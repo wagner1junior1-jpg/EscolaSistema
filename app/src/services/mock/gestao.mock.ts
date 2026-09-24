@@ -51,7 +51,7 @@ export class MockGestaoService implements GestaoService {
   }
 
   async listarPeriodos(): Promise<Periodo[]> {
-    await exigirUsuario(['direcao', 'coordenacao']);
+    await exigirUsuario(['direcao', 'coordenacao', 'professor']);
     const db = await getDatabase();
     return [...db.periodos].sort((a, b) => a.ano_letivo - b.ano_letivo);
   }
@@ -109,7 +109,7 @@ export class MockGestaoService implements GestaoService {
   }
 
   async listarDisciplinas(): Promise<Disciplina[]> {
-    await exigirUsuario(['direcao', 'coordenacao']);
+    await exigirUsuario(['direcao', 'coordenacao', 'professor']);
     const db = await getDatabase();
     return [...db.disciplinas].sort((a, b) => a.nome.localeCompare(b.nome));
   }

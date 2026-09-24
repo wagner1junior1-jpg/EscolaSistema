@@ -673,4 +673,33 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
       expect(dbFinal.versao).toBe(versaoInicial + 2);
     });
   });
+
+  describe('Acesso de Professor a Períodos e Disciplinas (só leitura)', () => {
+    it('professor consegue listarPeriodos e listarDisciplinas para configurar atividades', async () => {
+      await authService.login('ana@demo.com', 'demo123'); // Professora Ana
+
+      const periodos = await gestaoService.listarPeriodos();
+      expect(periodos.length).toBeGreaterThan(0);
+      expect(periodos.some((p) => p.ativo)).toBe(true);
+
+      const disciplinas = await gestaoService.listarDisciplinas();
+      expect(disciplinas.length).toBeGreaterThan(0);
+      expect(disciplinas.some((d) => d.nome === 'Matemática')).toBe(true);
+    });
+
+    it('professor continua sem conseguir criarPeriodo (exclusivo da direção)', async () => {
+      await authService.login('ana@demo.com', 'demo123'); // Professora Ana
+
+      await expect(
+        gestaoService.criarPeriodo({
+          escola_id: 'esc-001',
+          nome: '5º Bimestre Ilegal',
+          ano_letivo: 2026,
+          data_inicio: '2026-11-01',
+          data_fim: '2026-12-20',
+          ativo: false,
+        })
+      ).rejects.toThrow('Você não tem permissão para esta ação.');
+    });
+  });
 });
