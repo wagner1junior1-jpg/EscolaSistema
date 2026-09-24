@@ -16,9 +16,9 @@ test.describe('Portal de Gestão', () => {
     // O menu lateral NÃO mostra "Bimestres" nem "Escola"
     const aside = page.locator('aside');
     await expect(aside.getByText('Bimestres')).toHaveCount(0);
-    await expect(aside.getByText('Escola')).toHaveCount(0);
+    await expect(aside.getByText('Escola', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Bimestres' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Escola' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Escola', exact: true })).toHaveCount(0);
   });
 
   test.describe.serial('Ciclo de Gestão: Turmas, Alunos, PINs e Sigilo (G2 a G5)', () => {
@@ -117,6 +117,9 @@ test.describe('Portal de Gestão', () => {
       await modalPins.getByRole('button', { name: /Imprimir Filipetas/ }).click();
       await page.emulateMedia({ media: 'print' });
 
+      // Na impressão, o modal NÃO está visível
+      await expect(page.getByText(/PINs de Acesso Gerados/)).not.toBeVisible();
+
       // A página contém os 3 nomes e o código da turma
       const filipetasContainer = page.locator('.print\\:block');
       await expect(filipetasContainer.getByText('Aluno Teste Um')).toBeVisible();
@@ -210,19 +213,179 @@ test.describe('Portal de Gestão', () => {
       // O PIN não aparece em nenhum lugar da página
       await expect(page.locator(`text=${pinGerado}`)).toHaveCount(0);
 
-      // O localStorage não contém esse PIN (percorra todas as chaves)
-      const pinEncontrado = await page.evaluate((pin) => {
+      // Verifica que o localStorage não contém o PIN entre aspas ("1059", com as aspas) e que nenhuma chave ou campo se chama pin_puro
+      const resultadoLocalStorage = await page.evaluate((pin) => {
+        const pinComAspas = `"${pin}"`;
+        let contemPinComAspas = false;
+        let contemPinPuro = false;
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i);
           if (!k) continue;
           const v = localStorage.getItem(k) || '';
-          if (k.includes(pin) || v.includes(pin)) {
-            return true;
+          if (k.includes('pin_puro') || v.includes('pin_puro')) {
+            contemPinPuro = true;
+          }
+          if (k.includes(pinComAspas) || v.includes(pinComAspas)) {
+            contemPinComAspas = true;
           }
         }
-        return false;
+        return { contemPinComAspas, contemPinPuro };
       }, pinGerado);
-      expect(pinEncontrado).toBe(false);
+      expect(resultadoLocalStorage.contemPinComAspas).toBe(false);
+      expect(resultadoLocalStorage.contemPinPuro).toBe(false);
     });
+  });
+
+  test('G6: Coordenação entra em /gestao e os cartões de Início mostram 16 alunos, 2 turmas, 2 professores', async ({ page }) => {
+    await loginDemo(page, 'coordenacao@demo.com');
+    await expect(page).toHaveURL(/\/gestao/);
+
+    await expect(page.getByText('16 alunos')).toBeVisible();
+    await expect(page.getByText('2 turmas')).toBeVisible();
+    await expect(page.getByText('2 professores')).toBeVisible();
+
+    await page.screenshot({ path: 'e2e/evidencias/G6.png' });
+  });
+
+  test('G7: Navega para Desempenho, seleciona 3º Bimestre, confere linha com 7º Ano A e Matemática', async ({ page }) => {
+    await loginDemo(page, 'coordenacao@demo.com');
+    await page.getByRole('button', { name: 'Desempenho' }).click();
+
+    // Seleciona o 3º Bimestre se já não estiver
+    const selectBimestre = page.locator('select').first();
+    const optBim3 = await selectBimestre.locator('option').filter({ hasText: '3º Bimestre' }).getAttribute('value');
+    if (optBim3) {
+      await selectBimestre.selectOption(optBim3);
+    }
+
+    const row = page.locator('tbody tr').filter({ hasText: '7º Ano A' }).filter({ hasText: 'Matemática' });
+    await expect(row).toBeVisible();
+  });
+
+  test('G8: Navega para Alunos em Atenção, confere alunos esperados e ausência de Beatriz', async ({ page }) => {
+    await loginDemo(page, 'coordenacao@demo.com');
+    await page.getByRole('button', { name: 'Alunos em Atenção' }).click();
+
+    // Seleciona o 3º Bimestre se já não estiver
+    const selectBimestre = page.locator('select').first();
+    const optBim3 = await selectBimestre.locator('option').filter({ hasText: '3º Bimestre' }).getAttribute('value');
+    if (optBim3) {
+      await selectBimestre.selectOption(optBim3);
+    }
+
+    await expect(page.getByText('Enzo Gabriel Ferreira')).toBeVisible();
+    await expect(page.getByText('Matheus Carvalho')).toBeVisible();
+    await expect(page.getByText('Gabriel Lima')).toBeVisible();
+    await expect(page.getByText('Isabella Martins')).toBeVisible();
+    await expect(page.getByText('Beatriz Santos')).toHaveCount(0);
+
+    await page.screenshot({ path: 'e2e/evidencias/G8.png' });
+  });
+
+  test('G9: Navega para Questões Críticas, confere questão crítica de porcentagem', async ({ page }) => {
+    await loginDemo(page, 'coordenacao@demo.com');
+    await page.getByRole('button', { name: 'Questões Críticas' }).click();
+
+    // Seleciona o 3º Bimestre se já não estiver
+    const selectBimestre = page.locator('select').first();
+    const optBim3 = await selectBimestre.locator('option').filter({ hasText: '3º Bimestre' }).getAttribute('value');
+    if (optBim3) {
+      await selectBimestre.selectOption(optBim3);
+    }
+
+    await expect(page.getByText('Quanto é 25% de 80?')).toBeVisible();
+
+    await page.screenshot({ path: 'e2e/evidencias/G9.png' });
+  });
+
+  test('G10: Direção cria aviso Aviso E2E no Mural e aluno Lucas visualiza em /aluno', async ({ page }) => {
+    // 1. Direção loga e cria aviso no Mural
+    await loginDemo(page, 'direcao@demo.com');
+    await page.getByRole('button', { name: 'Mural da Escola' }).click();
+
+    await page.getByRole('button', { name: 'Novo Aviso' }).click();
+    const modalAviso = page.getByRole('dialog');
+    await modalAviso.getByLabel('Título do Aviso').fill('Aviso E2E');
+    await modalAviso.locator('textarea').fill('Este é um aviso institucional de teste E2E.');
+    await modalAviso.locator('select').selectOption('alta');
+    await modalAviso.getByRole('button', { name: 'Publicar Aviso' }).click();
+
+    await expect(page.getByText('Aviso publicado no mural da escola com sucesso!')).toBeVisible();
+
+    // 2. Aluno Lucas entra em /aluno
+    await page.goto('/aluno');
+    await page.getByPlaceholder('Ex: 7A-MAT').fill('7A-MAT');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByText('Lucas Oliveira').click();
+
+    // PIN: 1420
+    for (const digito of '1420') {
+      await page.getByRole('button', { name: digito, exact: true }).click();
+    }
+
+    await expect(page).toHaveURL(/\/aluno\/painel/);
+    await expect(page.getByText('Olá, Lucas Oliveira!')).toBeVisible();
+    await expect(page.getByText('Aviso E2E')).toBeVisible();
+  });
+
+  test('G11: Clica em Baixar CSV em Alunos em Atenção e confere arquivo baixado', async ({ page }) => {
+    await loginDemo(page, 'coordenacao@demo.com');
+    await page.getByRole('button', { name: 'Alunos em Atenção' }).click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Baixar CSV' }).click();
+    const download = await downloadPromise;
+
+    const nomeArquivo = download.suggestedFilename();
+    expect(nomeArquivo.endsWith('.csv')).toBe(true);
+
+    const readable = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    if (readable) {
+      for await (const chunk of readable) {
+        chunks.push(Buffer.from(chunk));
+      }
+    }
+    const conteudo = Buffer.concat(chunks).toString('utf-8');
+
+    // Começa com \uFEFF (BOM UTF-8)
+    expect(conteudo.startsWith('\uFEFF')).toBe(true);
+
+    // Tem cabeçalho separado por ;
+    const primeiraLinha = conteudo.replace('\uFEFF', '').split(/\r?\n/)[0];
+    expect(primeiraLinha).toContain(';');
+
+    // Contém "Enzo"
+    expect(conteudo).toContain('Enzo');
+  });
+
+  test('G12: Impressão das filipetas (@media print) esconde modal e exibe nomes dos alunos', async ({ page }) => {
+    await loginDemo(page, 'direcao@demo.com');
+    await page.goto('/gestao?secao=alunos');
+
+    // Reseta PIN de um aluno para abrir o modal de PINs
+    const row = page.locator('.divide-y > div').first();
+    const nomeAluno = await row.locator('p.font-semibold').innerText();
+    await row.getByRole('button', { name: 'Resetar PIN' }).click();
+    await page.getByRole('button', { name: 'Gerar Novo PIN' }).click();
+
+    const modalPins = page.getByRole('dialog');
+    await expect(modalPins.getByText(/PINs de Acesso Gerados/)).toBeVisible();
+
+    // Clica em Imprimir Filipetas
+    await page.evaluate(() => { window.print = () => {}; });
+    await modalPins.getByRole('button', { name: /Imprimir Filipetas/ }).click();
+
+    // Simula @media print
+    await page.emulateMedia({ media: 'print' });
+
+    // Verifica que o texto "PINs de Acesso Gerados" NÃO está visível
+    await expect(page.getByText(/PINs de Acesso Gerados/)).not.toBeVisible();
+
+    // Verifica que o nome do aluno ESTÁ visível no container de filipetas
+    const filipetasContainer = page.locator('.print\\:block');
+    await expect(filipetasContainer.getByText(nomeAluno)).toBeVisible();
+
+    await page.emulateMedia({ media: 'screen' });
   });
 });

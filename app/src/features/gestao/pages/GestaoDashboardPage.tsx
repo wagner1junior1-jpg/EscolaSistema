@@ -13,6 +13,10 @@ import {
   Menu,
   X,
   ChevronRight,
+  BarChart3,
+  AlertTriangle,
+  HelpCircle,
+  Megaphone,
 } from 'lucide-react';
 
 import { GestaoInicioSecao } from '../components/GestaoInicioSecao';
@@ -22,6 +26,10 @@ import { GestaoProfessoresSecao } from '../components/GestaoProfessoresSecao';
 import { GestaoAlunosSecao } from '../components/GestaoAlunosSecao';
 import { GestaoBimestresSecao } from '../components/GestaoBimestresSecao';
 import { GestaoEscolaSecao } from '../components/GestaoEscolaSecao';
+import { GestaoDesempenhoSecao } from '../components/GestaoDesempenhoSecao';
+import { GestaoAlunosAtencaoSecao } from '../components/GestaoAlunosAtencaoSecao';
+import { GestaoQuestoesCriticasSecao } from '../components/GestaoQuestoesCriticasSecao';
+import { GestaoMuralSecao } from '../components/GestaoMuralSecao';
 
 type SecaoGestao =
   | 'inicio'
@@ -29,6 +37,10 @@ type SecaoGestao =
   | 'disciplinas'
   | 'professores'
   | 'alunos'
+  | 'desempenho'
+  | 'atencao'
+  | 'questoes_criticas'
+  | 'mural'
   | 'bimestres'
   | 'escola';
 
@@ -56,6 +68,26 @@ export const GestaoDashboardPage: React.FC = () => {
       id: 'inicio',
       label: 'Início',
       icon: <LayoutDashboard className="w-4 h-4" />,
+    },
+    {
+      id: 'desempenho',
+      label: 'Desempenho',
+      icon: <BarChart3 className="w-4 h-4" />,
+    },
+    {
+      id: 'atencao',
+      label: 'Alunos em Atenção',
+      icon: <AlertTriangle className="w-4 h-4" />,
+    },
+    {
+      id: 'questoes_criticas',
+      label: 'Questões Críticas',
+      icon: <HelpCircle className="w-4 h-4" />,
+    },
+    {
+      id: 'mural',
+      label: 'Mural da Escola',
+      icon: <Megaphone className="w-4 h-4" />,
     },
     {
       id: 'turmas',
@@ -99,7 +131,7 @@ export const GestaoDashboardPage: React.FC = () => {
     <AppShell>
       <div className="space-y-6">
         {/* Cabeçalho do Painel */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200 shrink-0">
               <Building2 className="w-6 h-6 sm:w-7 sm:h-7" />
@@ -142,7 +174,7 @@ export const GestaoDashboardPage: React.FC = () => {
         <div className="flex flex-col md:flex-row items-start gap-6">
           {/* Menu Lateral (Desktop e Gaveta no Mobile) */}
           <aside
-            className={`w-full md:w-60 shrink-0 bg-white border border-slate-200 rounded-2xl p-2 shadow-xs transition-all ${
+            className={`w-full md:w-60 shrink-0 bg-white border border-slate-200 rounded-2xl p-2 shadow-xs transition-all print:hidden ${
               menuMobileAberto ? 'block' : 'hidden md:block'
             }`}
           >
@@ -182,6 +214,10 @@ export const GestaoDashboardPage: React.FC = () => {
             {secaoAtiva === 'inicio' && (
               <GestaoInicioSecao onNavegar={handleMudarSecao} isDirecao={isDirecao} />
             )}
+            {secaoAtiva === 'desempenho' && <GestaoDesempenhoSecao />}
+            {secaoAtiva === 'atencao' && <GestaoAlunosAtencaoSecao />}
+            {secaoAtiva === 'questoes_criticas' && <GestaoQuestoesCriticasSecao />}
+            {secaoAtiva === 'mural' && <GestaoMuralSecao />}
             {secaoAtiva === 'turmas' && <GestaoTurmasSecao />}
             {secaoAtiva === 'disciplinas' && <GestaoDisciplinasSecao />}
             {secaoAtiva === 'professores' && <GestaoProfessoresSecao />}

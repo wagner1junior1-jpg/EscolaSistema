@@ -356,8 +356,9 @@ export const GestaoAlunosSecao: React.FC = () => {
         turmaCodigo={turmaAtual?.codigo_acesso || ''}
       />
 
-      {/* Cabeçalho */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="print:hidden space-y-6">
+        {/* Cabeçalho */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-heading font-black text-slate-800 flex items-center gap-2">
             <Users className="w-6 h-6 text-indigo-600" />
@@ -869,6 +870,7 @@ export const GestaoAlunosSecao: React.FC = () => {
           </div>
         </div>
       </Modal>
+      </div>
     </div>
   );
 };

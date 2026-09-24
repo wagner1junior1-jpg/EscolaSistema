@@ -32,6 +32,9 @@ export const FilipetasImpressao: React.FC<FilipetasImpressaoProps> = ({
             background: white !important;
             color: black !important;
           }
+          header, aside, [role="dialog"], [aria-modal="true"] {
+            display: none !important;
+          }
         }
       `}</style>
 
