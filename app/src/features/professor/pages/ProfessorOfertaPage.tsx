@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import {
   Card,
+  CardHeader,
+  CardTitle,
   CardContent,
   Button,
   Tabs,
@@ -20,6 +22,9 @@ import {
   OfertaDetalhada,
   Periodo,
   ModoAtividade,
+  RelatorioDesempenhoOferta,
+  Aviso,
+  PrioridadeAviso,
 } from '@/services';
 import {
   ArrowLeft,
@@ -38,6 +43,10 @@ import {
   Loader2,
   FileQuestion,
   Info,
+  BarChart2,
+  MessageSquare,
+  ClipboardList,
+  Filter,
 } from 'lucide-react';
 
 interface AtividadeComQtd extends Atividade {
@@ -47,23 +56,39 @@ interface AtividadeComQtd extends Atividade {
 export const ProfessorOfertaPage: React.FC = () => {
   const { ofertaId } = useParams<{ ofertaId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const toast = useToast();
+
+  // Aba principal vinda da URL: 'atividades' | 'desempenho' | 'recados'
+  const abaPrincipal = (searchParams.get('aba') as 'atividades' | 'desempenho' | 'recados') || 'atividades';
 
   const [oferta, setOferta] = useState<OfertaDetalhada | null>(null);
   const [minhasOfertas, setMinhasOfertas] = useState<OfertaDetalhada[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
+  const [periodoSelecionadoId, setPeriodoSelecionadoId] = useState<string>('');
   const [atividades, setAtividades] = useState<AtividadeComQtd[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Aba ativa: 'rascunho' | 'publicada' | 'encerrada'
-  const [abaAtiva, setAbaAtiva] = useState<'rascunho' | 'publicada' | 'encerrada'>('rascunho');
+  // Sub-aba de Atividades: 'rascunho' | 'publicada' | 'encerrada'
+  const [abaAtividades, setAbaAtividades] = useState<'rascunho' | 'publicada' | 'encerrada'>('rascunho');
 
-  // Modais
+  // Estado da Aba Desempenho
+  const [relatorioDesempenho, setRelatorioDesempenho] = useState<RelatorioDesempenhoOferta | null>(null);
+  const [carregandoDesempenho, setCarregandoDesempenho] = useState(false);
+  const [filtroSoAtencao, setFiltroSoAtencao] = useState(false);
+
+  // Estado da Aba Recados
+  const [recados, setRecados] = useState<Aviso[]>([]);
+  const [carregandoRecados, setCarregandoRecados] = useState(false);
+  const [novoRecadoTitulo, setNovoRecadoTitulo] = useState('');
+  const [novoRecadoMensagem, setNovoRecadoMensagem] = useState('');
+  const [novoRecadoPrioridade, setNovoRecadoPrioridade] = useState<PrioridadeAviso>('media');
+  const [enviandoRecado, setEnviandoRecado] = useState(false);
+
+  // Modais de Criação e Ação em Atividades
   const [modalNovoAberto, setModalNovoAberto] = useState(false);
   const [salvandoNova, setSalvandoNova] = useState(false);
-
-  // Formulário Nova Atividade
   const [novoTitulo, setNovoTitulo] = useState('');
   const [novaDescricao, setNovaDescricao] = useState('');
   const [novoModo, setNovoModo] = useState<ModoAtividade>('exercicio');
@@ -71,7 +96,6 @@ export const ProfessorOfertaPage: React.FC = () => {
   const [novoPrazo, setNovoPrazo] = useState('');
   const [erroValidacaoNova, setErroValidacaoNova] = useState<string | null>(null);
 
-  // Confirmações
   const [atividadePublicar, setAtividadePublicar] = useState<AtividadeComQtd | null>(null);
   const [processandoPublicar, setProcessandoPublicar] = useState(false);
 
@@ -85,13 +109,13 @@ export const ProfessorOfertaPage: React.FC = () => {
   const [ofertaDestinoId, setOfertaDestinoId] = useState('');
   const [processandoDuplicar, setProcessandoDuplicar] = useState(false);
 
-  const carregarDados = useCallback(async () => {
+  // Carregamento inicial da oferta e períodos
+  const carregarDadosBase = useCallback(async () => {
     if (!ofertaId) return;
 
     setCarregando(true);
     setErro(null);
     try {
-      // 1. Busca ofertas do professor e valida pertencimento
       const listaOfertas = await professorService.minhasOfertas();
       setMinhasOfertas(listaOfertas);
 
@@ -101,18 +125,16 @@ export const ProfessorOfertaPage: React.FC = () => {
       }
       setOferta(ofertaEncontrada);
 
-      // 2. Busca períodos letivos
       const listaPeriodos = await gestaoService.listarPeriodos();
       setPeriodos(listaPeriodos);
       const ativo = listaPeriodos.find((p) => p.ativo) || listaPeriodos[0];
       if (ativo) {
         setNovoPeriodoId(ativo.id);
+        setPeriodoSelecionadoId(ativo.id);
       }
 
-      // 3. Busca atividades da oferta
+      // Busca atividades da oferta
       const listaAtividades = await professorService.listarAtividades(ofertaId);
-
-      // Para cada atividade, obtém número de questões
       const atividadesComQtd: AtividadeComQtd[] = await Promise.all(
         listaAtividades.map(async (ativ) => {
           try {
@@ -132,15 +154,64 @@ export const ProfessorOfertaPage: React.FC = () => {
 
       setAtividades(atividadesComQtd);
     } catch (err: unknown) {
-      setErro(err instanceof Error ? err.message : 'Falha ao carregar atividades da turma.');
+      setErro(err instanceof Error ? err.message : 'Falha ao carregar dados da turma.');
     } finally {
       setCarregando(false);
     }
   }, [ofertaId]);
 
   useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
+    carregarDadosBase();
+  }, [carregarDadosBase]);
+
+  // Carregamento de Desempenho
+  const carregarDesempenho = useCallback(async (periodoIdParam: string) => {
+    if (!ofertaId || !periodoIdParam) return;
+    setCarregandoDesempenho(true);
+    try {
+      const dados = await professorService.desempenhoOferta(ofertaId, periodoIdParam);
+      setRelatorioDesempenho(dados);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar desempenho.');
+    } finally {
+      setCarregandoDesempenho(false);
+    }
+  }, [ofertaId, toast]);
+
+  useEffect(() => {
+    if (abaPrincipal === 'desempenho' && periodoSelecionadoId) {
+      carregarDesempenho(periodoSelecionadoId);
+    }
+  }, [abaPrincipal, periodoSelecionadoId, carregarDesempenho]);
+
+  // Carregamento de Recados
+  const carregarRecados = useCallback(async () => {
+    if (!oferta?.turma_id) return;
+    setCarregandoRecados(true);
+    try {
+      const lista = await professorService.listarRecadosTurma(oferta.turma_id);
+      // Mais recente primeiro
+      const ordenados = [...lista].sort(
+        (a, b) => new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime()
+      );
+      setRecados(ordenados);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao carregar recados.');
+    } finally {
+      setCarregandoRecados(false);
+    }
+  }, [oferta?.turma_id, toast]);
+
+  useEffect(() => {
+    if (abaPrincipal === 'recados' && oferta?.turma_id) {
+      carregarRecados();
+    }
+  }, [abaPrincipal, oferta?.turma_id, carregarRecados]);
+
+  // Troca de aba superior (grava na URL ?aba=)
+  const mudarAbaPrincipal = (novaAba: 'atividades' | 'desempenho' | 'recados') => {
+    setSearchParams({ aba: novaAba });
+  };
 
   // Formatação de data
   const formatarPrazo = (prazo: string | null) => {
@@ -154,25 +225,39 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   };
 
-  // Obter nome do período
+  const formatarDataHora = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return iso;
+    }
+  };
+
   const getPeriodoNome = (id: string) => {
     const p = periodos.find((item) => item.id === id);
     return p ? p.nome : 'Período';
   };
 
-  // Filtragem por status
+  // Filtragem de atividades por status
   const rascunhos = atividades.filter((a) => a.status === 'rascunho');
   const publicadas = atividades.filter((a) => a.status === 'publicada');
   const encerradas = atividades.filter((a) => a.status === 'encerrada');
 
   const atividadesExibidas =
-    abaAtiva === 'rascunho'
+    abaAtividades === 'rascunho'
       ? rascunhos
-      : abaAtiva === 'publicada'
+      : abaAtividades === 'publicada'
       ? publicadas
       : encerradas;
 
-  // Ação: Criar Nova Atividade
+  // Ações da Aba Atividades
   const handleCriarAtividade = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!ofertaId) return;
@@ -203,7 +288,6 @@ export const ProfessorOfertaPage: React.FC = () => {
 
       toast.success('Atividade criada como rascunho!');
       setModalNovoAberto(false);
-      // Redireciona diretamente para o editor
       navigate(`/professor/atividade/${nova.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Falha ao criar atividade.';
@@ -214,7 +298,6 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   };
 
-  // Ação: Publicar
   const handleConfirmarPublicar = async () => {
     if (!atividadePublicar) return;
     setProcessandoPublicar(true);
@@ -222,8 +305,8 @@ export const ProfessorOfertaPage: React.FC = () => {
       await professorService.publicarAtividade(atividadePublicar.id);
       toast.success('Atividade publicada com sucesso!');
       setAtividadePublicar(null);
-      await carregarDados();
-      setAbaAtiva('publicada');
+      await carregarDadosBase();
+      setAbaAtividades('publicada');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao publicar atividade.');
     } finally {
@@ -231,7 +314,6 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   };
 
-  // Ação: Encerrar
   const handleConfirmarEncerrar = async () => {
     if (!atividadeEncerrar) return;
     setProcessandoEncerrar(true);
@@ -239,8 +321,8 @@ export const ProfessorOfertaPage: React.FC = () => {
       await professorService.encerrarAtividade(atividadeEncerrar.id);
       toast.success('Atividade encerrada com sucesso!');
       setAtividadeEncerrar(null);
-      await carregarDados();
-      setAbaAtiva('encerrada');
+      await carregarDadosBase();
+      setAbaAtividades('encerrada');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao encerrar atividade.');
     } finally {
@@ -248,7 +330,6 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   };
 
-  // Ação: Excluir
   const handleConfirmarExcluir = async () => {
     if (!atividadeExcluir) return;
     setProcessandoExcluir(true);
@@ -256,7 +337,7 @@ export const ProfessorOfertaPage: React.FC = () => {
       await professorService.excluirAtividade(atividadeExcluir.id);
       toast.success('Atividade excluída com sucesso!');
       setAtividadeExcluir(null);
-      await carregarDados();
+      await carregarDadosBase();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Erro ao excluir atividade.');
     } finally {
@@ -264,7 +345,6 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   };
 
-  // Ação: Duplicar
   const handleConfirmarDuplicar = async () => {
     if (!atividadeDuplicar || !ofertaDestinoId) return;
     setProcessandoDuplicar(true);
@@ -273,8 +353,8 @@ export const ProfessorOfertaPage: React.FC = () => {
       toast.success('Atividade duplicada como rascunho com sucesso!');
       setAtividadeDuplicar(null);
       if (ofertaDestinoId === ofertaId) {
-        await carregarDados();
-        setAbaAtiva('rascunho');
+        await carregarDadosBase();
+        setAbaAtividades('rascunho');
       } else {
         toast.info('A cópia foi criada na turma selecionada.');
       }
@@ -285,9 +365,50 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   };
 
+  // Ação de Publicar Novo Recado
+  const handleCriarRecado = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ofertaId) return;
+
+    if (!novoRecadoTitulo.trim()) {
+      toast.error('O título do recado é obrigatório.');
+      return;
+    }
+    if (!novoRecadoMensagem.trim()) {
+      toast.error('A mensagem do recado é obrigatória.');
+      return;
+    }
+
+    setEnviandoRecado(true);
+    try {
+      await professorService.criarRecadoTurma(ofertaId, {
+        titulo: novoRecadoTitulo.trim(),
+        mensagem: novoRecadoMensagem.trim(),
+        prioridade: novoRecadoPrioridade,
+      });
+
+      toast.success('Recado publicado para a turma!');
+      setNovoRecadoTitulo('');
+      setNovoRecadoMensagem('');
+      setNovoRecadoPrioridade('media');
+      await carregarRecados();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao publicar recado.');
+    } finally {
+      setEnviandoRecado(false);
+    }
+  };
+
+  // Filtra alunos em atenção para a aba Desempenho
+  const alunosDesempenho = relatorioDesempenho?.alunos
+    ? filtroSoAtencao
+      ? relatorioDesempenho.alunos.filter((a) => a.faixa === 'Atenção')
+      : relatorioDesempenho.alunos
+    : [];
+
   return (
     <AppShell>
-      <div className="space-y-6">
+      <div className="space-y-6 pb-20">
         {/* Navegação e Cabeçalho da Oferta */}
         <div>
           <Link
@@ -307,45 +428,77 @@ export const ProfessorOfertaPage: React.FC = () => {
                   </span>
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-lg">
                     <Key className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Código: <strong className="font-mono text-slate-800">{oferta.turma_codigo}</strong></span>
+                    <span>
+                      Código:{' '}
+                      <strong className="font-mono text-slate-800">{oferta.turma_codigo}</strong>
+                    </span>
                   </div>
                 </div>
                 <h1 className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
                   {oferta.turma_nome}
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-500">
-                  Gerencie exercícios formativos e provas com correção automática.
+                  Gerencie exercícios formativos, avaliações, desempenho e avisos da turma.
                 </p>
               </div>
 
-              <Button
-                variant="primary"
-                leftIcon={<Plus className="w-4 h-4" />}
-                onClick={() => {
-                  setNovoTitulo('');
-                  setNovaDescricao('');
-                  setNovoModo('exercicio');
-                  setNovoPrazo('');
-                  setErroValidacaoNova(null);
-                  setModalNovoAberto(true);
-                }}
-                className="w-full sm:w-auto shrink-0 shadow-sm"
-              >
-                Nova atividade
-              </Button>
+              {abaPrincipal === 'atividades' && (
+                <Button
+                  variant="primary"
+                  leftIcon={<Plus className="w-4 h-4" />}
+                  onClick={() => {
+                    setNovoTitulo('');
+                    setNovaDescricao('');
+                    setNovoModo('exercicio');
+                    setNovoPrazo('');
+                    setErroValidacaoNova(null);
+                    setModalNovoAberto(true);
+                  }}
+                  className="w-full sm:w-auto shrink-0 shadow-sm"
+                >
+                  Nova atividade
+                </Button>
+              )}
             </div>
           )}
         </div>
 
-        {/* Estado de Carregamento */}
+        {/* Abas Superiores Principais: Atividades | Desempenho | Recados */}
+        <div className="border-b border-slate-200 bg-white rounded-2xl px-4 pt-2 shadow-2xs">
+          <Tabs
+            activeTab={abaPrincipal}
+            onChange={(tab) => mudarAbaPrincipal(tab as 'atividades' | 'desempenho' | 'recados')}
+            tabs={[
+              {
+                id: 'atividades',
+                label: 'Atividades',
+                icon: <ClipboardList className="w-4 h-4" />,
+                count: atividades.length,
+              },
+              {
+                id: 'desempenho',
+                label: 'Desempenho',
+                icon: <BarChart2 className="w-4 h-4" />,
+              },
+              {
+                id: 'recados',
+                label: 'Recados',
+                icon: <MessageSquare className="w-4 h-4" />,
+                count: recados.length > 0 ? recados.length : undefined,
+              },
+            ]}
+          />
+        </div>
+
+        {/* Estado de Carregamento Base */}
         {carregando && (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-            <p className="text-sm font-medium">Carregando atividades da turma...</p>
+            <p className="text-sm font-medium">Carregando dados da turma...</p>
           </div>
         )}
 
-        {/* Estado de Erro de Permissão ou Carregamento */}
+        {/* Estado de Erro de Permissão */}
         {!carregando && erro && (
           <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-6 sm:p-8 text-center space-y-4">
             <AlertCircle className="w-12 h-12 text-rose-600 mx-auto" />
@@ -355,22 +508,20 @@ export const ProfessorOfertaPage: React.FC = () => {
               </h3>
               <p className="text-sm text-rose-700 max-w-md mx-auto">{erro}</p>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/professor')}
-              className="mx-auto"
-            >
+            <Button variant="outline" onClick={() => navigate('/professor')} className="mx-auto">
               Voltar para Minhas Turmas
             </Button>
           </div>
         )}
 
-        {/* Conteúdo com Abas de Atividades */}
-        {!carregando && !erro && (
+        {/* =========================================================================
+            ABA 1: ATIVIDADES
+           ========================================================================= */}
+        {!carregando && !erro && abaPrincipal === 'atividades' && (
           <div className="space-y-5">
             <Tabs
-              activeTab={abaAtiva}
-              onChange={(tab) => setAbaAtiva(tab as 'rascunho' | 'publicada' | 'encerrada')}
+              activeTab={abaAtividades}
+              onChange={(tab) => setAbaAtividades(tab as 'rascunho' | 'publicada' | 'encerrada')}
               tabs={[
                 {
                   id: 'rascunho',
@@ -390,7 +541,6 @@ export const ProfessorOfertaPage: React.FC = () => {
               ]}
             />
 
-            {/* Listagem de Atividades da Aba Selecionada */}
             {atividadesExibidas.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center space-y-3">
                 <FileQuestion className="w-10 h-10 text-slate-300 mx-auto" />
@@ -398,13 +548,13 @@ export const ProfessorOfertaPage: React.FC = () => {
                   Nenhuma atividade neste status
                 </h3>
                 <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
-                  {abaAtiva === 'rascunho'
+                  {abaAtividades === 'rascunho'
                     ? 'Você não possui rascunhos no momento. Crie uma nova atividade para começar.'
-                    : abaAtiva === 'publicada'
+                    : abaAtividades === 'publicada'
                     ? 'Nenhuma atividade publicada aberta para os alunos responderem.'
                     : 'Nenhuma atividade encerrada nesta turma.'}
                 </p>
-                {abaAtiva === 'rascunho' && (
+                {abaAtividades === 'rascunho' && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -434,7 +584,6 @@ export const ProfessorOfertaPage: React.FC = () => {
                       {/* Topo do Cartão: Chips de Modo e Bimestre */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          {/* Chip do Modo */}
                           {ativ.modo === 'prova' ? (
                             <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-800 border border-violet-200">
                               Prova
@@ -445,19 +594,16 @@ export const ProfessorOfertaPage: React.FC = () => {
                             </span>
                           )}
 
-                          {/* Bimestre */}
                           <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
                             <Calendar className="w-3 h-3 text-slate-400" />
                             {getPeriodoNome(ativ.periodo_id)}
                           </span>
                         </div>
 
-                        {/* Título da Atividade */}
                         <h3 className="font-heading font-black text-lg text-slate-900 leading-snug">
                           {ativ.titulo}
                         </h3>
 
-                        {/* Descrição */}
                         {ativ.descricao && (
                           <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
                             {ativ.descricao}
@@ -480,7 +626,6 @@ export const ProfessorOfertaPage: React.FC = () => {
 
                       {/* Ações conforme o Status */}
                       <div className="pt-3 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                        {/* Status Rascunho */}
                         {ativ.status === 'rascunho' && (
                           <>
                             <Button
@@ -527,13 +672,22 @@ export const ProfessorOfertaPage: React.FC = () => {
                           </>
                         )}
 
-                        {/* Status Publicada */}
                         {ativ.status === 'publicada' && (
                           <>
                             <Button
                               variant="outline"
                               size="sm"
-                              leftIcon={<Edit3 className="w-3.5 h-3.5 text-indigo-600" />}
+                              leftIcon={<BarChart2 className="w-3.5 h-3.5 text-indigo-600" />}
+                              onClick={() => navigate(`/professor/atividade/${ativ.id}/resultados`)}
+                              className="text-indigo-700 bg-indigo-50/50 border-indigo-200 hover:bg-indigo-100/60"
+                            >
+                              Ver resultados
+                            </Button>
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              leftIcon={<Edit3 className="w-3.5 h-3.5 text-slate-600" />}
                               onClick={() => navigate(`/professor/atividade/${ativ.id}`)}
                               className="flex-1"
                             >
@@ -563,9 +717,17 @@ export const ProfessorOfertaPage: React.FC = () => {
                           </>
                         )}
 
-                        {/* Status Encerrada */}
                         {ativ.status === 'encerrada' && (
                           <>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              leftIcon={<BarChart2 className="w-3.5 h-3.5" />}
+                              onClick={() => navigate(`/professor/atividade/${ativ.id}/resultados`)}
+                            >
+                              Ver resultados
+                            </Button>
+
                             <Button
                               variant="outline"
                               size="sm"
@@ -596,6 +758,312 @@ export const ProfessorOfertaPage: React.FC = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            ABA 2: DESEMPENHO
+           ========================================================================= */}
+        {!carregando && !erro && abaPrincipal === 'desempenho' && (
+          <div className="space-y-6">
+            {/* Filtros: Bimestre e "Só Alunos em Atenção" */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+              <div className="w-full sm:w-72">
+                <Select
+                  label="Bimestre / Período Letivo:"
+                  value={periodoSelecionadoId}
+                  onChange={(e) => setPeriodoSelecionadoId(e.target.value)}
+                  options={periodos.map((p) => ({
+                    value: p.id,
+                    label: `${p.nome} (${p.ano_letivo})${p.ativo ? ' — Ativo' : ''}`,
+                  }))}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 sm:pt-4">
+                <label className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={filtroSoAtencao}
+                    onChange={(e) => setFiltroSoAtencao(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  />
+                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Mostrar só alunos em Atenção</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Estado de Carregamento do Desempenho */}
+            {carregandoDesempenho && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                <p className="text-sm font-medium">Carregando quadro de desempenho...</p>
+              </div>
+            )}
+
+            {/* Tabela de Desempenho Aluno × Atividade */}
+            {!carregandoDesempenho && relatorioDesempenho && (
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-heading font-black text-lg text-slate-900">
+                      Quadro Geral de Desempenho
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {relatorioDesempenho.periodo_nome} • {alunosDesempenho.length} aluno(s) listado(s)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto relative">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-heading font-bold text-slate-600">
+                        {/* Coluna Fixa do Nome do Aluno */}
+                        <th className="py-3 px-4 sticky left-0 bg-slate-50 z-20 shadow-xs whitespace-nowrap min-w-[180px]">
+                          Aluno
+                        </th>
+
+                        {/* Colunas das Atividades */}
+                        {relatorioDesempenho.atividades.map((ativ) => (
+                          <th
+                            key={ativ.id}
+                            className="py-3 px-3 text-center min-w-[120px] max-w-[160px] truncate whitespace-nowrap"
+                            title={ativ.titulo}
+                          >
+                            <span className="block truncate">{ativ.titulo}</span>
+                            <span className="text-[10px] font-normal text-slate-400 block uppercase">
+                              {ativ.modo}
+                            </span>
+                          </th>
+                        ))}
+
+                        {/* Colunas Finais: Média e Faixa */}
+                        <th className="py-3 px-4 text-center min-w-[90px] whitespace-nowrap">
+                          Média
+                        </th>
+                        <th className="py-3 px-4 text-center min-w-[120px] whitespace-nowrap">
+                          Faixa
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {alunosDesempenho.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={relatorioDesempenho.atividades.length + 3}
+                            className="py-10 text-center text-slate-400 text-xs sm:text-sm"
+                          >
+                            Nenhum aluno encontrado com os filtros aplicados.
+                          </td>
+                        </tr>
+                      ) : (
+                        alunosDesempenho.map((aluno) => (
+                          <tr
+                            key={aluno.aluno_id}
+                            className="hover:bg-slate-50/70 transition-colors group"
+                          >
+                            {/* Nome com Coluna Fixa no Mobile */}
+                            <td className="py-3 px-4 sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-xs whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(`/professor/oferta/${ofertaId}/aluno/${aluno.aluno_id}`)
+                                }
+                                className="flex items-center gap-2 text-left font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                title="Abrir ficha pedagógica individual"
+                              >
+                                <span className="font-mono text-xs text-slate-400">
+                                  #{aluno.numero_chamada}
+                                </span>
+                                <span>{aluno.nome_completo}</span>
+                              </button>
+                            </td>
+
+                            {/* Células das Atividades */}
+                            {relatorioDesempenho.atividades.map((colAtiv) => {
+                              const dadoAtiv = aluno.atividades.find(
+                                (a) => a.atividade_id === colAtiv.id
+                              );
+
+                              return (
+                                <td
+                                  key={colAtiv.id}
+                                  className="py-3 px-3 text-center whitespace-nowrap text-xs"
+                                >
+                                  {!dadoAtiv || dadoAtiv.aproveitamento === null ? (
+                                    <span className="text-slate-300 font-mono">—</span>
+                                  ) : !dadoAtiv.concluida ? (
+                                    <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                      em andamento
+                                    </span>
+                                  ) : (
+                                    <span className="font-mono font-bold text-slate-700">
+                                      {dadoAtiv.aproveitamento}%
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })}
+
+                            {/* Coluna Média */}
+                            <td className="py-3 px-4 text-center whitespace-nowrap font-mono font-bold text-xs sm:text-sm text-slate-900">
+                              {aluno.media !== null ? `${aluno.media}%` : '—'}
+                            </td>
+
+                            {/* Coluna Faixa */}
+                            <td className="py-3 px-4 text-center whitespace-nowrap">
+                              <span
+                                className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                                  aluno.faixa === 'Ótimo'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : aluno.faixa === 'Bom'
+                                    ? 'bg-sky-50 text-sky-800 border-sky-200'
+                                    : aluno.faixa === 'Atenção'
+                                    ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}
+                              >
+                                {aluno.faixa}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =========================================================================
+            ABA 3: RECADOS DA TURMA
+           ========================================================================= */}
+        {!carregando && !erro && abaPrincipal === 'recados' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Formulário: Novo Recado */}
+            <div className="lg:col-span-1">
+              <Card className="border-slate-200 shadow-xs sticky top-20">
+                <CardHeader>
+                  <CardTitle className="text-base">Publicar Novo Recado</CardTitle>
+                  <p className="text-xs text-slate-500">
+                    O recado será exibido no painel de todos os alunos desta turma.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleCriarRecado} className="space-y-4">
+                    <Input
+                      label="Título do Recado *"
+                      placeholder="Ex: Trazer transferidor amanhã"
+                      value={novoRecadoTitulo}
+                      onChange={(e) => setNovoRecadoTitulo(e.target.value)}
+                      disabled={enviandoRecado}
+                      required
+                    />
+
+                    <Textarea
+                      label="Mensagem *"
+                      placeholder="Digite o conteúdo detalhado do aviso aos alunos..."
+                      value={novoRecadoMensagem}
+                      onChange={(e) => setNovoRecadoMensagem(e.target.value)}
+                      disabled={enviandoRecado}
+                      rows={3}
+                      required
+                    />
+
+                    <Select
+                      label="Prioridade do Recado *"
+                      value={novoRecadoPrioridade}
+                      onChange={(e) => setNovoRecadoPrioridade(e.target.value as PrioridadeAviso)}
+                      disabled={enviandoRecado}
+                      options={[
+                        { value: 'baixa', label: 'Baixa prioridade (Informativo)' },
+                        { value: 'media', label: 'Média prioridade (Aviso normal)' },
+                        { value: 'alta', label: 'Alta prioridade (Urgente / Importante)' },
+                      ]}
+                    />
+
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      fullWidth
+                      isLoading={enviandoRecado}
+                      leftIcon={<Send className="w-4 h-4" />}
+                    >
+                      Publicar recado
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Lista de Recados da Turma */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-heading font-black text-lg text-slate-900">
+                  Recados Publicados ({recados.length})
+                </h3>
+              </div>
+
+              {carregandoRecados && (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                  <p className="text-sm font-medium">Carregando recados da turma...</p>
+                </div>
+              )}
+
+              {!carregandoRecados && recados.length === 0 && (
+                <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center space-y-3">
+                  <MessageSquare className="w-10 h-10 text-slate-300 mx-auto" />
+                  <h4 className="font-heading font-bold text-base text-slate-700">
+                    Nenhum recado publicado
+                  </h4>
+                  <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
+                    Utilize o formulário ao lado para enviar o primeiro comunicado para a turma.
+                  </p>
+                </div>
+              )}
+
+              {!carregandoRecados &&
+                recados.map((recado) => {
+                  const corPrioridade =
+                    recado.prioridade === 'alta'
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
+                      : recado.prioridade === 'media'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200';
+
+                  return (
+                    <Card key={recado.id} className="border-slate-200 shadow-xs">
+                      <CardContent className="p-5 sm:p-6 space-y-3">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <span
+                            className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${corPrioridade}`}
+                          >
+                            Prioridade {recado.prioridade.toUpperCase()}
+                          </span>
+
+                          <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" />
+                            {formatarDataHora(recado.publicado_em)}
+                          </span>
+                        </div>
+
+                        <h4 className="font-heading font-bold text-base text-slate-900 leading-snug">
+                          {recado.titulo}
+                        </h4>
+
+                        <p className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {recado.mensagem}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
           </div>
         )}
       </div>

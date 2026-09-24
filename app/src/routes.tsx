@@ -8,6 +8,8 @@ import AlunoAtividadePage from '@/features/aluno/pages/AlunoAtividadePage';
 import ProfessorDashboardPage from '@/features/professor/pages/ProfessorDashboardPage';
 import ProfessorOfertaPage from '@/features/professor/pages/ProfessorOfertaPage';
 import ProfessorAtividadePage from '@/features/professor/pages/ProfessorAtividadePage';
+import ProfessorResultadosPage from '@/features/professor/pages/ProfessorResultadosPage';
+import ProfessorFichaAlunoPage from '@/features/professor/pages/ProfessorFichaAlunoPage';
 import GestaoDashboardPage from '@/features/gestao/pages/GestaoDashboardPage';
 import { RotaProtegida } from '@/features/auth/AuthProvider';
 
@@ -47,10 +49,26 @@ export const AppRoutes: React.FC = () => {
         }
       />
       <Route
+        path="/professor/oferta/:ofertaId/aluno/:alunoId"
+        element={
+          <RotaProtegida papeis={['professor']}>
+            <ProfessorFichaAlunoPage />
+          </RotaProtegida>
+        }
+      />
+      <Route
         path="/professor/atividade/:id"
         element={
           <RotaProtegida papeis={['professor']}>
             <ProfessorAtividadePage />
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/professor/atividade/:id/resultados"
+        element={
+          <RotaProtegida papeis={['professor']}>
+            <ProfessorResultadosPage />
           </RotaProtegida>
         }
       />
