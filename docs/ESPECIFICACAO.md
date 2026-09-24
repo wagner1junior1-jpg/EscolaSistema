@@ -66,11 +66,14 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 - **ofertas** (turma + disciplina + professor): turma_id, disciplina_id, professor_id → perfis. unique(turma_id, disciplina_id)
 - **alunos**: escola_id, turma_id, nome_completo, numero_chamada int, pin_hash text (bcrypt via pgcrypto), ativo bool
   - Um aluno tem UM PIN e vê todas as ofertas da sua turma.
-- **atividades**: oferta_id, periodo_id, titulo, descricao, prazo date null, status (`rascunho`|`publicada`|`encerrada`), criado_por → perfis
+- **atividades**: oferta_id, periodo_id, titulo, descricao, prazo date null, modo (`prova`|`exercicio`, padrão `exercicio`), status (`rascunho`|`publicada`|`encerrada`), criado_por → perfis
+  - O modo só pode ser alterado enquanto a atividade estiver em rascunho.
 - **questoes**: atividade_id, ordem int, enunciado, dica null, explicacao null
 - **alternativas**: questao_id, letra (`A`..`E`), texto, correta bool, por_que_errou text null
   - Exatamente 1 correta por questão (validar por trigger ou na função de salvar). Mínimo 2, máximo 5 alternativas.
-- **respostas**: aluno_id, questao_id, alternativa_id, acertou bool, respondida_em. unique(aluno_id, questao_id); a resposta é definitiva, não pode ser alterada.
+- **respostas**: aluno_id, questao_id, alternativa_id, acertou bool, respondida_em, tentativas int (padrão 1), acertou_final bool. unique(aluno_id, questao_id).
+  - alternativa_id e acertou guardam SEMPRE a 1ª tentativa, que é a que vale para nota, média, conselho e mapa de calor. Nunca são alterados.
+  - tentativas e acertou_final só mudam no modo exercício, quando o aluno usa "Tentar novamente".
 - **frequencias**: oferta_id, aluno_id, data date, status (`P`|`F`|`J`), registrado_por. unique(oferta_id, aluno_id, data)
 - **avisos**: escola_id, autor_id → perfis, turma_id null (null = escola toda), titulo, mensagem, prioridade (`baixa`|`media`|`alta`), publicado_em
 - **aluno_sessoes**: aluno_id, token_hash, expira_em, criado_em
@@ -82,7 +85,9 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 - RPC `aluno_login(aluno_id, pin)`: confere o bcrypt. Se houver 5 erros em 15 minutos, bloqueia por 15 minutos. Em caso de sucesso, cria a sessão (validade de 30 dias) e devolve o token puro uma única vez.
 - Todas as outras RPCs do aluno recebem `p_token`, validam a sessão e trabalham só com o aluno_id dela.
 - **A alternativa correta, o texto de por_que_errou e a explicação NUNCA são enviados ao aluno antes da resposta.** O aluno recebe o enunciado, a dica e as alternativas (id, letra, texto).
-- RPC `aluno_responder(p_token, questao_id, alternativa_id)`: grava a resposta (se ainda não houver resposta) e devolve `{acertou, alternativa_correta_id, por_que_errou, explicacao}`.
+- RPC `aluno_responder(p_token, questao_id, alternativa_id)`, com comportamento que depende do modo da atividade:
+  - **Modo exercício**: a 1ª resposta é gravada e devolve na hora `{acertou, alternativa_correta_id, por_que_errou, explicacao}`. Se o aluno errar, pode usar "Tentar novamente": a RPC `aluno_tentar_novamente(p_token, questao_id, alternativa_id)` incrementa tentativas, atualiza acertou_final e devolve o mesmo feedback. A 1ª resposta continua valendo para a nota.
+  - **Modo prova**: resposta definitiva, sem "Tentar novamente". A RPC devolve só `{registrada: true}`, sem dizer se acertou. A correção completa (acertou, correta, por_que_errou, explicação de cada questão) só é liberada quando o aluno termina TODAS as questões da prova, pela RPC `aluno_resultado_prova(p_token, atividade_id)`. Assim um aluno não consegue repassar o gabarito no meio da prova.
 - A professora vê o PIN só no momento em que o gera ou reseta, e pode imprimir as filipetas nessa hora. Depois disso fica apenas o hash guardado.
 
 ## 6. Cálculos (definições oficiais)
@@ -110,6 +115,16 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 
 **Fase G — Produção:** LGPD (termo de aceite da escola, política de privacidade, exclusão de dados do aluno), deploy na Vercel, backups, domínio.
 
+## 7.2 Identidade visual do portal do aluno
+
+- Referência: sistema "Jornada do Saber" (pasta `Estudo Meninas`), com capturas de tela e CSS em `docs/referencia-layout-aluno/`.
+- Vale para TODAS as telas do aluno e do responsável (código da turma, escolha do nome, PIN, painel, player de questões, resultado e Espaço dos Pais). As telas de professor e gestão continuam com o visual sóbrio (indigo, fundo slate-50).
+- O que manter: fundo em degradê (#f0f4ff → #fae8ff → #fef3c7) com bolhas desfocadas; cartões "vidro" brancos com borda clara e sombra suave; fontes Nunito (texto) e Outfit (títulos); chips no topo da questão (disciplina, modo, questão X de Y); barra de progresso fina no topo do cartão; alternativas em cartões grandes com a letra em quadrado, que ficam vermelho (escolhida errada, com ❌) e verde (correta, com ✅) após a resposta; faixa de resultado (verde no acerto; degradê vermelho→laranja no erro, com "Não foi dessa vez, mas faz parte aprender!"); cartão rosa "Onde prestar atenção / Por que não é essa" (por_que_errou); cartão verde "Entenda a resposta correta" (explicação); botão "💡 Precisa de uma dica?"; botão 🔊 de ouvir a questão (speechSynthesis, pt-BR); confete e sons curtos gerados pelo navegador no acerto e ao terminar; tela final com placar (questões, acertos, erros, aproveitamento).
+- O que NÃO trazer: estrelas, sequência 🔥, medalhas, ranking, "Nova Questão", "Embaralhar", "Reiniciar", "Trocar filha", e "Tentar novamente" no modo prova.
+- No modo prova, o player não mostra acerto/erro por questão: só "Resposta registrada ✓" e o botão Próxima. A correção completa aparece na tela final.
+- Confete: pacote npm `canvas-confetti` (sem CDN). Respeitar `prefers-reduced-motion` e ter um botão para desligar o som.
+- Mobile first (360px), alvos de toque de pelo menos 48px, contraste AA e zoom liberado.
+
 ## 7.1 Modo local (enquanto não houver conta no Supabase)
 
 - A variável `VITE_DATA_SOURCE` define a origem dos dados: `mock` (padrão por enquanto) ou `supabase`.
@@ -122,4 +137,4 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 
 ## 8. Fora do escopo do MVP (não implementar sem pedido)
 
-Imagens nas questões, questões dissertativas, app nativo, chat, gamificação/ranking, notificações push, integração com outros sistemas, pagamentos, multi-idioma.
+Imagens nas questões, questões dissertativas, app nativo, chat, pontos/estrelas/medalhas/ranking (confete e sons de incentivo são permitidos, ver 7.2), caderno de erros, notificações push, integração com outros sistemas, pagamentos, multi-idioma.

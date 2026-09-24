@@ -1,0 +1,295 @@
+/* ==========================================================================
+   ESTILOS PERSONALIZADOS - JORNADA DO SABER
+   Design moderno, lúdico, limpo e super amigável para crianças e jovens
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Nunito:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --font-main: 'Nunito', system-ui, -apple-system, sans-serif;
+  --font-heading: 'Outfit', system-ui, -apple-system, sans-serif;
+  
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --secondary: #ec4899;
+  --accent-yellow: #f59e0b;
+  --accent-green: #10b981;
+  --accent-blue: #0ea5e9;
+  --accent-purple: #8b5cf6;
+  
+  --card-bg: rgba(255, 255, 255, 0.95);
+  --shadow-playful: 0 10px 25px -5px rgba(99, 102, 241, 0.15), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+  --shadow-float: 0 20px 30px -10px rgba(0, 0, 0, 0.12);
+}
+
+body {
+  font-family: var(--font-main);
+  background: linear-gradient(135deg, #f0f4ff 0%, #fae8ff 50%, #fef3c7 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: #1e293b;
+  user-select: text;
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+/* Utilitário para ocultar barra de rolagem em listas horizontais mantendo o toque suave no mobile */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Bolhas de fundo decorativas suaves */
+.bg-bubble {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(40px);
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  animation: floatSlow 20s infinite alternate ease-in-out;
+}
+.bg-bubble-1 {
+  width: 400px;
+  height: 400px;
+  background: #c7d2fe;
+  top: -100px;
+  left: -100px;
+}
+.bg-bubble-2 {
+  width: 450px;
+  height: 450px;
+  background: #fbcfe8;
+  bottom: -100px;
+  right: -100px;
+  animation-duration: 25s;
+}
+.bg-bubble-3 {
+  width: 300px;
+  height: 300px;
+  background: #fef08a;
+  top: 40%;
+  right: 15%;
+  opacity: 0.35;
+}
+
+@keyframes floatSlow {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, 40px) scale(1.08); }
+}
+
+/* Animações e Cards */
+.card-glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  box-shadow: var(--shadow-playful);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.option-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid #e2e8f0;
+  background-color: #ffffff;
+}
+
+.option-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #818cf8;
+  box-shadow: 0 6px 15px -3px rgba(99, 102, 241, 0.18);
+  background-color: #faf5ff;
+}
+
+.option-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Estados de resposta */
+.option-correct {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+  border-color: #22c55e !important;
+  color: #14532d !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px 0 rgba(34, 197, 94, 0.35) !important;
+}
+
+.option-incorrect {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
+  border-color: #ef4444 !important;
+  color: #7f1d1d !important;
+  box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.25) !important;
+}
+
+.option-hinted-correct {
+  border-color: #10b981 !important;
+  border-style: dashed !important;
+  border-width: 3px !important;
+  background-color: #f0fdf4 !important;
+}
+
+/* Pulso alegre para estrelas e streak */
+@keyframes starPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2) rotate(15deg); }
+  100% { transform: scale(1); }
+}
+
+.star-pop {
+  animation: starPulse 0.6s ease-in-out;
+}
+
+/* Animação suave para as caixas de explicação */
+@keyframes slideDownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.explanation-card {
+  animation: slideDownFade 0.35s ease-out forwards;
+}
+
+/* Crachás e tags de matéria */
+.badge-materia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Scrollbar estilizada */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Botão Flutuante de Áudio/Voz */
+.voice-btn {
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.voice-btn:hover {
+  transform: scale(1.1);
+}
+.voice-speaking {
+  animation: speechPulse 1s infinite alternate;
+}
+@keyframes speechPulse {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  100% { transform: scale(1.12); box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+}
+
+/* ==========================================================================
+   TELA INICIAL DE SELEÇÃO: ANALLU & MARCELLA
+   ========================================================================== */
+.daughter-card {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.daughter-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 35px -10px rgba(99, 102, 241, 0.25);
+}
+
+.daughter-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: 0.6s;
+}
+
+.daughter-card:hover::before {
+  left: 100%;
+}
+
+.avatar-bounce {
+  transition: transform 0.3s ease;
+}
+
+.daughter-card:hover .avatar-bounce {
+  transform: scale(1.15) rotate(6deg);
+}
+
+/* ==========================================================================
+   OTIMIZAÇÕES RESPONSIVAS PARA CELULARES E SMARTPHONES (< 640px)
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Tamanho amigável para toque */
+  .option-btn {
+    min-height: 48px;
+    padding: 0.75rem 0.85rem !important;
+  }
+
+  .badge-materia {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.55rem;
+  }
+
+  /* Suaviza as bolhas no mobile para economizar processamento e evitar deslocamento */
+  .bg-bubble-1 {
+    width: 220px;
+    height: 220px;
+    top: -50px;
+    left: -50px;
+  }
+  .bg-bubble-2 {
+    width: 250px;
+    height: 250px;
+    bottom: -50px;
+    right: -50px;
+  }
+  .bg-bubble-3 {
+    display: none;
+  }
+
+  /* Reduz ligeiramente o efeito hover no touch para evitar 'stuck hover' */
+  .daughter-card:hover {
+    transform: none;
+  }
+  
+  .daughter-card:active {
+    transform: scale(0.98);
+  }
+}
+
+

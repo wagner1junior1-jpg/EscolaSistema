@@ -27,6 +27,8 @@ import { getDatabase, saveDatabase } from './db';
 import { gerarId } from './ids';
 import { exigirUsuario } from './autorizacao';
 import { calcularMapaDeCalorQuestao } from '../calculos';
+import { hojeLocal } from '@/lib/datas';
+
 
 export class MockProfessorService implements ProfessorService {
   /**
@@ -228,7 +230,10 @@ export class MockProfessorService implements ProfessorService {
       }
     }
 
-    atividade.status = 'publicada';
+    const ativInDb = db.atividades.find((a) => a.id === id);
+    if (ativInDb) {
+      ativInDb.status = 'publicada';
+    }
     saveDatabase(db);
   }
 
@@ -241,7 +246,10 @@ export class MockProfessorService implements ProfessorService {
     }
 
     const db = await getDatabase();
-    atividade.status = 'encerrada';
+    const ativInDb = db.atividades.find((a) => a.id === id);
+    if (ativInDb) {
+      ativInDb.status = 'encerrada';
+    }
     saveDatabase(db);
   }
 
@@ -318,23 +326,31 @@ export class MockProfessorService implements ProfessorService {
   }
 
   async salvarQuestoes(atividadeId: string, questoes: NovaQuestaoPayload[]): Promise<void> {
-    const { oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
     await this.validarAcessoEscritaOferta(oferta.id);
 
     const db = await getDatabase();
     const agora = new Date().toISOString();
     const letrasValidas: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
+    // 1. Validação de textos e integridade de IDs de todas as questões e alternativas
     for (let i = 0; i < questoes.length; i++) {
       const qPayload = questoes[i];
       const ordemCalculada = qPayload.ordem ?? i + 1;
 
-      if (qPayload.alternativas.length < 2 || qPayload.alternativas.length > 5) {
+      // Validação de texto do enunciado (ponto 5)
+      if (!qPayload.enunciado || !qPayload.enunciado.trim()) {
+        throw new Error(`O enunciado da questão ${ordemCalculada} não pode ficar vazio.`);
+      }
+
+      // Validação de quantidade de alternativas (entre 2 e 5)
+      if (!qPayload.alternativas || qPayload.alternativas.length < 2 || qPayload.alternativas.length > 5) {
         throw new Error(
-          `A questão ${ordemCalculada} deve conter entre 2 e 5 alternativas (possui ${qPayload.alternativas.length}).`
+          `A questão ${ordemCalculada} deve conter entre 2 e 5 alternativas (possui ${qPayload.alternativas?.length || 0}).`
         );
       }
 
+      // Validação de exatamente 1 correta
       const totalCorretas = qPayload.alternativas.filter((a) => a.correta).length;
       if (totalCorretas !== 1) {
         throw new Error(
@@ -342,54 +358,108 @@ export class MockProfessorService implements ProfessorService {
         );
       }
 
-      const questaoId = qPayload.id;
-      const jaTemRespostas = questaoId
-        ? db.respostas.some((r) => r.questao_id === questaoId)
-        : false;
-
-      if (jaTemRespostas && questaoId) {
-        // Regra da Auditoria (Item 7):
-        // Se a questão já foi respondida, verificar se o payload tenta alterar a correta,
-        // adicionar ou remover alternativas. Em caso afirmativo, LANÇAR ERRO explícito!
-        const altsExistentes = db.alternativas
-          .filter((a) => a.questao_id === questaoId)
-          .sort((a, b) => a.letra.localeCompare(b.letra));
-
-        if (qPayload.alternativas.length !== altsExistentes.length) {
+      // Validação de texto das alternativas (ponto 5)
+      for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
+        const alt = qPayload.alternativas[altIdx];
+        if (!alt.texto || !alt.texto.trim()) {
           throw new Error(
-            'Esta questão já foi respondida por alunos: só é possível editar os textos.'
+            `O texto da alternativa ${letrasValidas[altIdx] || altIdx + 1} da questão ${ordemCalculada} não pode ficar vazio.`
           );
         }
-
-        // Verifica se a marcação da alternativa correta foi alterada
-        for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
-          const payloadAlt = qPayload.alternativas[altIdx];
-          const existAlt = altsExistentes[altIdx];
-          if (payloadAlt.correta !== existAlt.correta) {
-            throw new Error(
-              'Esta questão já foi respondida por alunos: só é possível editar os textos.'
-            );
-          }
-        }
-
-        // Atualização permitida apenas dos textos
-        const qExistente = db.questoes.find((q) => q.id === questaoId);
-        if (qExistente) {
-          qExistente.enunciado = qPayload.enunciado.trim();
-          qExistente.dica = qPayload.dica;
-          qExistente.explicacao = qPayload.explicacao;
-        }
-
-        for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
-          const payloadAlt = qPayload.alternativas[altIdx];
-          const existAlt = altsExistentes[altIdx];
-          existAlt.texto = payloadAlt.texto.trim();
-          existAlt.por_que_errou = payloadAlt.por_que_errou;
-        }
-        continue;
       }
 
-      // Se a questão é nova ou ainda não possui respostas
+      // Validação de integridade de IDs (ponto 3):
+      // Se trouxer id de questão, ela deve pertencer à atividadeId informada
+      if (qPayload.id) {
+        const qExistente = db.questoes.find((q) => q.id === qPayload.id);
+        if (!qExistente || qExistente.atividade_id !== atividadeId) {
+          throw new Error('Questão ou alternativa inválida para esta atividade.');
+        }
+      }
+
+      // Se trouxer id de alternativa, ela deve pertencer àquela questão
+      for (const altPayload of qPayload.alternativas) {
+        if (altPayload.id) {
+          const altExistente = db.alternativas.find((a) => a.id === altPayload.id);
+          if (!altExistente || !qPayload.id || altExistente.questao_id !== qPayload.id) {
+            throw new Error('Questão ou alternativa inválida para esta atividade.');
+          }
+        }
+      }
+    }
+
+    // 2. Regra de edição por status da atividade (ponto 4):
+    // Alterações estruturais só em 'rascunho'.
+    // Em 'publicada' ou 'encerrada', só é permitido corrigir textos.
+    if (atividade.status !== 'rascunho') {
+      const questoesAtuais = db.questoes
+        .filter((q) => q.atividade_id === atividadeId)
+        .sort((a, b) => a.ordem - b.ordem);
+
+      // Não pode adicionar nem remover questões
+      if (questoes.length !== questoesAtuais.length) {
+        throw new Error('Atividade publicada: só é possível corrigir textos.');
+      }
+
+      for (let i = 0; i < questoes.length; i++) {
+        const qPayload = questoes[i];
+        if (!qPayload.id) {
+          throw new Error('Atividade publicada: só é possível corrigir textos.');
+        }
+
+        const qAtual = questoesAtuais.find((q) => q.id === qPayload.id);
+        if (!qAtual) {
+          throw new Error('Atividade publicada: só é possível corrigir textos.');
+        }
+
+        const altsAtuais = db.alternativas
+          .filter((a) => a.questao_id === qAtual.id)
+          .sort((a, b) => a.letra.localeCompare(b.letra));
+
+        // Não pode mudar quantidade de alternativas
+        if (qPayload.alternativas.length !== altsAtuais.length) {
+          throw new Error('Atividade publicada: só é possível corrigir textos.');
+        }
+
+        // Não pode trocar qual é a alternativa correta
+        for (let altIdx = 0; altIdx < altsAtuais.length; altIdx++) {
+          const payloadAlt = qPayload.alternativas[altIdx];
+          const existAlt = altsAtuais[altIdx];
+          if (payloadAlt.correta !== existAlt.correta) {
+            throw new Error('Atividade publicada: só é possível corrigir textos.');
+          }
+        }
+      }
+
+      // Aplica atualização estritamente textual
+      for (const qPayload of questoes) {
+        const qAtual = questoesAtuais.find((q) => q.id === qPayload.id)!;
+        qAtual.enunciado = qPayload.enunciado.trim();
+        qAtual.dica = qPayload.dica ? qPayload.dica.trim() : null;
+        qAtual.explicacao = qPayload.explicacao ? qPayload.explicacao.trim() : null;
+
+        const altsAtuais = db.alternativas
+          .filter((a) => a.questao_id === qAtual.id)
+          .sort((a, b) => a.letra.localeCompare(b.letra));
+
+        for (let altIdx = 0; altIdx < altsAtuais.length; altIdx++) {
+          const payloadAlt = qPayload.alternativas[altIdx];
+          const existAlt = altsAtuais[altIdx];
+          existAlt.texto = payloadAlt.texto.trim();
+          existAlt.por_que_errou = payloadAlt.por_que_errou ? payloadAlt.por_que_errou.trim() : null;
+        }
+      }
+
+      saveDatabase(db);
+      return;
+    }
+
+    // 3. Status 'rascunho': permite criação e edição estrutural completa
+    for (let i = 0; i < questoes.length; i++) {
+      const qPayload = questoes[i];
+      const ordemCalculada = qPayload.ordem ?? i + 1;
+      const questaoId = qPayload.id;
+
       const idFinal = questaoId || gerarId('q');
       let questao = db.questoes.find((q) => q.id === idFinal);
 
@@ -400,18 +470,18 @@ export class MockProfessorService implements ProfessorService {
           atividade_id: atividadeId,
           ordem: ordemCalculada,
           enunciado: qPayload.enunciado.trim(),
-          dica: qPayload.dica,
-          explicacao: qPayload.explicacao,
+          dica: qPayload.dica ? qPayload.dica.trim() : null,
+          explicacao: qPayload.explicacao ? qPayload.explicacao.trim() : null,
         };
         db.questoes.push(questao);
       } else {
         questao.ordem = ordemCalculada;
         questao.enunciado = qPayload.enunciado.trim();
-        questao.dica = qPayload.dica;
-        questao.explicacao = qPayload.explicacao;
+        questao.dica = qPayload.dica ? qPayload.dica.trim() : null;
+        questao.explicacao = qPayload.explicacao ? qPayload.explicacao.trim() : null;
       }
 
-      // Atribuição automática das letras na ordem recebida (A, B, C, D, E)
+      // Reatribuição das alternativas da questão
       db.alternativas = db.alternativas.filter((a) => a.questao_id !== idFinal);
       for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
         const altPayload = qPayload.alternativas[altIdx];
@@ -424,7 +494,7 @@ export class MockProfessorService implements ProfessorService {
           letra: letraAtribuida,
           texto: altPayload.texto.trim(),
           correta: altPayload.correta,
-          por_que_errou: altPayload.por_que_errou,
+          por_que_errou: altPayload.por_que_errou ? altPayload.por_que_errou.trim() : null,
         });
       }
     }
@@ -449,8 +519,12 @@ export class MockProfessorService implements ProfessorService {
     const questao = db.questoes.find((q) => q.id === id);
     if (!questao) throw new Error('Questão não encontrada.');
 
-    const { oferta } = await this.obterOfertaDaAtividade(questao.atividade_id);
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(questao.atividade_id);
     await this.validarAcessoEscritaOferta(oferta.id);
+
+    if (atividade.status !== 'rascunho') {
+      throw new Error('Atividade publicada: só é possível corrigir textos.');
+    }
 
     const jaTemRespostas = db.respostas.some((r) => r.questao_id === id);
     if (jaTemRespostas) {
@@ -477,8 +551,8 @@ export class MockProfessorService implements ProfessorService {
     const db = await getDatabase();
     const oferta = db.ofertas.find((o) => o.id === ofertaId)!;
 
-    // Validação 1: Data não pode ser futura
-    const hoje = new Date().toISOString().split('T')[0];
+    // Validação 1: Data não pode ser futura no fuso horário local
+    const hoje = hojeLocal();
     if (data > hoje) {
       throw new Error('Não é possível registrar frequência em data futura.');
     }

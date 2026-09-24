@@ -100,15 +100,25 @@ export class MockAlunoService implements AlunoService {
     }
 
     const agora = new Date();
-    const quinzeMinutosAtras = new Date(agora.getTime() - 15 * 60 * 1000);
+    const agoraMs = agora.getTime();
+    const quinzeMinutosAtrasMs = agoraMs - 15 * 60 * 1000;
 
-    // Verifica tentativas de erro nos últimos 15 minutos
-    const errosRecentes = db.pin_tentativas.filter(
-      (t) =>
-        t.aluno_id === alunoId &&
-        !t.sucesso &&
-        new Date(t.tentativa_em) >= quinzeMinutosAtras
-    );
+    // Encontra o índice da última tentativa com sucesso deste aluno no histórico
+    let ultimoSucessoIdx = -1;
+    for (let i = db.pin_tentativas.length - 1; i >= 0; i--) {
+      const t = db.pin_tentativas[i];
+      if (t.aluno_id === alunoId && t.sucesso) {
+        ultimoSucessoIdx = i;
+        break;
+      }
+    }
+
+    // Só conta erros de PIN feitos APÓS o último sucesso e dentro da janela de 15 min
+    const errosRecentes = db.pin_tentativas.filter((t, idx) => {
+      if (t.aluno_id !== alunoId || t.sucesso) return false;
+      if (idx <= ultimoSucessoIdx) return false;
+      return new Date(t.tentativa_em).getTime() >= quinzeMinutosAtrasMs;
+    });
 
     if (errosRecentes.length >= 5) {
       throw new Error(

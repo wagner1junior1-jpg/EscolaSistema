@@ -36,14 +36,14 @@ export interface NovaQuestaoPayload {
   id?: string;
   ordem?: number;
   enunciado: string;
-  dica: string | null;
-  explicacao: string | null;
+  dica?: string | null;
+  explicacao?: string | null;
   alternativas: Array<{
     id?: string;
     letra?: 'A' | 'B' | 'C' | 'D' | 'E';
     texto: string;
     correta: boolean;
-    por_que_errou: string | null;
+    por_que_errou?: string | null;
   }>;
 }
 

@@ -11,6 +11,11 @@ export const MOCK_STORAGE_KEY = 'saberpontual_mock_db';
 let memoryDb: MockDatabaseSchema | null = null;
 
 export async function getDatabase(): Promise<MockDatabaseSchema> {
+  // Retorna SEMPRE a mesma instância em memória para consistência
+  if (memoryDb) {
+    return memoryDb;
+  }
+
   if (typeof window !== 'undefined' && window.localStorage) {
     const raw = window.localStorage.getItem(MOCK_STORAGE_KEY);
     if (raw) {
@@ -22,10 +27,6 @@ export async function getDatabase(): Promise<MockDatabaseSchema> {
         console.error('Falha ao decodificar banco mock local. Recriando seed...', e);
       }
     }
-  }
-
-  if (memoryDb) {
-    return memoryDb;
   }
 
   // Inicializa seed padrão
@@ -50,3 +51,12 @@ export async function resetDatabase(): Promise<MockDatabaseSchema> {
   saveDatabase(seedData);
   return seedData;
 }
+
+/**
+ * Simula um recarregamento da aplicação (F5),
+ * descartando a referência em memória e forçando nova leitura a partir do localStorage.
+ */
+export function recarregarDoLocalStorage(): void {
+  memoryDb = null;
+}
+

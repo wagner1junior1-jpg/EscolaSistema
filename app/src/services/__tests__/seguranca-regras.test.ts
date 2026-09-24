@@ -4,9 +4,11 @@ import { MockGestaoService } from '../mock/gestao.mock';
 import { MockProfessorService } from '../mock/professor.mock';
 import { MockRelatorioService } from '../mock/relatorio.mock';
 import { MockAlunoService } from '../mock/aluno.mock';
-import { resetDatabase, getDatabase, saveDatabase } from '../mock/db';
+import { resetDatabase, getDatabase, saveDatabase, recarregarDoLocalStorage } from '../mock/db';
 import { gerarId } from '../mock/ids';
 import { Frequencia } from '@/lib/types';
+import { hojeLocal } from '@/lib/datas';
+
 
 describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)', () => {
   const authService = new MockAuthService();
@@ -155,12 +157,11 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
     expect((boletim.aluno as Record<string, unknown>).pin_hash).toBeUndefined();
   });
 
-  // 8. Trocar a correta de questão já respondida lança erro
-  it('trocar a correta de questão já respondida lança erro', async () => {
+  // 8. Trocar a correta de atividade publicada lança erro
+  it('trocar a correta de atividade publicada lança erro', async () => {
     await authService.login('ana@demo.com', 'demo123');
 
-    // q-mat-1 já possui respostas cadastradas no seed (Lucas, Beatriz...)
-    // Alternativa A era a correta. Tentando mudar para B como correta:
+    // ativ-mat-01 é uma atividade publicada. Tentando alterar qual é a correta:
     await expect(
       professorService.salvarQuestoes('ativ-mat-01', [
         {
@@ -177,9 +178,7 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
           ],
         },
       ])
-    ).rejects.toThrow(
-      'Esta questão já foi respondida por alunos: só é possível editar os textos.'
-    );
+    ).rejects.toThrow('Atividade publicada: só é possível corrigir textos.');
   });
 
   // 9. Publicar atividade sem questões lança erro
@@ -238,5 +237,241 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
     }
 
     expect(ids.size).toBe(total);
+  });
+
+  // 12. Publicar atividade, recarregar banco do localStorage (F5) e confirmar que o status é 'publicada'
+  it('publica atividade, recarrega banco do localStorage (F5) e confirma persistência do status "publicada"', async () => {
+    await authService.login('ana@demo.com', 'demo123');
+
+    // Cria nova atividade em rascunho
+    const novaAtiv = await professorService.criarAtividade('oferta-mat-7a', {
+      titulo: 'Atividade de Fixação',
+      descricao: 'Exercícios sobre equações',
+      prazo: '2026-11-15',
+      periodo_id: 'per-bim-3',
+    });
+
+    // Salva questão válida na atividade
+    await professorService.salvarQuestoes(novaAtiv.id, [
+      {
+        ordem: 1,
+        enunciado: 'Quanto é 2 + 2?',
+        dica: 'Soma simples',
+        explicacao: '2 + 2 = 4',
+        alternativas: [
+          { texto: '3', correta: false, por_que_errou: 'Menos um' },
+          { texto: '4', correta: true, por_que_errou: null },
+          { texto: '5', correta: false, por_que_errou: 'Mais um' },
+          { texto: '6', correta: false, por_que_errou: 'Mais dois' },
+        ],
+      },
+    ]);
+
+    // Publica a atividade
+    await professorService.publicarAtividade(novaAtiv.id);
+
+    // Simula o recarregamento do navegador (F5), limpando a instância da memória
+    recarregarDoLocalStorage();
+
+    // Verifica se ao recarregar do localStorage o status continua 'publicada'
+    const atividadeRecarregada = await professorService.obterAtividade(novaAtiv.id);
+    expect(atividadeRecarregada).not.toBeNull();
+    expect(atividadeRecarregada?.status).toBe('publicada');
+  });
+
+  // 13. Carlos tentando passar ID de questão ou alternativa da Ana lança erro
+  it('salvarQuestoes: Carlos passando ID de questão ou alternativa da Ana lança erro', async () => {
+    await authService.login('carlos@demo.com', 'demo123');
+
+    // Carlos tenta alterar sua atividade 'ativ-cien-01', mas injetando o ID de questão da Ana 'q-mat-1'
+    await expect(
+      professorService.salvarQuestoes('ativ-cien-01', [
+        {
+          id: 'q-mat-1', // Pertence a ativ-mat-01 da Ana, não a ativ-cien-01 do Carlos
+          ordem: 1,
+          enunciado: 'Enunciado qualquer',
+          alternativas: [
+            { texto: 'Opção 1', correta: true },
+            { texto: 'Opção 2', correta: false },
+          ],
+        },
+      ])
+    ).rejects.toThrow('Questão ou alternativa inválida para esta atividade.');
+
+    // Agora tentando passar ID de alternativa da Ana 'alt-m1-a'
+    await expect(
+      professorService.salvarQuestoes('ativ-cien-01', [
+        {
+          id: 'q-cien-1',
+          ordem: 1,
+          enunciado: 'Questão de Ciências',
+          alternativas: [
+            { id: 'alt-m1-a', texto: 'Alternativa da Ana', correta: true }, // Pertence a q-mat-1 da Ana
+            { texto: 'Opção B', correta: false },
+          ],
+        },
+      ])
+    ).rejects.toThrow('Questão ou alternativa inválida para esta atividade.');
+  });
+
+  // 14. Alterações estruturais em atividade publicada são barradas, mas correções de texto são aceitas
+  it('alterações estruturais em atividade publicada são bloqueadas, mas textos podem ser corrigidos', async () => {
+    await authService.login('ana@demo.com', 'demo123');
+
+    // ativ-mat-01 é uma atividade publicada com 4 questões no seed
+    const ativOriginal = await professorService.obterAtividade('ativ-mat-01');
+    expect(ativOriginal?.status).toBe('publicada');
+    expect(ativOriginal?.questoes.length).toBe(4);
+
+    // 14.1. Tentar excluir uma questão de atividade publicada lança erro
+    await expect(
+      professorService.excluirQuestao('q-mat-1')
+    ).rejects.toThrow('Atividade publicada: só é possível corrigir textos.');
+
+    // 14.2. Tentar adicionar nova questão a atividade publicada lança erro
+    const payloadComMaisUma = [
+      ...ativOriginal!.questoes.map((q) => ({
+        id: q.id,
+        ordem: q.ordem,
+        enunciado: q.enunciado,
+        alternativas: q.alternativas.map((a) => ({
+          id: a.id,
+          texto: a.texto,
+          correta: a.correta,
+        })),
+      })),
+      {
+        ordem: 5,
+        enunciado: 'Questão Nova não permitida',
+        alternativas: [
+          { texto: 'Alt 1', correta: true },
+          { texto: 'Alt 2', correta: false },
+        ],
+      },
+    ];
+
+    await expect(
+      professorService.salvarQuestoes('ativ-mat-01', payloadComMaisUma)
+    ).rejects.toThrow('Atividade publicada: só é possível corrigir textos.');
+
+    // 14.3. Correção de texto mantendo toda a estrutura de questões e alternativas é permitida com sucesso
+    const payloadApenasTexto = ativOriginal!.questoes.map((q, qIdx) => ({
+      id: q.id,
+      ordem: q.ordem,
+      enunciado: qIdx === 0 ? 'Enunciado corrigido com texto melhorado' : q.enunciado,
+      dica: q.dica,
+      explicacao: q.explicacao,
+      alternativas: q.alternativas.map((a, aIdx) => ({
+        id: a.id,
+        texto: qIdx === 0 && aIdx === 0 ? 'Alternativa A texto corrigido' : a.texto,
+        correta: a.correta,
+        por_que_errou: a.por_que_errou,
+      })),
+    }));
+
+    await professorService.salvarQuestoes('ativ-mat-01', payloadApenasTexto);
+
+    const ativAtualizada = await professorService.obterAtividade('ativ-mat-01');
+    expect(ativAtualizada?.questoes[0].enunciado).toBe('Enunciado corrigido com texto melhorado');
+    expect(ativAtualizada?.questoes[0].alternativas[0].texto).toBe('Alternativa A texto corrigido');
+  });
+
+  // 15. Validação de textos vazios no enunciado e nas alternativas
+  it('validação de textos: enunciado ou alternativas em branco lançam erro', async () => {
+    await authService.login('ana@demo.com', 'demo123');
+
+    const novaAtiv = await professorService.criarAtividade('oferta-mat-7a', {
+      titulo: 'Atividade Rascunho',
+      descricao: 'Teste de validação',
+      prazo: '2026-11-15',
+      periodo_id: 'per-bim-3',
+    });
+
+    // Enunciado vazio
+    await expect(
+      professorService.salvarQuestoes(novaAtiv.id, [
+        {
+          ordem: 1,
+          enunciado: '    ', // Vazio após trim
+          alternativas: [
+            { texto: 'A', correta: true },
+            { texto: 'B', correta: false },
+          ],
+        },
+      ])
+    ).rejects.toThrow('O enunciado da questão 1 não pode ficar vazio.');
+
+    // Alternativa com texto vazio
+    await expect(
+      professorService.salvarQuestoes(novaAtiv.id, [
+        {
+          ordem: 1,
+          enunciado: 'Enunciado válido',
+          alternativas: [
+            { texto: 'A', correta: true },
+            { texto: '   ', correta: false }, // Vazia após trim
+          ],
+        },
+      ])
+    ).rejects.toThrow('O texto da alternativa B da questão 1 não pode ficar vazio.');
+  });
+
+  // 16. hojeLocal e validação de data futura na frequência
+  it('hojeLocal retorna YYYY-MM-DD e frequência rejeita datas futuras', async () => {
+    const hojeStr = hojeLocal();
+    expect(hojeStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    await authService.login('ana@demo.com', 'demo123');
+
+    // Frequência para hoje é aceita
+    await expect(
+      professorService.salvarFrequencia('oferta-mat-7a', hojeStr, [
+        { aluno_id: 'aluno-7a-1', status: 'P' },
+      ])
+    ).resolves.toBeUndefined();
+
+    // Data futura (amanhã)
+    const amanha = new Date();
+    amanha.setDate(amanha.getDate() + 1);
+    const dataAmanhaStr = hojeLocal(amanha);
+
+    await expect(
+      professorService.salvarFrequencia('oferta-mat-7a', dataAmanhaStr, [
+        { aluno_id: 'aluno-7a-1', status: 'P' },
+      ])
+    ).rejects.toThrow('Não é possível registrar frequência em data futura.');
+  });
+
+  // 17. Login do aluno: erros de PIN só contam após o último sucesso
+  it('login do aluno: erros de PIN contam apenas após o último login bem-sucedido', async () => {
+    // Aluno Lucas Souza (aluno-7a-1, PIN '1420')
+    // 1. Aluno erra o PIN 4 vezes
+    for (let i = 0; i < 4; i++) {
+      await expect(
+        alunoService.login('aluno-7a-1', '0000')
+      ).rejects.toThrow('PIN incorreto.');
+    }
+
+    // 2. Aluno digita o PIN correto -> login com sucesso!
+    const { token } = await alunoService.login('aluno-7a-1', '1420');
+    expect(token).toBeDefined();
+
+    // 3. Aluno tenta login novamente e erra o PIN 1 vez:
+    // Não deve ser bloqueado, pois o contador de erros recentes foi resetado após o sucesso!
+    await expect(
+      alunoService.login('aluno-7a-1', '9999')
+    ).rejects.toThrow('PIN incorreto. Você tem mais 4 tentativa(s).');
+
+    // 4. Se agora errar mais 4 vezes seguidas (total 5 erros após o sucesso), é bloqueado
+    for (let i = 0; i < 3; i++) {
+      await expect(
+        alunoService.login('aluno-7a-1', '9999')
+      ).rejects.toThrow('PIN incorreto.');
+    }
+
+    // 5º erro consecutivo após o sucesso
+    await expect(
+      alunoService.login('aluno-7a-1', '9999')
+    ).rejects.toThrow('Acesso bloqueado por 15 minutos');
   });
 });
