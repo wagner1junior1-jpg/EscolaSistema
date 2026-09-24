@@ -6,30 +6,47 @@ import AlunoLoginPage from '@/features/aluno/pages/AlunoLoginPage';
 import AlunoPainelPage from '@/features/aluno/pages/AlunoPainelPage';
 import ProfessorDashboardPage from '@/features/professor/pages/ProfessorDashboardPage';
 import GestaoDashboardPage from '@/features/gestao/pages/GestaoDashboardPage';
+import { RotaProtegida } from '@/features/auth/AuthProvider';
 
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* Rota inicial com vitrine de rotas e demonstração dos componentes */}
+      {/* 1. Página Inicial — SaberPontual com dois caminhos de acesso */}
       <Route path="/" element={<HomePage />} />
 
-      {/* 1. Login do Professor e Gestão */}
+      {/* 2. Login da Equipe Escolar (Professores e Gestão) */}
       <Route path="/entrar" element={<LoginPage />} />
 
-      {/* 2. Login do Aluno (Código + PIN) */}
+      {/* 3. Acesso do Aluno (Código da Turma -> Nome -> PIN) */}
       <Route path="/aluno" element={<AlunoLoginPage />} />
 
-      {/* 3. Painel do Aluno */}
+      {/* 4. Painel do Aluno (Protegido por token de sessão) */}
       <Route path="/aluno/painel" element={<AlunoPainelPage />} />
 
-      {/* 4. Portal do Professor */}
-      <Route path="/professor" element={<ProfessorDashboardPage />} />
+      {/* 5. Portal do Professor (Protegido por papel: professor) */}
+      <Route
+        path="/professor"
+        element={
+          <RotaProtegida papeis={['professor']}>
+            <ProfessorDashboardPage />
+          </RotaProtegida>
+        }
+      />
 
-      {/* 5. Gestão Escolar & Coordenação */}
-      <Route path="/gestao" element={<GestaoDashboardPage />} />
+      {/* 6. Gestão Escolar & Coordenação (Protegido por papéis: direcao, coordenacao) */}
+      <Route
+        path="/gestao"
+        element={
+          <RotaProtegida papeis={['direcao', 'coordenacao']}>
+            <GestaoDashboardPage />
+          </RotaProtegida>
+        }
+      />
 
       {/* Redirecionamento de rotas desconhecidas */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
+
+export default AppRoutes;

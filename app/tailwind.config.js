@@ -20,9 +20,23 @@ export default {
           900: '#312e81',
           950: '#1e1b4b',
         },
+        aluno: {
+          primary: '#6366f1',
+          'primary-hover': '#4f46e5',
+          secondary: '#ec4899',
+          yellow: '#f59e0b',
+          green: '#10b981',
+          blue: '#0ea5e9',
+          purple: '#8b5cf6',
+          bubble1: '#c7d2fe',
+          bubble2: '#fbcfe8',
+          bubble3: '#fef08a',
+        },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['Nunito', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        nunito: ['Nunito', 'system-ui', '-apple-system', 'sans-serif'],
+        outfit: ['Outfit', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         heading: ['Outfit', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       borderRadius: {
@@ -31,6 +45,8 @@ export default {
       },
       boxShadow: {
         subtle: '0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
+        playful: '0 10px 25px -5px rgba(99, 102, 241, 0.15), 0 8px 10px -6px rgba(99, 102, 241, 0.1)',
+        float: '0 20px 30px -10px rgba(0, 0, 0, 0.12)',
       },
     },
   },

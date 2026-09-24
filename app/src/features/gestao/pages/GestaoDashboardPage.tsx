@@ -1,64 +1,87 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
-import { Building2, ArrowLeft, Users, BookMarked, TrendingUp } from 'lucide-react';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { AppShell } from '@/components/layout/AppShell';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui';
+import { Building2, Users, BookMarked, TrendingUp } from 'lucide-react';
 
 export const GestaoDashboardPage: React.FC = () => {
+  const { usuario } = useAuth();
+
   return (
-    <div className="min-h-screen p-4 relative overflow-hidden" style={{background: 'radial-gradient(ellipse at 50% 0%, #f0f9ff 0%, #f8fafc 60%)'}}>
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 w-96 h-96 bg-sky-100/30 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/3" />
-      </div>
-
-      <div className="relative max-w-2xl mx-auto pt-6 space-y-4">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-sky-600 transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" /> Início
-        </Link>
-
-        <div className="flex items-center gap-3 py-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-sky-700 text-white flex items-center justify-center shadow-lg shadow-sky-300/40">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="font-heading font-bold text-xl text-slate-900">Gestão Escolar</h1>
-            <p className="text-xs text-slate-500">Coordenação pedagógica, turmas, períodos e desempenho escolar</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {[
-            { icon: <Users className="w-5 h-5" />, label: 'Turmas & Alunos', desc: 'Cadastro, PIN e filipetas', colorClass: 'bg-sky-100 text-sky-600' },
-            { icon: <BookMarked className="w-5 h-5" />, label: 'Disciplinas', desc: 'Ofertas e professores', colorClass: 'bg-indigo-100 text-indigo-600' },
-            { icon: <TrendingUp className="w-5 h-5" />, label: 'Desempenho', desc: 'Acompanhamento pedagógico das turmas', colorClass: 'bg-emerald-100 text-emerald-600' },
-          ].map((item) => (
-            <Card key={item.label} className="p-4 opacity-60">
-              <div className={`w-9 h-9 rounded-xl ${item.colorClass} flex items-center justify-center mb-3`}>
-                {item.icon}
-              </div>
-              <p className="font-heading font-semibold text-sm text-slate-800">{item.label}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
-            </Card>
-          ))}
-        </div>
-
-        <Card className="border-sky-100">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Gestão em desenvolvimento</CardTitle>
-            <CardDescription>
-              Configure a escola, períodos letivos, disciplinas e turmas. Gerencie professores, acompanhe o desempenho das turmas e exporte relatórios.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="rounded-xl bg-sky-50 border border-sky-100 p-3 text-xs text-sky-800 leading-relaxed">
-              🚧 Painel administrativo em construção. Em breve disponível para direção e coordenação.
+    <AppShell>
+      <div className="space-y-6">
+        {/* Boas-vindas */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-8 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-200 shrink-0">
+              <Building2 className="w-8 h-8" />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <h1 className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
+                Olá, {usuario?.nome || 'Gestor(a)'}!
+              </h1>
+              <p className="text-sm text-slate-500 mt-1 font-sans">
+                Gestão Escolar &amp; Coordenação Pedagógica — Visão geral da escola, turmas, períodos e relatórios.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Recursos em desenvolvimento */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-2">
+                <Users className="w-5 h-5" />
+              </div>
+              <CardTitle className="text-base">Turmas &amp; Alunos</CardTitle>
+              <CardDescription>
+                Gerenciamento de turmas, matrículas, geração e reset de PINs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-xs font-semibold text-sky-700 bg-sky-50 px-2.5 py-1 rounded-full border border-sky-100">
+                Módulo em breve
+              </span>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2">
+                <BookMarked className="w-5 h-5" />
+              </div>
+              <CardTitle className="text-base">Disciplinas &amp; Ofertas</CardTitle>
+              <CardDescription>
+                Atribuição de professores a disciplinas por turma e períodos letivos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-100">
+                Módulo em breve
+              </span>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <CardTitle className="text-base">Diagnóstico da Escola</CardTitle>
+              <CardDescription>
+                Desempenho consolidado por turma, alunos em atenção e questões críticas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                Módulo em breve
+              </span>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </AppShell>
   );
 };
 
