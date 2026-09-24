@@ -311,6 +311,8 @@ export class MockAlunoService implements AlunoService {
           alternativa_correta_id: altCorreta?.id,
           por_que_errou: respostaRegistrada.acertou ? null : altEscolhida?.por_que_errou || null,
           explicacao: q.explicacao,
+          tentativas: respostaRegistrada.tentativas ?? 1,
+          acertou_final: respostaRegistrada.acertou_final ?? respostaRegistrada.acertou,
         };
       }
 
@@ -326,6 +328,8 @@ export class MockAlunoService implements AlunoService {
           acertou: false,
           alternativa_correta_id: altCorreta?.id,
           explicacao: q.explicacao,
+          tentativas: 0,
+          acertou_final: false,
         };
       }
 

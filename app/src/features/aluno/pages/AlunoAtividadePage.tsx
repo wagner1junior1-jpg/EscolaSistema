@@ -103,8 +103,8 @@ export const AlunoAtividadePage: React.FC = () => {
             explicacao: q.explicacao,
             alternativa_escolhida_id: q.alternativa_respondida_id,
             registradaProva: ativ.modo === 'prova',
-            tentativas: 1,
-            acertou_final: q.acertou,
+            tentativas: q.tentativas ?? 1,
+            acertou_final: q.acertou_final ?? q.acertou,
           };
         }
       }
@@ -219,6 +219,7 @@ export const AlunoAtividadePage: React.FC = () => {
         // Mantém acertou da 1ª tentativa para o placar, atualiza acertou_final e feedback
         setRespostasMap((prev) => {
           const anterior = prev[questaoAtual.id];
+          const tentativasAnteriores = anterior?.tentativas ?? 1;
           return {
             ...prev,
             [questaoAtual.id]: {
@@ -226,7 +227,7 @@ export const AlunoAtividadePage: React.FC = () => {
               alternativa_correta_id: resultado.alternativa_correta_id,
               por_que_errou: resultado.por_que_errou,
               explicacao: resultado.explicacao,
-              tentativas: 2,
+              tentativas: tentativasAnteriores + 1,
               acertou_final: resultado.acertou,
               alternativa_escolhida_id: selecionadaId,
             },
@@ -500,6 +501,14 @@ export const AlunoAtividadePage: React.FC = () => {
               <div className="space-y-4">
                 {resultadoProvaFinal.questoes.map((q) => {
                   const semResposta = q.alternativa_escolhida_id === null;
+                  const questaoBase = atividade.questoes.find((item) => item.id === q.questao_id);
+                  const altEscolhida = questaoBase?.alternativas.find(
+                    (a) => a.id === q.alternativa_escolhida_id
+                  );
+                  const altCorreta = questaoBase?.alternativas.find(
+                    (a) => a.id === q.alternativa_correta_id
+                  );
+
                   return (
                     <CartaoVidro key={q.questao_id} className="p-5 sm:p-6 space-y-4">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -525,6 +534,64 @@ export const AlunoAtividadePage: React.FC = () => {
                       <p className="font-heading font-bold text-base sm:text-lg text-slate-900 leading-snug">
                         {q.enunciado}
                       </p>
+
+                      {/* Alternativa Escolhida e Alternativa Correta */}
+                      <div className="space-y-2 pt-1">
+                        {/* Alternativa Escolhida pelo Aluno */}
+                        {semResposta ? (
+                          <div className="p-3.5 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-600 text-sm flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-heading font-bold text-xs uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                                Sua resposta
+                              </span>
+                              <span className="italic font-medium text-slate-500">Em branco</span>
+                            </div>
+                            <span className="text-xs font-heading font-bold text-slate-400">Não respondida</span>
+                          </div>
+                        ) : q.acertou ? (
+                          <div className="p-3.5 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-50 to-emerald-100/90 text-emerald-950 text-sm flex items-center justify-between gap-3 shadow-sm">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-heading font-black text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white shrink-0">
+                                {altEscolhida ? altEscolhida.letra : 'Sua resposta'}
+                              </span>
+                              <span className="font-medium leading-snug">
+                                {altEscolhida ? altEscolhida.texto : ''}
+                              </span>
+                            </div>
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                          </div>
+                        ) : (
+                          <div className="p-3.5 rounded-2xl border-2 border-rose-400 bg-gradient-to-r from-rose-50 to-rose-100/90 text-rose-950 text-sm flex items-center justify-between gap-3 shadow-sm">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-heading font-black text-xs px-2.5 py-1 rounded-lg bg-rose-600 text-white shrink-0">
+                                {altEscolhida ? altEscolhida.letra : 'Sua resposta'}
+                              </span>
+                              <span className="font-medium leading-snug">
+                                {altEscolhida ? altEscolhida.texto : ''}
+                              </span>
+                            </div>
+                            <XCircle className="w-5 h-5 text-rose-600 shrink-0" />
+                          </div>
+                        )}
+
+                        {/* Alternativa Correta (exibida quando o aluno errou ou deixou em branco) */}
+                        {(!q.acertou || semResposta) && altCorreta && (
+                          <div className="p-3.5 rounded-2xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-50 to-emerald-100/90 text-emerald-950 text-sm flex items-center justify-between gap-3 shadow-sm">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-heading font-black text-xs px-2.5 py-1 rounded-lg bg-emerald-600 text-white shrink-0">
+                                {altCorreta.letra}
+                              </span>
+                              <span className="font-bold leading-snug">
+                                {altCorreta.texto}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 text-xs font-heading font-bold text-emerald-700">
+                              <span>Resposta correta</span>
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Caixa de Por que errou (se errou) */}
                       {!q.acertou && q.por_que_errou && (
@@ -744,7 +811,7 @@ export const AlunoAtividadePage: React.FC = () => {
 
             {/* Caixa da Dica Aberta */}
             {dicaAberta && questaoAtual?.dica && !questaoJaRespondida && (
-              <div className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-200 text-amber-950 text-sm leading-relaxed flex items-start gap-2.5 animate-slideDownFade">
+              <div className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-200 text-amber-950 text-sm leading-relaxed flex items-start gap-2.5 animate-slideDownFade motion-reduce:animate-none">
                 <span className="text-lg">💡</span>
                 <div>
                   <span className="font-heading font-bold block text-amber-900 mb-0.5">Dica da questão:</span>
@@ -823,7 +890,7 @@ export const AlunoAtividadePage: React.FC = () => {
 
           {/* Feedback do Modo Exercício (após responder) */}
           {questaoJaRespondida && !isProva && respAtual && (
-            <div className="space-y-4 pt-2 animate-slideDownFade">
+            <div className="space-y-4 pt-2 animate-slideDownFade motion-reduce:animate-none">
               {/* Faixa de Resultado (Verde ou Degradê Vermelho->Laranja) */}
               {respAtual.acertou || respAtual.acertou_final ? (
                 <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-heading font-black text-lg sm:text-xl flex items-center gap-3 shadow-md shadow-emerald-200">
@@ -863,7 +930,7 @@ export const AlunoAtividadePage: React.FC = () => {
 
           {/* Feedback do Modo Prova (Discreto: Resposta registrada ✓) */}
           {questaoJaRespondida && isProva && (
-            <div className="p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-200 text-indigo-900 font-heading font-bold text-base flex items-center gap-2.5 animate-slideDownFade">
+            <div className="p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-200 text-indigo-900 font-heading font-bold text-base flex items-center gap-2.5 animate-slideDownFade motion-reduce:animate-none">
               <CheckCircle2 className="w-5 h-5 text-indigo-600" />
               <span>Resposta registrada ✓</span>
             </div>
@@ -883,8 +950,8 @@ export const AlunoAtividadePage: React.FC = () => {
               </BotaoGrande>
             ) : (
               <div className="flex items-center justify-between w-full gap-3 flex-wrap">
-                {/* Botão Tentar Novamente (só em exercício quando errou e ainda não acertou) */}
-                {!isProva && !respAtual?.acertou && !respAtual?.acertou_final && !isEncerrada && (
+                {/* Botão Tentar Novamente (só em exercício quando acertou_final for false) */}
+                {!isProva && respAtual?.acertou_final === false && !isEncerrada && (
                   <BotaoGrande
                     variant="yellow"
                     onClick={handleIniciarTentarNovamente}

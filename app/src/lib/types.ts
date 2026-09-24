@@ -209,6 +209,8 @@ export interface QuestaoParaAluno {
   alternativa_correta_id?: string;
   por_que_errou?: string | null;
   explicacao?: string | null;
+  tentativas?: number;
+  acertou_final?: boolean;
 }
 
 // Atividade entregue ao portal do aluno

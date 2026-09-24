@@ -49,6 +49,15 @@ export default {
         playful: '0 10px 25px -5px rgba(99, 102, 241, 0.15), 0 8px 10px -6px rgba(99, 102, 241, 0.1)',
         float: '0 20px 30px -10px rgba(0, 0, 0, 0.12)',
       },
+      keyframes: {
+        slideDownFade: {
+          '0%': { opacity: '0', transform: 'translateY(-12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        slideDownFade: 'slideDownFade 0.35s ease-out forwards',
+      },
     },
   },
   plugins: [],

@@ -109,4 +109,27 @@ describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICA
       expect(discMat?.faixa).toBe('Bom');
     });
   });
+
+  describe('Tentativas e persistência após F5 (carregarAtividade)', () => {
+    it('deve devolver tentativas 2 e acertou_final true para Gabriel em ativ-demo-mat-frac (q-demo-frac-2)', async () => {
+      const { token } = await alunoService.login('aluno-7a-3', '7254'); // Gabriel Lima
+      const atividade = await alunoService.carregarAtividade(token, 'ativ-demo-mat-frac');
+      const q2 = atividade.questoes.find((q) => q.id === 'q-demo-frac-2');
+
+      expect(q2).toBeDefined();
+      expect(q2?.tentativas).toBe(2);
+      expect(q2?.acertou_final).toBe(true);
+    });
+
+    it('NÃO deve expor tentativas e acertou_final na Prova de Ciências incompleta do Lucas', async () => {
+      const { token } = await alunoService.login('aluno-7a-1', '1420'); // Lucas Oliveira
+      const atividade = await alunoService.carregarAtividade(token, 'ativ-demo-cien-prova');
+
+      for (const q of atividade.questoes) {
+        expect(q.tentativas).toBeUndefined();
+        expect(q.acertou_final).toBeUndefined();
+      }
+    });
+  });
 });
+
