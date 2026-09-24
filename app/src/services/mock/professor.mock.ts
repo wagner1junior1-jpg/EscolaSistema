@@ -37,6 +37,7 @@ import {
   calcularAproveitamentoAtividade,
   calcularMediaPeriodo,
   faixaDesempenho,
+  mediaDoAlunoNasAtividades,
 } from '../calculos';
 
 export class MockProfessorService implements ProfessorService {
@@ -654,8 +655,6 @@ export class MockProfessorService implements ProfessorService {
 
     for (const aluno of alunosDaTurma) {
       const ativsAluno: DesempenhoOfertaAtividadeAluno[] = [];
-      let somaAcertosMedia = 0;
-      let somaQuestoesMedia = 0;
 
       for (const ativ of atividadesDoPeriodo) {
         const questoes = db.questoes.filter((q) => q.atividade_id === ativ.id);
@@ -669,15 +668,8 @@ export class MockProfessorService implements ProfessorService {
         const concluida = totalQ > 0 && respostas.length === totalQ;
 
         let aproveitamento: number | null = null;
-        if (concluida) {
+        if (concluida || ativ.status === 'encerrada') {
           aproveitamento = calcularAproveitamentoAtividade(acertos, totalQ);
-          somaAcertosMedia += acertos;
-          somaQuestoesMedia += totalQ;
-        } else if (ativ.status === 'encerrada') {
-          // Na atividade encerrada, questões sem resposta contam como erro
-          aproveitamento = calcularAproveitamentoAtividade(acertos, totalQ);
-          somaAcertosMedia += acertos;
-          somaQuestoesMedia += totalQ;
         }
 
         ativsAluno.push({
@@ -689,7 +681,12 @@ export class MockProfessorService implements ProfessorService {
         });
       }
 
-      const media = calcularMediaPeriodo(somaAcertosMedia, somaQuestoesMedia);
+      const respostasDoAluno = db.respostas.filter((r) => r.aluno_id === aluno.id);
+      const { media } = mediaDoAlunoNasAtividades(
+        atividadesDoPeriodo,
+        db.questoes,
+        respostasDoAluno
+      );
       const faixa = faixaDesempenho(media);
 
       alunosRelatorio.push({

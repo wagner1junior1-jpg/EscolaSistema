@@ -455,6 +455,79 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
         alunoService.tentarNovamente(token, 'q-cien-1', 'alt-c1-a')
       ).rejects.toThrow('"Tentar novamente" está disponível apenas no modo exercício.');
     });
+
+    it('resultadoProva liberado numa prova encerrada e incompleta, com as questões em branco contando como erro', async () => {
+      // 1. Aluna Manuela Costa (6º B) responde apenas à q-cien-1 enquanto a prova está publicada
+      const { token } = await alunoService.login('aluno-6b-4', '6543');
+      await alunoService.responder(token, 'q-cien-1', 'alt-c1-b'); // Correta
+
+      // Enquanto a prova está publicada e incompleta, resultadoProva continua bloqueado
+      await expect(
+        alunoService.resultadoProva(token, 'ativ-cien-01')
+      ).rejects.toThrow('Termine todas as questões para ver o resultado.');
+
+      // 2. Professor Carlos encerra a prova
+      await authService.login('carlos@demo.com', 'demo123');
+      await professorService.encerrarAtividade('ativ-cien-01');
+
+      // 3. Agora a aluna pode acessar resultadoProva mesmo incompleta
+      const resultado = await alunoService.resultadoProva(token, 'ativ-cien-01');
+      expect(resultado.atividade_id).toBe('ativ-cien-01');
+      expect(resultado.total_questoes).toBe(4);
+      expect(resultado.acertos).toBe(1);
+      expect(resultado.erros).toBe(3);
+      expect(resultado.aproveitamento).toBe(25);
+
+      // Questão 1 (respondida)
+      expect(resultado.questoes[0].alternativa_escolhida_id).toBe('alt-c1-b');
+      expect(resultado.questoes[0].acertou).toBe(true);
+
+      // Questões 2, 3 e 4 (não respondidas) aparecem com alternativa_escolhida_id null e acertou false
+      for (let i = 1; i < 4; i++) {
+        expect(resultado.questoes[i].alternativa_escolhida_id).toBeNull();
+        expect(resultado.questoes[i].acertou).toBe(false);
+        expect(resultado.questoes[i].alternativa_correta_id).toBeTruthy();
+        expect(resultado.questoes[i].explicacao).toBeTruthy();
+      }
+
+      // 4. carregarAtividade em prova encerrada também mostra o feedback das questões
+      const ativCarregada = await alunoService.carregarAtividade(token, 'ativ-cien-01');
+      expect(ativCarregada.status).toBe('encerrada');
+      expect(ativCarregada.questoes[0].respondida).toBe(true);
+      expect(ativCarregada.questoes[0].acertou).toBe(true);
+      expect(ativCarregada.questoes[1].respondida).toBe(false);
+      expect(ativCarregada.questoes[1].acertou).toBe(false);
+      expect(ativCarregada.questoes[1].alternativa_correta_id).toBeTruthy();
+    });
+
+    it('aluno do 6º B recebe erro em resultadoProva de prova do 7º A', async () => {
+      // Cria uma prova no 7º A
+      await authService.login('ana@demo.com', 'demo123');
+      const prova7A = await professorService.criarAtividade('oferta-mat-7a', {
+        titulo: 'Prova 7A',
+        descricao: 'Avaliação de Matemática',
+        prazo: '2026-11-20',
+        periodo_id: 'per-bim-3',
+        modo: 'prova',
+      });
+
+      // Aluno do 6º B (aluno-6b-1) tenta acessar resultadoProva da prova do 7º A
+      const { token } = await alunoService.login('aluno-6b-1', '1098');
+      await expect(
+        alunoService.resultadoProva(token, prova7A.id)
+      ).rejects.toThrow('Esta atividade não pertence à sua turma.');
+    });
+  });
+
+  // Teste específico de validação de turma na fichaAluno
+  it('fichaAluno com aluno de outra turma recebe erro', async () => {
+    // Carlos é professor do 6º B (oferta-cien-6b)
+    await authService.login('carlos@demo.com', 'demo123');
+
+    // aluno-7a-1 (Lucas) pertence à turma 7º A, não à turma 6º B
+    await expect(
+      professorService.fichaAluno('oferta-cien-6b', 'aluno-7a-1')
+    ).rejects.toThrow('O aluno não pertence à turma desta oferta.');
   });
 
   // 18. Modo Exercício: tentarNovamente e invariância pedagógica
@@ -530,9 +603,9 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
     });
   });
 
-  // 19. Simulação Multi-Aba (Parte E)
-  describe('Simulação Multi-Aba com LocalStorage e Sincronização', () => {
-    it('duas leituras independentes: alteração na primeira é integrada na segunda sem sobrescrever dados alheios', async () => {
+  // 19. Simulação Multi-Aba (Parte E - Trava Otimista)
+  describe('Simulação Multi-Aba com LocalStorage e Sincronização (Trava Otimista)', () => {
+    it('segunda aba recebe erro ao tentar salvar versão defasada e grava com sucesso na nova tentativa', async () => {
       // 1. Aba 1 lê o banco
       const dbAba1 = await getDatabase();
       const versaoInicial = dbAba1.versao || 1;
@@ -555,11 +628,9 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
       saveDatabase(dbAba1);
 
       // Confirma que a versão subiu no localStorage
-      const dbAposAba1 = await getDatabase();
-      expect(dbAposAba1.versao).toBe(versaoInicial + 1);
-      expect(dbAposAba1.turmas.some((t) => t.id === 'turma-aba-1')).toBe(true);
+      expect(dbAba1.versao).toBe(versaoInicial + 1);
 
-      // 4. Aba 2 cria OUTRA turma nova baseada no seu estado prévio
+      // 4. Aba 2 tenta salvar modificação baseada na versão defasada
       dbAba2.turmas.push({
         id: 'turma-aba-2',
         created_at: new Date().toISOString(),
@@ -572,10 +643,30 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
         ativa: true,
       });
 
-      // Salva da Aba 2: o mecanismo de mesclagem (mesclarBancos) não pode apagar turma-aba-1!
-      saveDatabase(dbAba2);
+      // A segunda aba deve receber erro e não gravar
+      expect(() => saveDatabase(dbAba2)).toThrow(
+        'Os dados foram atualizados em outra aba. Tente de novo.'
+      );
 
-      // 5. Verifica se o banco mesclado contém as turmas criadas por AMBAS as abas
+      // 5. Na nova tentativa, Aba 2 busca os dados atualizados (que já contêm a alteração da Aba 1)
+      const dbAba2Atualizado = await getDatabase();
+      expect(dbAba2Atualizado.turmas.some((t) => t.id === 'turma-aba-1')).toBe(true);
+
+      // Aplica a alteração da Aba 2 sobre o banco atualizado e salva
+      dbAba2Atualizado.turmas.push({
+        id: 'turma-aba-2',
+        created_at: new Date().toISOString(),
+        escola_id: 'esc-001',
+        nome: '9º Ano Aba 2',
+        serie: '9º Ano',
+        segmento: 'fund2',
+        ano_letivo: 2026,
+        codigo_acesso: 'ABA202',
+        ativa: true,
+      });
+      saveDatabase(dbAba2Atualizado);
+
+      // 6. Confirma que o banco final contém as turmas criadas por AMBAS as abas e versão = versaoInicial + 2
       const dbFinal = await getDatabase();
       expect(dbFinal.turmas.some((t) => t.id === 'turma-aba-1')).toBe(true);
       expect(dbFinal.turmas.some((t) => t.id === 'turma-aba-2')).toBe(true);

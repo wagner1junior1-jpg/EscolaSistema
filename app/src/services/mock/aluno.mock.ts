@@ -33,8 +33,8 @@ import { hashPin, hashToken, gerarTokenAleatorio } from './crypto';
 import { gerarId } from './ids';
 import {
   calcularAproveitamentoAtividade,
-  calcularMediaPeriodo,
   faixaDesempenho,
+  mediaDoAlunoNasAtividades,
 } from '../calculos';
 
 function toAlunoPublico(aluno: Aluno): AlunoPublico {
@@ -280,9 +280,11 @@ export class MockAlunoService implements AlunoService {
         texto: alt.texto,
       }));
 
+      const altCorreta = todasAlts.find((a) => a.correta);
+
       if (respostaRegistrada) {
-        // Se for prova e ainda não tiver concluído todas as questões: NÃO expõe o feedback pedagógico
-        if (atividade.modo === 'prova' && !provaCompleta) {
+        // Se for prova publicada e ainda não tiver concluído todas as questões: NÃO expõe o feedback pedagógico
+        if (atividade.modo === 'prova' && atividade.status === 'publicada' && !provaCompleta) {
           return {
             id: q.id,
             ordem: q.ordem,
@@ -294,8 +296,7 @@ export class MockAlunoService implements AlunoService {
           };
         }
 
-        // Se for exercício ou prova concluída: inclui feedback pedagógico
-        const altCorreta = todasAlts.find((a) => a.correta);
+        // Se for exercício, prova concluída ou prova encerrada: inclui feedback pedagógico
         const altEscolhida = todasAlts.find((a) => a.id === respostaRegistrada.alternativa_id);
 
         return {
@@ -313,7 +314,22 @@ export class MockAlunoService implements AlunoService {
         };
       }
 
-      // Para questões NÃO respondidas: sigilo absoluto
+      // Para questões NÃO respondidas numa prova encerrada: mostrar o feedback
+      if (atividade.status === 'encerrada') {
+        return {
+          id: q.id,
+          ordem: q.ordem,
+          enunciado: q.enunciado,
+          dica: q.dica,
+          alternativas: alternativasBase,
+          respondida: false,
+          acertou: false,
+          alternativa_correta_id: altCorreta?.id,
+          explicacao: q.explicacao,
+        };
+      }
+
+      // Para questões NÃO respondidas em atividade aberta/publicada: sigilo absoluto
       return {
         id: q.id,
         ordem: q.ordem,
@@ -486,8 +502,17 @@ export class MockAlunoService implements AlunoService {
     const atividade = db.atividades.find((a) => a.id === atividadeId);
     if (!atividade) throw new Error('Atividade não encontrada.');
 
+    const oferta = db.ofertas.find((o) => o.id === atividade.oferta_id);
+    if (!oferta || oferta.turma_id !== aluno.turma_id) {
+      throw new Error('Esta atividade não pertence à sua turma.');
+    }
+
     if (atividade.modo !== 'prova') {
       throw new Error('O resultado detalhado de prova só se aplica a atividades no modo prova.');
+    }
+
+    if (atividade.status !== 'publicada' && atividade.status !== 'encerrada') {
+      throw new Error('Atividade indisponível.');
     }
 
     const questoes = db.questoes
@@ -498,18 +523,33 @@ export class MockAlunoService implements AlunoService {
       (r) => r.aluno_id === aluno.id && questoes.some((q) => q.id === r.questao_id)
     );
 
-    // Só depois de responder TODAS as questões da prova
-    if (respostas.length < questoes.length || questoes.length === 0) {
-      throw new Error('Termine todas as questões para ver o resultado.');
+    // Com a prova publicada e incompleta, continua bloqueado
+    if (atividade.status === 'publicada') {
+      if (respostas.length < questoes.length || questoes.length === 0) {
+        throw new Error('Termine todas as questões para ver o resultado.');
+      }
     }
 
     let acertos = 0;
     const questoesResultado: ResultadoProvaQuestao[] = questoes.map((q) => {
-      const r = respostas.find((resp) => resp.questao_id === q.id)!;
+      const r = respostas.find((resp) => resp.questao_id === q.id);
       const alts = db.alternativas.filter((a) => a.questao_id === q.id);
       const corretaAlt = alts.find((a) => a.correta);
-      const escolhidaAlt = alts.find((a) => a.id === r.alternativa_id);
 
+      if (!r) {
+        return {
+          questao_id: q.id,
+          ordem: q.ordem,
+          enunciado: q.enunciado,
+          alternativa_escolhida_id: null,
+          alternativa_correta_id: corretaAlt?.id || '',
+          acertou: false,
+          por_que_errou: null,
+          explicacao: q.explicacao,
+        };
+      }
+
+      const escolhidaAlt = alts.find((a) => a.id === r.alternativa_id);
       if (r.acertou) acertos++;
 
       return {
@@ -556,7 +596,7 @@ export class MockAlunoService implements AlunoService {
       const disc = db.disciplinas.find((d) => d.id === of.disciplina_id);
       const prof = db.perfis.find((p) => p.id === of.professor_id);
 
-      // Atividades concluídas ou encerradas do período nesta oferta
+      // Atividades do período nesta oferta
       const ativs = db.atividades.filter(
         (a) =>
           a.oferta_id === of.id &&
@@ -564,38 +604,20 @@ export class MockAlunoService implements AlunoService {
           a.status !== 'rascunho'
       );
 
-      let somaAcertos = 0;
-      let somaQuestoes = 0;
-      let concluidasCount = 0;
-
-      for (const a of ativs) {
-        const questoes = db.questoes.filter((q) => q.atividade_id === a.id);
-        const respostas = db.respostas.filter(
-          (r) =>
-            r.aluno_id === aluno.id &&
-            questoes.some((q) => q.id === r.questao_id)
-        );
-
-        if (questoes.length > 0 && respostas.length === questoes.length) {
-          concluidasCount++;
-          // Usa sempre a 1ª tentativa para a nota/média
-          somaAcertos += respostas.filter((r) => r.acertou).length;
-          somaQuestoes += questoes.length;
-        } else if (a.status === 'encerrada') {
-          somaAcertos += respostas.filter((r) => r.acertou).length;
-          somaQuestoes += questoes.length;
-        }
-      }
-
-      const mediaAproveitamento = calcularMediaPeriodo(somaAcertos, somaQuestoes);
-      const faixa = faixaDesempenho(mediaAproveitamento);
+      const respostasDoAluno = db.respostas.filter((r) => r.aluno_id === aluno.id);
+      const { media, atividades_avaliadas } = mediaDoAlunoNasAtividades(
+        ativs,
+        db.questoes,
+        respostasDoAluno
+      );
+      const faixa = faixaDesempenho(media);
 
       return {
         oferta_id: of.id,
         disciplina_nome: disc?.nome || 'Disciplina',
         professor_nome: prof?.nome || 'Professor',
-        atividades_concluidas: concluidasCount,
-        media_periodo: mediaAproveitamento,
+        atividades_concluidas: atividades_avaliadas,
+        media_periodo: media,
         faixa,
       };
     });

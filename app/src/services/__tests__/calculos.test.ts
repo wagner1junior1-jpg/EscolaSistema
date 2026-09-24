@@ -5,8 +5,9 @@ import {
   faixaDesempenho,
   questoesCriticas,
   calcularMapaDeCalorQuestao,
+  mediaDoAlunoNasAtividades,
 } from '../calculos';
-import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao } from '@/lib/types';
+import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao, Atividade } from '@/lib/types';
 
 describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', () => {
   describe('1. Aproveitamento em uma atividade', () => {
@@ -43,6 +44,131 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
     it('deve retornar null se não houver questões avaliadas ou lista vazia', () => {
       expect(calcularMediaPeriodo(0, 0)).toBeNull();
       expect(calcularMediaPeriodo([])).toBeNull();
+    });
+  });
+
+  describe('2.1 Média do aluno nas atividades (mediaDoAlunoNasAtividades)', () => {
+    const criarQuestao = (id: string, atividadeId: string): Questao => ({
+      id,
+      created_at: '',
+      atividade_id: atividadeId,
+      ordem: 1,
+      enunciado: 'Questão ' + id,
+      dica: null,
+      explicacao: null,
+    });
+
+    const criarResposta = (
+      id: string,
+      alunoId: string,
+      questaoId: string,
+      acertou: boolean,
+      acertouFinal: boolean = acertou
+    ): Resposta => ({
+      id,
+      created_at: '',
+      aluno_id: alunoId,
+      questao_id: questaoId,
+      alternativa_id: 'alt-1',
+      acertou,
+      respondida_em: '',
+      tentativas: 1,
+      acertou_final: acertouFinal,
+    });
+
+    it('ignora atividades em rascunho mesmo com respostas', () => {
+      const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'a1', status: 'rascunho' }];
+      const questoes = [criarQuestao('q1', 'a1'), criarQuestao('q2', 'a1')];
+      const respostas = [
+        criarResposta('r1', 'aluno-1', 'q1', true),
+        criarResposta('r2', 'aluno-1', 'q2', true),
+      ];
+
+      const res = mediaDoAlunoNasAtividades(ativs, questoes, respostas);
+      expect(res.atividades_avaliadas).toBe(0);
+      expect(res.media).toBeNull();
+      expect(res.soma_acertos).toBe(0);
+      expect(res.soma_questoes).toBe(0);
+    });
+
+    it('ignora atividade publicada que ainda está incompleta', () => {
+      const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'a1', status: 'publicada' }];
+      const questoes = [criarQuestao('q1', 'a1'), criarQuestao('q2', 'a1')];
+      const respostas = [criarResposta('r1', 'aluno-1', 'q1', true)]; // Apenas 1 de 2 respondida
+
+      const res = mediaDoAlunoNasAtividades(ativs, questoes, respostas);
+      expect(res.atividades_avaliadas).toBe(0);
+      expect(res.media).toBeNull();
+    });
+
+    it('avalia atividade publicada concluída usando estritamente a 1ª resposta', () => {
+      const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'a1', status: 'publicada' }];
+      const questoes = [
+        criarQuestao('q1', 'a1'),
+        criarQuestao('q2', 'a1'),
+        criarQuestao('q3', 'a1'),
+        criarQuestao('q4', 'a1'),
+      ];
+      const respostas = [
+        criarResposta('r1', 'aluno-1', 'q1', true),
+        criarResposta('r2', 'aluno-1', 'q2', true),
+        criarResposta('r3', 'aluno-1', 'q3', true),
+        // Na q4 errou na 1ª tentativa, mas acertou_final = true no retry:
+        criarResposta('r4', 'aluno-1', 'q4', false, true),
+      ];
+
+      const res = mediaDoAlunoNasAtividades(ativs, questoes, respostas);
+      expect(res.atividades_avaliadas).toBe(1);
+      expect(res.soma_acertos).toBe(3); // 3 da primeira resposta
+      expect(res.soma_questoes).toBe(4);
+      expect(res.media).toBe(75);
+    });
+
+    it('avalia atividade encerrada incompleta contando não respondidas como erro', () => {
+      const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'a1', status: 'encerrada' }];
+      const questoes = [
+        criarQuestao('q1', 'a1'),
+        criarQuestao('q2', 'a1'),
+        criarQuestao('q3', 'a1'),
+        criarQuestao('q4', 'a1'),
+      ];
+      // Aluno respondeu apenas 1 questão (correta) e deixou 3 em branco:
+      const respostas = [criarResposta('r1', 'aluno-1', 'q1', true)];
+
+      const res = mediaDoAlunoNasAtividades(ativs, questoes, respostas);
+      expect(res.atividades_avaliadas).toBe(1);
+      expect(res.soma_acertos).toBe(1);
+      expect(res.soma_questoes).toBe(4);
+      expect(res.media).toBe(25);
+    });
+
+    it('combina múltiplas atividades e suporta diferentes fontes de questões (Map e Record)', () => {
+      const ativs: Pick<Atividade, 'id' | 'status'>[] = [
+        { id: 'a1', status: 'publicada' },
+        { id: 'a2', status: 'encerrada' },
+      ];
+
+      const qMap = new Map<string, Questao[]>([
+        ['a1', [criarQuestao('q1', 'a1'), criarQuestao('q2', 'a1')]],
+        ['a2', [criarQuestao('q3', 'a2'), criarQuestao('q4', 'a2'), criarQuestao('q5', 'a2')]],
+      ]);
+
+      const respostas = [
+        criarResposta('r1', 'aluno-1', 'q1', true),
+        criarResposta('r2', 'aluno-1', 'q2', true),
+        criarResposta('r3', 'aluno-1', 'q3', true),
+        criarResposta('r4', 'aluno-1', 'q4', false),
+        // q5 não respondida em a2 (encerrada)
+      ];
+
+      const res = mediaDoAlunoNasAtividades(ativs, qMap, respostas);
+      // a1: 2 acertos em 2 questões
+      // a2: 1 acerto em 3 questões
+      // Total: 3 acertos em 5 questões = 60%
+      expect(res.atividades_avaliadas).toBe(2);
+      expect(res.soma_acertos).toBe(3);
+      expect(res.soma_questoes).toBe(5);
+      expect(res.media).toBe(60);
     });
   });
 

@@ -43,46 +43,6 @@ if (typeof window !== 'undefined' && window.addEventListener) {
   });
 }
 
-/**
- * Mescla entidades gravadas em outra aba que ainda não estão presentes na instância atual
- */
-function mesclarBancos(local: MockDatabaseSchema, remoto: MockDatabaseSchema): void {
-  const chavesComId: Array<keyof MockDatabaseSchema> = [
-    'escolas',
-    'perfis',
-    'periodos',
-    'disciplinas',
-    'turmas',
-    'ofertas',
-    'alunos',
-    'atividades',
-    'questoes',
-    'alternativas',
-    'respostas',
-    'avisos',
-    'aluno_sessoes',
-    'pin_tentativas',
-  ];
-
-  for (const chave of chavesComId) {
-    const listaLocal = local[chave] as Array<{ id: string }>;
-    const listaRemota = remoto[chave] as Array<{ id: string }>;
-    if (Array.isArray(listaLocal) && Array.isArray(listaRemota)) {
-      const idsLocais = new Set(listaLocal.map((item) => item.id));
-      for (const itemRemoto of listaRemota) {
-        if (!idsLocais.has(itemRemoto.id)) {
-          listaLocal.push(itemRemoto);
-          idsLocais.add(itemRemoto.id);
-        }
-      }
-    }
-  }
-
-  if (remoto.credenciais) {
-    local.credenciais = { ...remoto.credenciais, ...local.credenciais };
-  }
-}
-
 export async function getDatabase(): Promise<MockDatabaseSchema> {
   // Se houver localStorage, verifica se existe uma versão gravada mais recente
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -112,18 +72,19 @@ export async function getDatabase(): Promise<MockDatabaseSchema> {
 }
 
 export function saveDatabase(db: MockDatabaseSchema): void {
-  // Se o localStorage tiver versão mais nova que a da memória atual, recarrega e mescla antes de salvar
+  // Se o localStorage tiver versão mais nova que a do db que está sendo salvo, NÃO grava
   if (typeof window !== 'undefined' && window.localStorage) {
     const raw = window.localStorage.getItem(MOCK_STORAGE_KEY);
     if (raw) {
+      let storageDb: MockDatabaseSchema | null = null;
       try {
-        const storageDb = JSON.parse(raw) as MockDatabaseSchema;
-        if (storageDb && typeof storageDb.versao === 'number' && storageDb.versao > (db.versao || 0)) {
-          mesclarBancos(db, storageDb);
-          db.versao = storageDb.versao;
-        }
+        storageDb = JSON.parse(raw) as MockDatabaseSchema;
       } catch (e) {
         console.warn('Erro ao verificar versão do localStorage antes de salvar:', e);
+      }
+      if (storageDb && typeof storageDb.versao === 'number' && storageDb.versao > (db.versao || 0)) {
+        memoryDb = null;
+        throw new Error('Os dados foram atualizados em outra aba. Tente de novo.');
       }
     }
   }

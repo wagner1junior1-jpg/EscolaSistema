@@ -12,7 +12,34 @@ import {
   Questao,
   Alternativa,
   Resposta,
+  Atividade,
+  ResultadoMediaAluno,
 } from '@/lib/types';
+
+/**
+ * Fonte flexível para consulta de questões de atividades
+ */
+export type FonteQuestoes =
+  | Questao[]
+  | Record<string, Questao[]>
+  | Map<string, Questao[]>
+  | ((atividadeId: string) => Questao[]);
+
+function obterQuestoesDaAtividade(fonte: FonteQuestoes, atividadeId: string): Questao[] {
+  if (typeof fonte === 'function') {
+    return fonte(atividadeId);
+  }
+  if (fonte instanceof Map) {
+    return fonte.get(atividadeId) || [];
+  }
+  if (Array.isArray(fonte)) {
+    return fonte.filter((q) => q.atividade_id === atividadeId);
+  }
+  if (fonte && typeof fonte === 'object') {
+    return (fonte as Record<string, Questao[]>)[atividadeId] || [];
+  }
+  return [];
+}
 
 /**
  * 1. Aproveitamento em uma atividade
@@ -46,6 +73,57 @@ export function calcularMediaPeriodo(
   if (somaQuestoes === undefined || somaQuestoes <= 0) return null;
   const valor = (somaAcertosOrAtividades / somaQuestoes) * 100;
   return Math.round(valor * 10) / 10;
+}
+
+/**
+ * 2.1 Média unificada do aluno nas atividades (Seção 6)
+ * Regra única:
+ * - Apenas atividades com status 'publicada' ou 'encerrada' (rascunhos nunca entram)
+ * - Conta apenas se concluída ou se a atividade estiver 'encerrada'
+ * - Na atividade encerrada incompleta, questões sem resposta contam como erro
+ * - Considera estritamente a 1ª resposta (campo r.acertou)
+ * - Retorna { media, atividades_avaliadas, soma_acertos, soma_questoes }
+ */
+export function mediaDoAlunoNasAtividades(
+  atividades: Array<Pick<Atividade, 'id' | 'status'>>,
+  questoesPorAtividade: FonteQuestoes,
+  respostasDoAluno: Resposta[]
+): ResultadoMediaAluno {
+  let soma_acertos = 0;
+  let soma_questoes = 0;
+  let atividades_avaliadas = 0;
+
+  for (const ativ of atividades) {
+    if (ativ.status !== 'publicada' && ativ.status !== 'encerrada') {
+      continue;
+    }
+
+    const questoes = obterQuestoesDaAtividade(questoesPorAtividade, ativ.id);
+    const totalQ = questoes.length;
+    if (totalQ === 0) continue;
+
+    const questaoIds = new Set(questoes.map((q) => q.id));
+    const respostasDaAtividade = respostasDoAluno.filter((r) => questaoIds.has(r.questao_id));
+
+    const concluida = respostasDaAtividade.length === totalQ;
+
+    if (concluida || ativ.status === 'encerrada') {
+      atividades_avaliadas++;
+      // Usa estritamente a 1ª resposta do aluno
+      const acertos = respostasDaAtividade.filter((r) => r.acertou).length;
+      soma_acertos += acertos;
+      soma_questoes += totalQ;
+    }
+  }
+
+  const media = calcularMediaPeriodo(soma_acertos, soma_questoes);
+
+  return {
+    media,
+    atividades_avaliadas,
+    soma_acertos,
+    soma_questoes,
+  };
 }
 
 /**

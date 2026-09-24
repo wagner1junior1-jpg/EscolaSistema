@@ -255,11 +255,19 @@ export interface ResultadoProvaQuestao {
   questao_id: string;
   ordem: number;
   enunciado: string;
-  alternativa_escolhida_id: string;
+  alternativa_escolhida_id: string | null;
   alternativa_correta_id: string;
   acertou: boolean;
   por_que_errou: string | null;
   explicacao: string | null;
+}
+
+// Resultado consolidado de média de aluno em atividades (seção 6)
+export interface ResultadoMediaAluno {
+  media: number | null;
+  atividades_avaliadas: number;
+  soma_acertos: number;
+  soma_questoes: number;
 }
 
 // Resultado final de prova entregue ao aluno após concluir todas as questões

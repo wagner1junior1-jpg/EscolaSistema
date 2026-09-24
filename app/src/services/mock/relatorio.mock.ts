@@ -17,10 +17,10 @@ import {
 import { getDatabase } from './db';
 import { exigirUsuario } from './autorizacao';
 import {
-  calcularMediaPeriodo,
   calcularMapaDeCalorQuestao,
   faixaDesempenho,
   questoesCriticas,
+  mediaDoAlunoNasAtividades,
 } from '../calculos';
 
 export class MockRelatorioService implements RelatorioService {
@@ -87,25 +87,11 @@ export class MockRelatorioService implements RelatorioService {
         };
 
         for (const aluno of alunos) {
-          let somaAcertos = 0;
-          let somaQuestoes = 0;
-
-          for (const ativ of atividadesDaOferta) {
-            const questoes = db.questoes.filter((q) => q.atividade_id === ativ.id);
-            const totalQ = questoes.length;
-            const respostas = db.respostas.filter(
-              (r) => r.aluno_id === aluno.id && questoes.some((q) => q.id === r.questao_id)
-            );
-            const acertos = respostas.filter((r) => r.acertou).length;
-            const concluida = totalQ > 0 && respostas.length === totalQ;
-
-            if (concluida || ativ.status === 'encerrada') {
-              somaAcertos += acertos;
-              somaQuestoes += totalQ;
-            }
-          }
-
-          const media = calcularMediaPeriodo(somaAcertos, somaQuestoes);
+          const { media } = mediaDoAlunoNasAtividades(
+            atividadesDaOferta,
+            db.questoes,
+            db.respostas.filter((r) => r.aluno_id === aluno.id)
+          );
           const faixa = faixaDesempenho(media);
 
           if (faixa === 'Ótimo') contagemFaixas.otimo++;
@@ -161,25 +147,11 @@ export class MockRelatorioService implements RelatorioService {
       );
 
       for (const aluno of alunos) {
-        let somaAcertos = 0;
-        let somaQuestoes = 0;
-
-        for (const ativ of atividades) {
-          const questoes = db.questoes.filter((q) => q.atividade_id === ativ.id);
-          const totalQ = questoes.length;
-          const respostas = db.respostas.filter(
-            (r) => r.aluno_id === aluno.id && questoes.some((q) => q.id === r.questao_id)
-          );
-          const acertos = respostas.filter((r) => r.acertou).length;
-          const concluida = totalQ > 0 && respostas.length === totalQ;
-
-          if (concluida || ativ.status === 'encerrada') {
-            somaAcertos += acertos;
-            somaQuestoes += totalQ;
-          }
-        }
-
-        const media = calcularMediaPeriodo(somaAcertos, somaQuestoes);
+        const { media } = mediaDoAlunoNasAtividades(
+          atividades,
+          db.questoes,
+          db.respostas.filter((r) => r.aluno_id === aluno.id)
+        );
         const faixa = faixaDesempenho(media);
 
         if (faixa === 'Atenção' && media !== null) {
