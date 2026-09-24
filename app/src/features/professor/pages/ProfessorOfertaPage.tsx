@@ -811,7 +811,8 @@ export const ProfessorOfertaPage: React.FC = () => {
                       Quadro Geral de Desempenho
                     </h3>
                     <p className="text-xs text-slate-500">
-                      {relatorioDesempenho.periodo_nome} • {alunosDesempenho.length} aluno(s) listado(s)
+                      {relatorioDesempenho.periodo_nome} • {alunosDesempenho.length}{' '}
+                      {alunosDesempenho.length === 1 ? 'aluno listado' : 'alunos listados'}
                     </p>
                   </div>
                 </div>
@@ -886,6 +887,10 @@ export const ProfessorOfertaPage: React.FC = () => {
                               const dadoAtiv = aluno.atividades.find(
                                 (a) => a.atividade_id === colAtiv.id
                               );
+                              const ativOriginal = atividades.find(
+                                (a) => a.id === colAtiv.id
+                              );
+                              const isAtivEncerrada = ativOriginal?.status === 'encerrada';
 
                               return (
                                 <td
@@ -895,12 +900,18 @@ export const ProfessorOfertaPage: React.FC = () => {
                                   {!dadoAtiv || dadoAtiv.aproveitamento === null ? (
                                     <span className="text-slate-300 font-mono">—</span>
                                   ) : !dadoAtiv.concluida ? (
-                                    <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
-                                      em andamento
-                                    </span>
+                                    isAtivEncerrada ? (
+                                      <span className="font-mono font-medium text-slate-700">
+                                        {String(dadoAtiv.aproveitamento).replace('.', ',')}% (incompleta)
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                                        em andamento
+                                      </span>
+                                    )
                                   ) : (
                                     <span className="font-mono font-bold text-slate-700">
-                                      {dadoAtiv.aproveitamento}%
+                                      {String(dadoAtiv.aproveitamento).replace('.', ',')}%
                                     </span>
                                   )}
                                 </td>

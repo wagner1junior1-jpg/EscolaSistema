@@ -149,7 +149,8 @@ export const ProfessorResultadosPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 font-medium">
                   <Users className="w-4 h-4 text-indigo-600" />
                   <span>
-                    <strong>{mapa.total_alunos_responderam}</strong> aluno(s) responderam
+                    <strong>{mapa.total_alunos_responderam}</strong>{' '}
+                    {mapa.total_alunos_responderam === 1 ? 'aluno respondeu' : 'alunos responderam'}
                   </span>
                 </div>
               </div>
@@ -280,7 +281,8 @@ export const ProfessorResultadosPage: React.FC = () => {
                                   </div>
 
                                   <div className="text-right shrink-0 font-semibold text-slate-600 font-mono">
-                                    <strong>{totalVotos}</strong> aluno(s) ({porcentagem}%)
+                                    <strong>{totalVotos}</strong>{' '}
+                                    {totalVotos === 1 ? 'aluno' : 'alunos'} ({porcentagem}%)
                                   </div>
                                 </div>
 
@@ -306,7 +308,8 @@ export const ProfessorResultadosPage: React.FC = () => {
                             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                             <span>
                               Pegadinha mais escolhida: Letra {q.distrator_mais_escolhido.letra} (
-                              {q.distrator_mais_escolhido.total_escolhas} alunos)
+                              {q.distrator_mais_escolhido.total_escolhas}{' '}
+                              {q.distrator_mais_escolhido.total_escolhas === 1 ? 'aluno' : 'alunos'})
                             </span>
                           </div>
                           <p className="text-xs text-rose-800 leading-relaxed pl-6">
