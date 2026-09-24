@@ -1,0 +1,243 @@
+import { test, expect, Page } from '@playwright/test';
+
+test.use({ viewport: { width: 1280, height: 900 } });
+
+async function loginDemo(page: Page, nomeOuEmail: string) {
+  await page.goto('/entrar');
+  await page.getByText(nomeOuEmail).click();
+  await page.getByRole('button', { name: 'Entrar' }).click();
+}
+
+test.describe('Portal do Professor', () => {
+  test('P1: Painel do professor com turmas ofertadas', async ({ page }) => {
+    await loginDemo(page, 'Profª Ana Paula');
+    await expect(page).toHaveURL(/\/professor/);
+
+    // Mostra os cartões Matemática e Língua Portuguesa do 7º Ano A
+    await expect(page.getByText('Matemática')).toBeVisible();
+    await expect(page.getByText('Língua Portuguesa')).toBeVisible();
+    await expect(page.getByText('7º Ano A').first()).toBeVisible();
+
+    // Captura P1
+    await page.screenshot({ path: 'e2e/evidencias/P1.png' });
+  });
+
+  // P2, P3 e P4 compartilham o mesmo ciclo de vida e estado
+  test.describe.serial('Ciclo de Atividade: Criação, Resposta e Edição de Textos (P2 a P4)', () => {
+    let page: Page;
+
+    test.beforeAll(async ({ browser }) => {
+      page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    });
+
+    test.afterAll(async () => {
+      await page.close();
+    });
+
+    test('P2: Ana cria e publica a atividade Teste E2E', async () => {
+      await loginDemo(page, 'Profª Ana Paula');
+      await expect(page).toHaveURL(/\/professor/);
+
+      // Abre a oferta de Matemática 7º A
+      await page.goto('/professor/oferta/oferta-mat-7a');
+
+      // Clica em Nova Atividade
+      await page.getByRole('button', { name: 'Nova Atividade' }).click();
+
+      // Preenche os dados
+      await page.getByLabel('Título da Atividade *').fill('Teste E2E');
+      await page.getByLabel('Descrição / Orientações *').fill('Exercício para teste automatizado');
+      await page.getByRole('button', { name: 'Criar e editar questões' }).click();
+
+      // No editor: Adiciona 1 questão
+      await page.getByRole('button', { name: 'Adicionar primeira questão' }).click();
+      await page
+        .getByPlaceholder('Digite aqui o problema ou enunciado completo da questão...')
+        .fill('Quanto é 2 + 2?');
+
+      // Alternativa A: 4 (correta por padrão)
+      await page.getByPlaceholder('Texto da alternativa A...').fill('4');
+
+      // Alternativa B: 5 com diagnóstico
+      await page.getByPlaceholder('Texto da alternativa B...').fill('5');
+      await page
+        .getByPlaceholder('Ex: O aluno esqueceu de inverter a fração ao dividir...')
+        .first()
+        .fill('Contou um a mais.');
+
+      // Alternativa C: 22
+      await page.getByPlaceholder('Texto da alternativa C...').fill('22');
+
+      // Alternativa D: 3
+      await page.getByPlaceholder('Texto da alternativa D...').fill('3');
+
+      // Salva a atividade
+      await page.getByRole('button', { name: 'Salvar atividade' }).click();
+      await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
+
+      // Volta para as atividades da turma
+      await page.getByText('Voltar para as atividades da turma').click();
+
+      // Na aba Rascunhos, publica a atividade
+      const card = page.locator('.rounded-2xl').filter({ hasText: 'Teste E2E' });
+      await card.getByRole('button', { name: 'Publicar' }).click();
+
+      // Confirma no modal
+      await page.getByRole('button', { name: 'Publicar agora' }).click();
+      await expect(page.getByText('Atividade publicada com sucesso!')).toBeVisible();
+
+      // Aparece na aba Publicadas
+      await page.getByRole('button', { name: /Publicadas/ }).click();
+      await expect(page.getByText('Teste E2E')).toBeVisible();
+    });
+
+    test('P3: Lucas responde e vê o diagnóstico de erro', async () => {
+      // Vai para o portal do aluno
+      await page.goto('/aluno');
+      await page.getByPlaceholder('Ex: 7A-MAT').fill('7a-mat');
+      await page.getByRole('button', { name: 'Continuar' }).click();
+      await page.getByText('Lucas Oliveira').click();
+
+      // Digita PIN 1420
+      for (const digito of '1420') {
+        await page.getByRole('button', { name: digito, exact: true }).click();
+      }
+      await expect(page).toHaveURL(/\/aluno\/painel/);
+
+      // Abre Teste E2E
+      const cardAluno = page.locator('.rounded-3xl').filter({ hasText: 'Teste E2E' });
+      await cardAluno.getByRole('button', { name: /Começar|Continuar/ }).click();
+
+      // Escolhe 5
+      await page.locator('div[role="radiogroup"] button').filter({ hasText: '5' }).click();
+      await page.getByRole('button', { name: 'Confirmar resposta' }).click();
+
+      // Vê a explicação da pegadinha
+      await expect(page.getByText('Contou um a mais.')).toBeVisible();
+    });
+
+    test('P4: Ana edita textos da atividade publicada', async () => {
+      // Volta para login do professor
+      await loginDemo(page, 'Profª Ana Paula');
+      await page.goto('/professor/oferta/oferta-mat-7a?aba=atividades');
+
+      // Aba Publicadas
+      await page.getByRole('button', { name: /Publicadas/ }).click();
+
+      // Clica em Editar textos
+      const card = page.locator('.rounded-2xl').filter({ hasText: 'Teste E2E' });
+      await card.getByRole('button', { name: 'Editar textos' }).click();
+
+      // Rádios de correta estão desabilitados
+      const radio = page.locator('input[type="radio"]').first();
+      await expect(radio).toBeDisabled();
+
+      // Não existe o botão Adicionar questão
+      await expect(page.getByRole('button', { name: 'Adicionar questão' })).toHaveCount(0);
+
+      // Altera o texto da alternativa A para "4 (quatro)"
+      await page.getByPlaceholder('Texto da alternativa A...').fill('4 (quatro)');
+
+      // Salva
+      await page.getByRole('button', { name: 'Salvar atividade' }).click();
+      await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
+
+      // Captura P4
+      await page.screenshot({ path: 'e2e/evidencias/P4.png' });
+    });
+  });
+
+  test('P5: Mapa de calor e questão crítica', async ({ page }) => {
+    await loginDemo(page, 'Profª Ana Paula');
+
+    // Abre resultados de Frações
+    await page.goto('/professor/atividade/ativ-demo-mat-frac/resultados');
+
+    // A questão 2 tem o chip "Questão crítica", o acerto 28,6% ou 28.6% e "Letra B (3 alunos)"
+    const q2 = page.locator('.rounded-2xl').filter({ hasText: 'Questão 2' });
+    await expect(q2.getByText('Questão crítica')).toBeVisible();
+    await expect(q2.getByText(/28[,\.]6%/).first()).toBeVisible();
+    await expect(q2.getByText(/Letra B \(3 alunos\)/)).toBeVisible();
+
+    // Captura P5
+    await page.screenshot({ path: 'e2e/evidencias/P5.png' });
+  });
+
+  test('P6: Aba Desempenho e filtro de alunos em Atenção', async ({ page }) => {
+    await loginDemo(page, 'Profª Ana Paula');
+
+    await page.goto('/professor/oferta/oferta-mat-7a?aba=desempenho');
+
+    // As linhas dos 4 alunos mostram "Atenção"
+    await expect(page.locator('tr').filter({ hasText: 'Gabriel Lima' })).toContainText('Atenção');
+    await expect(page.locator('tr').filter({ hasText: 'Enzo Gabriel Ferreira' })).toContainText('Atenção');
+    await expect(page.locator('tr').filter({ hasText: 'Matheus Carvalho' })).toContainText('Atenção');
+    await expect(page.locator('tr').filter({ hasText: 'Isabella Martins' })).toContainText('Atenção');
+
+    // Beatriz Santos mostra "Ótimo"
+    await expect(page.locator('tr').filter({ hasText: 'Beatriz Santos' })).toContainText('Ótimo');
+
+    // Marcando "Mostrar só alunos em Atenção", Beatriz some
+    await page.getByLabel('Mostrar só alunos em Atenção').check();
+    await expect(page.locator('tr').filter({ hasText: 'Beatriz Santos' })).toHaveCount(0);
+
+    // Captura P6
+    await page.screenshot({ path: 'e2e/evidencias/P6.png' });
+  });
+
+  test('P7: Ficha individual do aluno com retentativa', async ({ page }) => {
+    await loginDemo(page, 'Profª Ana Paula');
+
+    // Abre ficha do aluno-7a-3
+    await page.goto('/professor/oferta/oferta-mat-7a/aluno/aluno-7a-3');
+
+    // Contém "2ª tentativa"
+    await expect(page.getByText(/2ª tentativa/)).toBeVisible();
+  });
+
+  test('P8: Controle de acesso e permissões de perfil', async ({ page }) => {
+    // Carlos tenta acessar oferta de Matemática da Ana
+    await loginDemo(page, 'Prof. Carlos Roberto');
+
+    await page.goto('/professor/oferta/oferta-mat-7a');
+    await expect(page.getByText(/permissão/i)).toBeVisible();
+
+    // Carlos tenta acessar /gestao
+    await page.goto('/gestao');
+    await expect(page.getByText(/Sem permissão/i)).toBeVisible();
+  });
+
+  test('P9: Envio de recado e visualização no mural do aluno', async ({ page }) => {
+    // Ana cria o recado
+    await loginDemo(page, 'Profª Ana Paula');
+    await page.goto('/professor/oferta/oferta-mat-7a?aba=recados');
+
+    await page.getByLabel('Título do Recado *').fill('Recado E2E');
+    await page.getByLabel('Mensagem *').fill('Conteúdo de aviso enviado pelo teste automatizado.');
+    await page.getByRole('button', { name: 'Publicar recado' }).click();
+
+    // Aparece na lista
+    await expect(page.getByText('Recado E2E')).toBeVisible();
+
+    // Entra como Lucas e confere no mural
+    await page.goto('/aluno');
+    await page.getByPlaceholder('Ex: 7A-MAT').fill('7a-mat');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByText('Lucas Oliveira').click();
+    for (const digito of '1420') {
+      await page.getByRole('button', { name: digito, exact: true }).click();
+    }
+
+    await expect(page).toHaveURL(/\/aluno\/painel/);
+    await expect(page.getByText('Recado E2E')).toBeVisible();
+  });
+
+  test('P10: Aba Desempenho do professor mostra 33,3% (incompleta) para Lucas', async ({ page }) => {
+    await loginDemo(page, 'Profª Ana Paula');
+    await page.goto('/professor/oferta/oferta-mat-7a?aba=desempenho');
+
+    // A célula do Lucas na "Prova: Números Inteiros (encerrada)" mostra 33,3% (incompleta)
+    const lucasRow = page.locator('tr').filter({ hasText: 'Lucas Oliveira' });
+    await expect(lucasRow).toContainText(/33[,\.]3%\s*\(incompleta\)/);
+  });
+});

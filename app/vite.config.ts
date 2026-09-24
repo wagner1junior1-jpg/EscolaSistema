@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
+import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
@@ -17,6 +18,7 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 });
 
