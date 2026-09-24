@@ -104,9 +104,9 @@ describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICA
 
       const discMat = desempenho.disciplinas.find((d) => d.disciplina_nome === 'Matemática');
       expect(discMat).toBeDefined();
-      expect(discMat?.atividades_concluidas).toBe(1);
-      expect(discMat?.media_periodo).toBe(100);
-      expect(discMat?.faixa).toBe('Ótimo');
+      expect(discMat?.atividades_concluidas).toBe(2);
+      expect(discMat?.media_periodo).toBe(71.4);
+      expect(discMat?.faixa).toBe('Bom');
     });
   });
 });

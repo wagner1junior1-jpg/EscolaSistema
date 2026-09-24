@@ -584,22 +584,22 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
       await alunoService.responder(token, 'q-mat-3', 'alt-m3-b'); // Acertou
       await alunoService.responder(token, 'q-mat-4', 'alt-m4-c'); // Acertou
 
-      // Média inicial esperada: 3 acertos em 4 questões = 75%
+      // Média inicial esperada: 8 acertos em 12 questões (ativ-mat-01: 3/4, ativ-demo-mat-frac: 3/5, ativ-demo-mat-inteiros-enc: 2/3) = 66.7%
       const desempenhoAntes = await alunoService.meuDesempenho(token);
       const discMatAntes = desempenhoAntes.disciplinas.find(
         (d) => d.oferta_id === 'oferta-mat-7a'
       );
-      expect(discMatAntes?.media_periodo).toBe(75);
+      expect(discMatAntes?.media_periodo).toBe(66.7);
 
       // Agora o aluno usa tentarNovamente na questão 1 e acerta!
       await alunoService.tentarNovamente(token, 'q-mat-1', 'alt-m1-a');
 
-      // A média no período DEVE continuar 75% (estatística pedagógica usa só a 1ª resposta)
+      // A média no período DEVE continuar 66.7% (estatística pedagógica usa só a 1ª resposta)
       const desempenhoDepois = await alunoService.meuDesempenho(token);
       const discMatDepois = desempenhoDepois.disciplinas.find(
         (d) => d.oferta_id === 'oferta-mat-7a'
       );
-      expect(discMatDepois?.media_periodo).toBe(75);
+      expect(discMatDepois?.media_periodo).toBe(66.7);
     });
   });
 

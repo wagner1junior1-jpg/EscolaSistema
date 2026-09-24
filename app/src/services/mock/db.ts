@@ -6,6 +6,7 @@
  */
 
 import { MockDatabaseSchema, criarBancoDemonstracao } from './seed';
+import dadosDemo from './dados-demo.json';
 
 export const MOCK_STORAGE_KEY = 'saberpontual_mock_db';
 
@@ -50,6 +51,10 @@ export async function getDatabase(): Promise<MockDatabaseSchema> {
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as MockDatabaseSchema;
+        // Se a versao_seed for diferente (ou não existir), recria a partir do seed
+        if (parsed.versao_seed !== dadosDemo.versao_seed) {
+          return await resetDatabase();
+        }
         if (!memoryDb || (parsed.versao && parsed.versao > (memoryDb.versao || 0))) {
           memoryDb = parsed;
           return memoryDb;
@@ -61,6 +66,9 @@ export async function getDatabase(): Promise<MockDatabaseSchema> {
   }
 
   if (memoryDb) {
+    if (memoryDb.versao_seed !== dadosDemo.versao_seed) {
+      return await resetDatabase();
+    }
     return memoryDb;
   }
 

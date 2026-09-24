@@ -1,0 +1,846 @@
+{
+  "_sobre": "Pacote FIXO de dados de demonstração do SaberPontual. Não altere os textos nem os ids sem aprovação do Wagner. Cada questão tem exatamente 1 alternativa correta e todas as erradas têm por_que_errou. Nas respostas, a letra é a 1ª tentativa do aluno (a que vale nota); null = não respondeu.",
+  "versao_seed": 2,
+  "disciplinas_novas": [
+    {
+      "id": "disc-port",
+      "nome": "Língua Portuguesa"
+    }
+  ],
+  "ofertas_novas": [
+    {
+      "id": "oferta-cien-7a",
+      "turma_id": "turma-7a",
+      "disciplina_id": "disc-cien",
+      "professor_id": "usr-prof-carlos"
+    },
+    {
+      "id": "oferta-port-7a",
+      "turma_id": "turma-7a",
+      "disciplina_id": "disc-port",
+      "professor_id": "usr-prof-ana"
+    }
+  ],
+  "atividades": [
+    {
+      "id": "ativ-demo-mat-frac",
+      "oferta_id": "oferta-mat-7a",
+      "periodo_id": "per-bim-3",
+      "titulo": "Frações e Porcentagem no Dia a Dia",
+      "descricao": "Exercício para treinar frações, equivalência e porcentagem com situações do cotidiano.",
+      "prazo": "2026-10-02",
+      "modo": "exercicio",
+      "status": "publicada",
+      "criado_por": "usr-prof-ana",
+      "questoes": [
+        {
+          "id": "q-demo-frac-1",
+          "enunciado": "Uma pizza foi dividida em 8 fatias iguais. Pedro comeu 3 fatias. Que fração da pizza ele comeu?",
+          "dica": "O número de baixo (denominador) mostra em quantas partes o inteiro foi dividido.",
+          "explicacao": "A pizza foi dividida em 8 partes iguais (denominador = 8) e Pedro comeu 3 delas (numerador = 3). Então ele comeu 3/8 da pizza.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "3/8",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "8/3",
+              "correta": false,
+              "por_que_errou": "Você inverteu a fração. O denominador (embaixo) é o total de partes (8) e o numerador (em cima) é o que foi comido (3)."
+            },
+            {
+              "letra": "C",
+              "texto": "3/5",
+              "correta": false,
+              "por_que_errou": "Você comparou as fatias comidas (3) com as que sobraram (5). A fração compara a parte com o TOTAL de fatias, que é 8."
+            },
+            {
+              "letra": "D",
+              "texto": "5/8",
+              "correta": false,
+              "por_que_errou": "5/8 é a fração que SOBROU da pizza. A pergunta é sobre o que Pedro comeu: 3 fatias de 8."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-frac-2",
+          "enunciado": "Quanto é 25% de 80?",
+          "dica": "25% é o mesmo que um quarto (1/4).",
+          "explicacao": "25% = 25/100 = 1/4. Para achar 1/4 de 80, dividimos por 4: 80 ÷ 4 = 20.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "20",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "25",
+              "correta": false,
+              "por_que_errou": "Você usou o número da porcentagem como se fosse o resultado. 25% não é 25 unidades: é 25 de cada 100, ou seja, um quarto de 80."
+            },
+            {
+              "letra": "C",
+              "texto": "32",
+              "correta": false,
+              "por_que_errou": "32 seria 40% de 80. Confira: 25% é um quarto, então divida 80 por 4."
+            },
+            {
+              "letra": "D",
+              "texto": "55",
+              "correta": false,
+              "por_que_errou": "Você subtraiu 25 de 80. Porcentagem não é subtração: 25% de 80 é a quarta parte de 80."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-frac-3",
+          "enunciado": "Qual das frações abaixo é equivalente a 2/3?",
+          "dica": "Frações equivalentes aparecem quando multiplicamos o numerador E o denominador pelo mesmo número.",
+          "explicacao": "Multiplicando o numerador e o denominador de 2/3 por 2, temos (2×2)/(3×2) = 4/6. As duas frações representam a mesma quantidade.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "4/6",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "3/2",
+              "correta": false,
+              "por_que_errou": "3/2 é a fração invertida e vale mais que um inteiro. Frações equivalentes mantêm a mesma posição dos números."
+            },
+            {
+              "letra": "C",
+              "texto": "2/6",
+              "correta": false,
+              "por_que_errou": "Você multiplicou só o denominador por 2. Para ser equivalente, o numerador também precisa ser multiplicado pelo mesmo número."
+            },
+            {
+              "letra": "D",
+              "texto": "4/5",
+              "correta": false,
+              "por_que_errou": "Você somou 2 ao numerador e ao denominador. Somar não gera frações equivalentes; é preciso multiplicar (ou dividir)."
+            },
+            {
+              "letra": "E",
+              "texto": "6/6",
+              "correta": false,
+              "por_que_errou": "6/6 é igual a 1 inteiro, que é maior que 2/3. O numerador e o denominador foram multiplicados por números diferentes."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-frac-4",
+          "enunciado": "Verdadeiro ou falso: o número decimal 0,5 representa a mesma quantidade que a fração 1/2.",
+          "dica": "Pense em 0,5 como 5 décimos.",
+          "explicacao": "0,5 = 5/10. Simplificando 5/10 (dividindo em cima e embaixo por 5), temos 1/2. Então a afirmação é verdadeira.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Verdadeiro",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "Falso",
+              "correta": false,
+              "por_que_errou": "0,5 significa 5 décimos (5/10). Simplificando 5/10, chegamos a 1/2. As duas formas representam metade do inteiro."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-frac-5",
+          "enunciado": "Uma camiseta custava R$ 50,00 e ganhou 10% de desconto. Qual é o novo preço?",
+          "dica": "Primeiro descubra quanto vale 10% de 50. Depois tire esse valor do preço.",
+          "explicacao": "10% de 50 = 50 ÷ 10 = 5. O desconto é de R$ 5,00, então o novo preço é 50 − 5 = R$ 45,00.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "R$ 45,00",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "R$ 40,00",
+              "correta": false,
+              "por_que_errou": "Você tirou R$ 10,00, mas o desconto é de 10%, e não de 10 reais. 10% de 50 é R$ 5,00."
+            },
+            {
+              "letra": "C",
+              "texto": "R$ 5,00",
+              "correta": false,
+              "por_que_errou": "R$ 5,00 é o valor do DESCONTO. A pergunta pede o novo preço, que é 50 − 5."
+            },
+            {
+              "letra": "D",
+              "texto": "R$ 55,00",
+              "correta": false,
+              "por_que_errou": "Você somou os 10% ao preço. Desconto diminui o valor, então é preciso subtrair."
+            }
+          ]
+        }
+      ],
+      "respostas": {
+        "aluno-7a-2": [
+          "A",
+          "A",
+          "A",
+          "A",
+          "A"
+        ],
+        "aluno-7a-3": [
+          "A",
+          "B",
+          "A",
+          "A",
+          "B"
+        ],
+        "aluno-7a-4": [
+          "A",
+          "D",
+          "B",
+          "A",
+          "A"
+        ],
+        "aluno-7a-5": [
+          "D",
+          "B",
+          "A",
+          "B",
+          "C"
+        ],
+        "aluno-7a-6": [
+          "A",
+          "A",
+          "E",
+          "A",
+          "A"
+        ],
+        "aluno-7a-7": [
+          "C",
+          "B",
+          "A",
+          "A",
+          "B"
+        ],
+        "aluno-7a-8": [
+          "A",
+          "D",
+          "C",
+          "A",
+          "A"
+        ]
+      },
+      "retentativas": [
+        {
+          "aluno_id": "aluno-7a-3",
+          "questao_id": "q-demo-frac-2",
+          "tentativas": 2,
+          "acertou_final": true
+        },
+        {
+          "aluno_id": "aluno-7a-5",
+          "questao_id": "q-demo-frac-5",
+          "tentativas": 3,
+          "acertou_final": true
+        },
+        {
+          "aluno_id": "aluno-7a-7",
+          "questao_id": "q-demo-frac-2",
+          "tentativas": 2,
+          "acertou_final": false
+        }
+      ]
+    },
+    {
+      "id": "ativ-demo-cien-prova",
+      "oferta_id": "oferta-cien-7a",
+      "periodo_id": "per-bim-3",
+      "titulo": "Prova: Alimentação e Sistema Digestório",
+      "descricao": "Prova do bimestre sobre nutrientes e o caminho dos alimentos no corpo. A correção aparece só no final.",
+      "prazo": "2026-09-30",
+      "modo": "prova",
+      "status": "publicada",
+      "criado_por": "usr-prof-carlos",
+      "questoes": [
+        {
+          "id": "q-demo-dig-1",
+          "enunciado": "Em qual parte do corpo começa a digestão dos alimentos?",
+          "dica": "Pense no que acontece logo que colocamos a comida na boca e começamos a mastigar.",
+          "explicacao": "A digestão começa na boca: os dentes fazem a digestão mecânica (mastigação) e a saliva, com a enzima amilase, começa a digerir o amido.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "No estômago",
+              "correta": false,
+              "por_que_errou": "O estômago continua a digestão (principalmente das proteínas), mas ela já começou antes, na boca, com a mastigação e a saliva."
+            },
+            {
+              "letra": "B",
+              "texto": "Na boca",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "No intestino delgado",
+              "correta": false,
+              "por_que_errou": "No intestino delgado acontece a maior parte da absorção dos nutrientes, mas a digestão começa bem antes, na boca."
+            },
+            {
+              "letra": "D",
+              "texto": "No esôfago",
+              "correta": false,
+              "por_que_errou": "O esôfago só transporta o alimento da boca até o estômago, com movimentos chamados peristálticos. Ele não digere."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-dig-2",
+          "enunciado": "Qual grupo de nutrientes é a principal fonte de energia rápida para o nosso corpo?",
+          "dica": "Pense em alimentos como pão, arroz, macarrão e frutas.",
+          "explicacao": "Os carboidratos são quebrados em glicose, que as células usam como energia mais rápida. Estão no pão, no arroz, no macarrão, na batata e nas frutas.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Carboidratos",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "Proteínas",
+              "correta": false,
+              "por_que_errou": "A principal função das proteínas é construir e reparar tecidos, como os músculos. Elas não são a fonte de energia rápida."
+            },
+            {
+              "letra": "C",
+              "texto": "Vitaminas",
+              "correta": false,
+              "por_que_errou": "As vitaminas regulam o funcionamento do corpo, mas não fornecem energia (calorias)."
+            },
+            {
+              "letra": "D",
+              "texto": "Água",
+              "correta": false,
+              "por_que_errou": "A água é essencial à vida, mas não fornece energia: ela não tem calorias."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-dig-3",
+          "enunciado": "Em qual órgão acontece a MAIOR parte da absorção dos nutrientes?",
+          "dica": "Esse órgão é longo e tem milhares de pequenas dobras chamadas vilosidades.",
+          "explicacao": "O intestino delgado é revestido por vilosidades, que aumentam muito a superfície de contato e permitem que os nutrientes passem para o sangue.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Estômago",
+              "correta": false,
+              "por_que_errou": "O estômago digere principalmente proteínas, mas absorve pouquíssimos nutrientes."
+            },
+            {
+              "letra": "B",
+              "texto": "Intestino grosso",
+              "correta": false,
+              "por_que_errou": "O intestino grosso absorve principalmente água e sais minerais. A maior parte dos nutrientes já foi absorvida antes."
+            },
+            {
+              "letra": "C",
+              "texto": "Intestino delgado",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "D",
+              "texto": "Fígado",
+              "correta": false,
+              "por_que_errou": "O fígado produz a bile, que ajuda a digerir gorduras, mas o alimento não passa por dentro dele: ele não é o local de absorção."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-dig-4",
+          "enunciado": "Qual destes alimentos é uma fonte importante de proteína?",
+          "dica": "Procure o alimento que ajuda a construir os músculos e costuma ir junto com o arroz no prato brasileiro.",
+          "explicacao": "O feijão é uma leguminosa rica em proteína. Junto com o arroz, forma uma combinação que fornece todos os aminoácidos de que o corpo precisa.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Feijão",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "Alface",
+              "correta": false,
+              "por_que_errou": "A alface é rica em água, fibras e algumas vitaminas, mas tem pouquíssima proteína."
+            },
+            {
+              "letra": "C",
+              "texto": "Refrigerante",
+              "correta": false,
+              "por_que_errou": "O refrigerante tem muito açúcar e nenhuma proteína. Ele deve ser consumido raramente."
+            },
+            {
+              "letra": "D",
+              "texto": "Maçã",
+              "correta": false,
+              "por_que_errou": "A maçã fornece carboidratos, fibras e vitaminas, mas quase nenhuma proteína."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-dig-5",
+          "enunciado": "Por que é importante comer fibras, presentes em frutas, verduras e cereais integrais?",
+          "dica": "Pense no último órgão por onde os restos dos alimentos passam.",
+          "explicacao": "As fibras não são digeridas: elas aumentam o volume do bolo fecal e ajudam o intestino a funcionar bem, além de dar sensação de saciedade.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Porque dão energia rápida ao corpo",
+              "correta": false,
+              "por_que_errou": "Energia rápida vem dos carboidratos como o açúcar e o amido. As fibras quase não são digeridas e não são fonte de energia rápida."
+            },
+            {
+              "letra": "B",
+              "texto": "Porque ajudam o intestino a funcionar bem",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "Porque substituem a água que bebemos",
+              "correta": false,
+              "por_que_errou": "As fibras não substituem a água. Na verdade, elas funcionam melhor quando bebemos água suficiente."
+            },
+            {
+              "letra": "D",
+              "texto": "Porque constroem os músculos",
+              "correta": false,
+              "por_que_errou": "Quem constrói os músculos são as proteínas. As fibras ajudam o funcionamento do intestino."
+            }
+          ]
+        }
+      ],
+      "respostas": {
+        "aluno-7a-2": [
+          "B",
+          "A",
+          "C",
+          "A",
+          "B"
+        ],
+        "aluno-7a-3": [
+          "A",
+          "A",
+          "B",
+          "A",
+          "B"
+        ]
+      },
+      "retentativas": []
+    },
+    {
+      "id": "ativ-demo-port-leitura",
+      "oferta_id": "oferta-port-7a",
+      "periodo_id": "per-bim-3",
+      "titulo": "Leitura, Acentuação e Classes de Palavras",
+      "descricao": "Exercício com um texto curto para interpretar e questões de gramática.",
+      "prazo": null,
+      "modo": "exercicio",
+      "status": "publicada",
+      "criado_por": "usr-prof-ana",
+      "questoes": [
+        {
+          "id": "q-demo-port-1",
+          "enunciado": "Leia o texto:\n\n\"Marina acordou cedo, olhou pela janela e viu o céu cinzento. Pegou o guarda-chuva antes de sair, mesmo sem nenhuma gota caindo. No caminho para a escola, a chuva começou forte, e Marina sorriu, protegida.\"\n\nPor que Marina sorriu?",
+          "dica": "Releia a última frase. Qual palavra explica o motivo do sorriso?",
+          "explicacao": "Marina viu o céu cinzento e levou o guarda-chuva prevendo a chuva. Quando a chuva veio, ela estava \"protegida\": o sorriso mostra satisfação por ter se preparado.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Porque ela adora dias de chuva.",
+              "correta": false,
+              "por_que_errou": "O texto não diz que Marina gosta de chuva. Responda com base no que está escrito: ela sorriu porque estava protegida."
+            },
+            {
+              "letra": "B",
+              "texto": "Porque tinha se preparado e ficou protegida da chuva.",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "Porque chegou atrasada à escola.",
+              "correta": false,
+              "por_que_errou": "Não há nenhuma informação sobre atraso no texto. Cuidado para não inventar fatos."
+            },
+            {
+              "letra": "D",
+              "texto": "Porque o céu estava azul e bonito.",
+              "correta": false,
+              "por_que_errou": "O texto diz que o céu estava cinzento, não azul. Releia o começo do texto."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-port-2",
+          "enunciado": "Em qual opção a palavra está escrita e acentuada corretamente?",
+          "dica": "Palavras oxítonas (com a sílaba forte no final) terminadas em -e levam acento.",
+          "explicacao": "\"Café\" é oxítona (a sílaba forte é -fé) terminada em -e, por isso leva acento agudo no último e.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Cafe",
+              "correta": false,
+              "por_que_errou": "Faltou o acento. \"Café\" é oxítona terminada em -e, e toda oxítona terminada em -e é acentuada."
+            },
+            {
+              "letra": "B",
+              "texto": "Café",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "Cáfe",
+              "correta": false,
+              "por_que_errou": "O acento está na sílaba errada. A sílaba forte de \"café\" é a última (-fé), e não a primeira."
+            },
+            {
+              "letra": "D",
+              "texto": "Cafè",
+              "correta": false,
+              "por_que_errou": "Esse é o acento grave (`), usado na crase (\"à\"). Aqui o correto é o acento agudo (´)."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-port-3",
+          "enunciado": "Na frase \"Os meninos correram rápido no parque.\", qual palavra é o VERBO?",
+          "dica": "O verbo indica uma ação. O que os meninos fizeram?",
+          "explicacao": "\"Correram\" é o verbo: indica a ação praticada pelos meninos, no passado.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "meninos",
+              "correta": false,
+              "por_que_errou": "\"Meninos\" é um substantivo: dá nome a quem pratica a ação. O verbo é a ação em si."
+            },
+            {
+              "letra": "B",
+              "texto": "correram",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "rápido",
+              "correta": false,
+              "por_que_errou": "\"Rápido\" é um advérbio: indica COMO eles correram. Ele modifica o verbo, mas não é o verbo."
+            },
+            {
+              "letra": "D",
+              "texto": "parque",
+              "correta": false,
+              "por_que_errou": "\"Parque\" é um substantivo que indica o lugar da ação."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-port-4",
+          "enunciado": "Qual palavra é SINÔNIMO de \"feliz\"?",
+          "dica": "Sinônimo é uma palavra com significado parecido.",
+          "explicacao": "\"Contente\" tem significado parecido com \"feliz\": os dois indicam alegria. Por isso são sinônimos.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "Triste",
+              "correta": false,
+              "por_que_errou": "\"Triste\" é o contrário de feliz, ou seja, um ANTÔNIMO, e não um sinônimo."
+            },
+            {
+              "letra": "B",
+              "texto": "Contente",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "Cansado",
+              "correta": false,
+              "por_que_errou": "\"Cansado\" descreve um estado físico, sem relação com alegria."
+            },
+            {
+              "letra": "D",
+              "texto": "Bravo",
+              "correta": false,
+              "por_que_errou": "\"Bravo\" indica raiva, um sentimento diferente de felicidade."
+            },
+            {
+              "letra": "E",
+              "texto": "Sério",
+              "correta": false,
+              "por_que_errou": "\"Sério\" indica ausência de riso ou brincadeira. Não quer dizer alegria."
+            }
+          ]
+        }
+      ],
+      "respostas": {},
+      "retentativas": []
+    },
+    {
+      "id": "ativ-demo-mat-inteiros-enc",
+      "oferta_id": "oferta-mat-7a",
+      "periodo_id": "per-bim-3",
+      "titulo": "Prova: Números Inteiros (encerrada)",
+      "descricao": "Prova já encerrada pela professora. Serve para ver o resultado de quem não terminou.",
+      "prazo": "2026-09-15",
+      "modo": "prova",
+      "status": "encerrada",
+      "criado_por": "usr-prof-ana",
+      "questoes": [
+        {
+          "id": "q-demo-int-1",
+          "enunciado": "Quanto é (−3) + 5?",
+          "dica": "Na reta numérica, comece no −3 e ande 5 casas para a direita.",
+          "explicacao": "Partindo de −3 e andando 5 casas para a direita na reta numérica, chegamos ao 2. Com sinais diferentes, subtraímos (5 − 3 = 2) e ficamos com o sinal do maior (+).",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "2",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "B",
+              "texto": "−8",
+              "correta": false,
+              "por_que_errou": "Você somou 3 + 5 e colocou o sinal negativo. Com sinais diferentes, subtraímos e usamos o sinal do número maior (5 é positivo)."
+            },
+            {
+              "letra": "C",
+              "texto": "8",
+              "correta": false,
+              "por_que_errou": "Você ignorou o sinal negativo do 3. Com sinais diferentes, subtraímos: 5 − 3 = 2."
+            },
+            {
+              "letra": "D",
+              "texto": "−2",
+              "correta": false,
+              "por_que_errou": "O cálculo 5 − 3 = 2 está certo, mas o sinal ficou errado: o resultado fica com o sinal do número maior, que é positivo."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-int-2",
+          "enunciado": "Qual número é MAIOR: −10 ou −2?",
+          "dica": "Na reta numérica, quem está mais à direita é maior.",
+          "explicacao": "Na reta numérica, −2 fica mais à direita (mais perto do zero) que −10. Entre números negativos, o maior é o que está mais perto do zero.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "−10",
+              "correta": false,
+              "por_que_errou": "Entre números negativos é o contrário do que parece: quanto mais longe do zero, MENOR. −10 está mais à esquerda na reta, então é menor que −2."
+            },
+            {
+              "letra": "B",
+              "texto": "−2",
+              "correta": true,
+              "por_que_errou": null
+            }
+          ]
+        },
+        {
+          "id": "q-demo-int-3",
+          "enunciado": "Quanto é (−4) × (−3)?",
+          "dica": "Na multiplicação, sinais iguais dão resultado positivo.",
+          "explicacao": "4 × 3 = 12. Como os dois números são negativos (sinais iguais), o resultado é positivo: (−4) × (−3) = 12.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "−12",
+              "correta": false,
+              "por_que_errou": "A conta 4 × 3 = 12 está certa, mas na multiplicação sinais iguais (− com −) dão resultado POSITIVO."
+            },
+            {
+              "letra": "B",
+              "texto": "12",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "−7",
+              "correta": false,
+              "por_que_errou": "Você somou os números (−4 + −3 = −7) em vez de multiplicar."
+            },
+            {
+              "letra": "D",
+              "texto": "7",
+              "correta": false,
+              "por_que_errou": "Você somou 4 + 3 em vez de multiplicar. A operação pedida é a multiplicação: 4 × 3 = 12."
+            }
+          ]
+        }
+      ],
+      "respostas": {
+        "aluno-7a-1": [
+          "A",
+          null,
+          null
+        ],
+        "aluno-7a-2": [
+          "A",
+          "B",
+          "B"
+        ],
+        "aluno-7a-3": [
+          "B",
+          "B",
+          "A"
+        ],
+        "aluno-7a-4": [
+          "A",
+          "A",
+          "B"
+        ],
+        "aluno-7a-5": [
+          "A",
+          "B",
+          "B"
+        ],
+        "aluno-7a-6": [
+          "D",
+          "B",
+          "C"
+        ],
+        "aluno-7a-7": [
+          "A",
+          "A",
+          "B"
+        ],
+        "aluno-7a-8": [
+          null,
+          null,
+          null
+        ]
+      },
+      "retentativas": []
+    },
+    {
+      "id": "ativ-demo-mat-rascunho",
+      "oferta_id": "oferta-mat-7a",
+      "periodo_id": "per-bim-3",
+      "titulo": "Geometria Básica (rascunho)",
+      "descricao": "Atividade ainda em rascunho. NÃO pode aparecer para o aluno.",
+      "prazo": null,
+      "modo": "exercicio",
+      "status": "rascunho",
+      "criado_por": "usr-prof-ana",
+      "questoes": [
+        {
+          "id": "q-demo-geo-1",
+          "enunciado": "Quantos lados tem um hexágono?",
+          "dica": "\"Hexa\" vem do grego e significa seis.",
+          "explicacao": "O prefixo \"hexa\" significa seis: o hexágono tem 6 lados.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "5",
+              "correta": false,
+              "por_que_errou": "O polígono de 5 lados é o pentágono (\"penta\" = cinco)."
+            },
+            {
+              "letra": "B",
+              "texto": "6",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "7",
+              "correta": false,
+              "por_que_errou": "O polígono de 7 lados é o heptágono (\"hepta\" = sete)."
+            },
+            {
+              "letra": "D",
+              "texto": "8",
+              "correta": false,
+              "por_que_errou": "O polígono de 8 lados é o octógono (\"octo\" = oito)."
+            }
+          ]
+        },
+        {
+          "id": "q-demo-geo-2",
+          "enunciado": "Quantos graus mede um ângulo reto?",
+          "dica": "É o ângulo do canto de uma folha de caderno.",
+          "explicacao": "O ângulo reto mede 90°, como o canto de uma folha ou de uma porta.",
+          "alternativas": [
+            {
+              "letra": "A",
+              "texto": "45°",
+              "correta": false,
+              "por_que_errou": "45° é a metade de um ângulo reto."
+            },
+            {
+              "letra": "B",
+              "texto": "90°",
+              "correta": true,
+              "por_que_errou": null
+            },
+            {
+              "letra": "C",
+              "texto": "180°",
+              "correta": false,
+              "por_que_errou": "180° é o ângulo raso, que forma uma linha reta: são dois ângulos retos."
+            },
+            {
+              "letra": "D",
+              "texto": "360°",
+              "correta": false,
+              "por_que_errou": "360° é uma volta completa: são quatro ângulos retos."
+            }
+          ]
+        }
+      ],
+      "respostas": {},
+      "retentativas": []
+    }
+  ],
+  "avisos_novos": [
+    {
+      "id": "aviso-demo-cien-7a",
+      "autor_id": "usr-prof-carlos",
+      "turma_id": "turma-7a",
+      "titulo": "Prova de Ciências liberada",
+      "mensagem": "A prova \"Alimentação e Sistema Digestório\" já está disponível. Leia com calma: a correção aparece só no final.",
+      "prioridade": "alta"
+    },
+    {
+      "id": "aviso-demo-port-7a",
+      "autor_id": "usr-prof-ana",
+      "turma_id": "turma-7a",
+      "titulo": "Novo exercício de Português",
+      "mensagem": "Tem exercício novo de leitura e gramática. Use a dica se precisar!",
+      "prioridade": "media"
+    }
+  ],
+  "o_que_cada_cenario_testa": {
+    "Lucas (aluno-7a-1, PIN 1420)": "Vê para fazer: Frações (exercício, 5 q, com questões de 2 e 5 alternativas), Prova de Ciências (sem respostas) e Português (texto longo). Vê em Concluídas: Prova de Números Inteiros encerrada com 1 de 3 respondidas, com resultado liberado e as questões em branco como erro. NÃO vê Geometria (rascunho).",
+    "Beatriz (aluno-7a-2, PIN 3891)": "Já fez tudo e acertou tudo em Frações e na Prova de Ciências: resultado completo liberado.",
+    "Professora Ana, mapa de calor de Frações": "Questão 2 (25% de 80) com 2 acertos em 7 = 29%: aparece como QUESTÃO CRÍTICA, e o distrator mais escolhido é a B (3 alunos). Gabriel e Enzo acertaram na retentativa, Matheus errou de novo.",
+    "Gestão, alunos em atenção": "Enzo (1/5 em Frações + 3/3 na encerrada = 50%) e Matheus (2/5 + 2/3 = 50%) ficam abaixo de 60% em Matemática no 3º bimestre, sem contar a atividade antiga ativ-mat-01."
+  }
+}

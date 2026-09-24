@@ -20,11 +20,16 @@ import {
   Aviso,
   AlunoSessao,
   PinTentativa,
+  ModoAtividade,
+  StatusAtividade,
+  PrioridadeAviso,
 } from '@/lib/types';
 import { hashPin } from './crypto';
+import dadosDemo from './dados-demo.json';
 
 export interface MockDatabaseSchema {
   versao: number;
+  versao_seed: number;
   escolas: Escola[];
   perfis: Perfil[];
   credenciais: Record<string, string>; // email -> senha pura ("demo123")
@@ -875,8 +880,129 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     },
   ];
 
+  // 13. Acréscimo do Pacote Fixo de Demonstração (dados-demo.json)
+  for (const disc of dadosDemo.disciplinas_novas) {
+    if (!disciplinas.some((d) => d.id === disc.id)) {
+      disciplinas.push({
+        id: disc.id,
+        created_at: agora,
+        escola_id: escolaId,
+        nome: disc.nome,
+      });
+    }
+  }
+
+  for (const of of dadosDemo.ofertas_novas) {
+    if (!ofertas.some((o) => o.id === of.id)) {
+      ofertas.push({
+        id: of.id,
+        created_at: agora,
+        turma_id: of.turma_id,
+        disciplina_id: of.disciplina_id,
+        professor_id: of.professor_id,
+      });
+    }
+  }
+
+  for (const ativ of dadosDemo.atividades) {
+    atividades.push({
+      id: ativ.id,
+      created_at: agora,
+      oferta_id: ativ.oferta_id,
+      periodo_id: ativ.periodo_id,
+      titulo: ativ.titulo,
+      descricao: ativ.descricao,
+      prazo: ativ.prazo,
+      modo: ativ.modo as ModoAtividade,
+      status: ativ.status as StatusAtividade,
+      criado_por: ativ.criado_por,
+    });
+
+    for (let pos = 0; pos < ativ.questoes.length; pos++) {
+      const q = ativ.questoes[pos];
+      questoes.push({
+        id: q.id,
+        created_at: agora,
+        atividade_id: ativ.id,
+        ordem: pos + 1,
+        enunciado: q.enunciado,
+        dica: q.dica,
+        explicacao: q.explicacao,
+      });
+
+      for (const alt of q.alternativas) {
+        alternativas.push({
+          id: `alt-${q.id}-${alt.letra.toLowerCase()}`,
+          created_at: agora,
+          questao_id: q.id,
+          letra: alt.letra as 'A' | 'B' | 'C' | 'D' | 'E',
+          texto: alt.texto,
+          correta: alt.correta,
+          por_que_errou: alt.por_que_errou,
+        });
+      }
+    }
+
+    if (ativ.respostas) {
+      for (const [alunoId, letras] of Object.entries(ativ.respostas)) {
+        for (let qIdx = 0; qIdx < letras.length; qIdx++) {
+          const letraEscolhida = letras[qIdx];
+          if (!letraEscolhida) continue; // null = sem resposta
+
+          const questao = ativ.questoes[qIdx];
+          if (!questao) continue;
+
+          const altEscolhida = questao.alternativas.find((a) => a.letra === letraEscolhida);
+          if (!altEscolhida) continue;
+
+          const alternativaId = `alt-${questao.id}-${letraEscolhida.toLowerCase()}`;
+          const acertou = altEscolhida.correta;
+
+          respostas.push({
+            id: `resp-demo-${ativ.id}-${alunoId}-${questao.id}`,
+            created_at: agora,
+            aluno_id: alunoId,
+            questao_id: questao.id,
+            alternativa_id: alternativaId,
+            acertou,
+            respondida_em: agora,
+            tentativas: 1,
+            acertou_final: acertou,
+          });
+        }
+      }
+    }
+
+    if (ativ.retentativas) {
+      for (const ret of ativ.retentativas) {
+        const r = respostas.find(
+          (resp) => resp.aluno_id === ret.aluno_id && resp.questao_id === ret.questao_id
+        );
+        if (r) {
+          r.tentativas = ret.tentativas;
+          r.acertou_final = ret.acertou_final;
+        }
+      }
+    }
+  }
+
+  for (const av of dadosDemo.avisos_novos) {
+    avisos.push({
+      id: av.id,
+      created_at: agora,
+      escola_id: escolaId,
+      autor_id: av.autor_id,
+      turma_id: av.turma_id,
+      titulo: av.titulo,
+      mensagem: av.mensagem,
+      prioridade: av.prioridade as PrioridadeAviso,
+      publicado_em: agora,
+    });
+  }
+
   return {
     versao: 1,
+    versao_seed: dadosDemo.versao_seed,
     escolas,
     perfis,
     credenciais,

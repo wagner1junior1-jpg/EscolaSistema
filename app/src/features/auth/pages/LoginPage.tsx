@@ -5,7 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../AuthProvider';
 import { useToast } from '@/components/ui';
-import { LogIn, School, Mail, Lock, ArrowLeft, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { LogIn, School, Mail, Lock, ArrowLeft, AlertCircle, Loader2, Sparkles, RotateCcw } from 'lucide-react';
+import { resetDatabase } from '@/services/mock/db';
 
 const loginSchema = z.object({
   email: z
@@ -272,6 +273,22 @@ export const LoginPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await resetDatabase();
+                    toast.success('Dados de demonstração restaurados.');
+                  } catch (e) {
+                    toast.error('Erro ao restaurar dados de demonstração.');
+                  }
+                }}
+                className="w-full mt-2 inline-flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-xs font-heading font-bold text-slate-600 hover:text-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Restaurar dados de demonstração</span>
+              </button>
             </div>
           )}
         </div>
