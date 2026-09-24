@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sistema de Questões Escolar | SaberPontual</title>
+  <meta name="description" content="Plataforma de exercícios escolares leve, rápida e sem necessidade de e-mail para alunos, com diagnóstico pedagógico em tempo real para os professores." />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- Top Global Header -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs no-print">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-indigo-100">
+          <i class="fas fa-school"></i>
+        </div>
+        <div>
+          <span class="font-heading font-extrabold text-base tracking-tight text-slate-900 flex items-center gap-1.5">
+            SaberPontual
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 uppercase tracking-wider">MVP</span>
+          </span>
+          <p class="text-[11px] text-slate-400 font-medium leading-none hidden sm:block">Exercícios Rápidos & Diagnóstico Pedagógico</p>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Pill -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/70 shadow-inner">
+        <button id="btn-nav-aluno" class="px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm">
+          <span>🎒</span>
+          <span class="hidden sm:inline">Aluno &</span>
+          <span>Família</span>
+        </button>
+        <button id="btn-nav-professora" class="px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 text-slate-600 hover:bg-slate-200/60">
+          <span>👩‍🏫</span>
+          <span>Professora</span>
+        </button>
+        <button id="btn-nav-coordenacao" class="px-3 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 text-slate-600 hover:bg-slate-200/60">
+          <span>🏛️</span>
+          <span class="hidden sm:inline">Direção &</span>
+          <span>Coordenação</span>
+        </button>
+      </div>
+
+      <!-- Action Utilities -->
+      <div class="flex items-center gap-1.5">
+        <button id="btn-nav-roteiro" class="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition-all flex items-center gap-1.5" title="Abrir roteiro com argumentos para a diretoria">
+          <span>🤝</span>
+          <span class="hidden md:inline">Roteiro Diretora</span>
+        </button>
+        <button id="btn-reset-demo" class="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all text-xs" title="Restaurar dados iniciais de demonstração">
+          <i class="fas fa-rotate-left"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Views Container -->
+  <main class="flex-1 w-full">
+    <!-- Student Container -->
+    <div id="student-view-container" class="w-full"></div>
+
+    <!-- Teacher Container -->
+    <div id="teacher-view-container" class="w-full hidden"></div>
+
+    <!-- Management & Direction Container -->
+    <div id="management-view-container" class="w-full hidden"></div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200/80 py-4 text-center text-xs text-slate-400 no-print">
+    <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <p>© 2026 SaberPontual • Sistema Escolar Integrado (Gestão, Diário Pedagógico & Portal do Aluno)</p>
+      <div class="flex items-center gap-3 text-[11px]">
+        <span class="text-emerald-600 font-semibold"><i class="fas fa-check-circle mr-1"></i>Zero Fricção (Código + PIN)</span>
+        <span>•</span>
+        <span class="text-indigo-600 font-semibold"><i class="fas fa-bolt mr-1"></i>Correção em Tempo Real</span>
+        <span>•</span>
+        <span class="text-amber-600 font-semibold"><i class="fas fa-users-cog mr-1"></i>Gestão Completa</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Toast Notification Area -->
+  <div id="toast-area" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Modal Root -->
+  <div id="modal-root"></div>
+
+  <!-- App Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/student.js"></script>
+  <script src="js/teacher.js"></script>
+  <script src="js/management.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
