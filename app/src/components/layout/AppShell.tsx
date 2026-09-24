@@ -39,14 +39,14 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
       {/* Cabeçalho superior com visual sóbrio */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
           {/* Logo e Nome da Plataforma */}
           <Link
             to={usuario?.papel === 'professor' ? '/professor' : '/gestao'}
             className="flex items-center gap-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-lg p-1"
           >
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
               <School className="w-5 h-5" />
             </div>
             <div className="flex flex-col">

@@ -44,6 +44,7 @@ export default {
         '3xl': '1.5rem',
       },
       boxShadow: {
+        xs: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
         subtle: '0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
         playful: '0 10px 25px -5px rgba(99, 102, 241, 0.15), 0 8px 10px -6px rgba(99, 102, 241, 0.1)',
         float: '0 20px 30px -10px rgba(0, 0, 0, 0.12)',

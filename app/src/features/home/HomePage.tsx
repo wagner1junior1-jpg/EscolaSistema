@@ -1,9 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande } from '@/components/aluno';
 import { School, Sparkles, GraduationCap, ArrowRight, UserCheck } from 'lucide-react';
 
 export const HomePage: React.FC = () => {
+  const navigate = useNavigate();
+
   return (
     <AlunoLayout containerClassName="items-center justify-center p-4 py-12">
       <main className="w-full max-w-lg space-y-6 text-center">
@@ -30,29 +32,27 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Botões de Acesso */}
+          {/* Botões de Acesso (sem aninhamento button dentro de Link) */}
           <div className="space-y-4 pt-2">
-            <Link to="/aluno" className="block w-full">
-              <BotaoGrande
-                variant="primary"
-                className="w-full py-4 text-lg"
-                leftIcon={<GraduationCap className="w-6 h-6" />}
-                rightIcon={<ArrowRight className="w-5 h-5 ml-auto opacity-70" />}
-              >
-                Sou aluno
-              </BotaoGrande>
-            </Link>
+            <BotaoGrande
+              variant="primary"
+              className="w-full py-4 text-lg"
+              onClick={() => navigate('/aluno')}
+              leftIcon={<GraduationCap className="w-6 h-6" />}
+              rightIcon={<ArrowRight className="w-5 h-5 ml-auto opacity-70" />}
+            >
+              Sou aluno
+            </BotaoGrande>
 
-            <Link to="/entrar" className="block w-full">
-              <BotaoGrande
-                variant="outline"
-                className="w-full py-4 text-base sm:text-lg"
-                leftIcon={<UserCheck className="w-5 h-5 text-indigo-600" />}
-                rightIcon={<ArrowRight className="w-5 h-5 ml-auto opacity-70 text-indigo-500" />}
-              >
-                Sou professor ou da gestão
-              </BotaoGrande>
-            </Link>
+            <BotaoGrande
+              variant="outline"
+              className="w-full py-4 text-base sm:text-lg"
+              onClick={() => navigate('/entrar')}
+              leftIcon={<UserCheck className="w-5 h-5 text-indigo-600" />}
+              rightIcon={<ArrowRight className="w-5 h-5 ml-auto opacity-70 text-indigo-500" />}
+            >
+              Sou professor ou da gestão
+            </BotaoGrande>
           </div>
         </CartaoVidro>
 

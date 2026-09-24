@@ -74,7 +74,23 @@ export const LoginPage: React.FC = () => {
       const usuario = await entrar(data.email, data.senha);
       const destinoPadrao = usuario.papel === 'professor' ? '/professor' : '/gestao';
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname;
-      navigate(from || destinoPadrao, { replace: true });
+
+      let destinoFinal = destinoPadrao;
+      if (from) {
+        const isProfessorRoute = from === '/professor' || from.startsWith('/professor/');
+        const isGestaoRoute = from === '/gestao' || from.startsWith('/gestao/');
+
+        if (isProfessorRoute && usuario.papel === 'professor') {
+          destinoFinal = from;
+        } else if (
+          isGestaoRoute &&
+          (usuario.papel === 'direcao' || usuario.papel === 'coordenacao')
+        ) {
+          destinoFinal = from;
+        }
+      }
+
+      navigate(destinoFinal, { replace: true });
     } catch (err) {
       if (err instanceof Error) {
         if (err.message.includes('Os dados foram atualizados em outra aba')) {
