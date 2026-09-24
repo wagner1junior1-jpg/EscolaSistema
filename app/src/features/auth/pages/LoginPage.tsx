@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { useAuth } from '../AuthProvider';
 import { useToast } from '@/components/ui';
 import { LogIn, School, Mail, Lock, ArrowLeft, AlertCircle, Loader2, Sparkles, RotateCcw } from 'lucide-react';
-import { resetDatabase } from '@/services/mock/db';
+import { restaurarDadosDemo } from '@/services';
 
 const loginSchema = z.object({
   email: z
@@ -278,7 +278,7 @@ export const LoginPage: React.FC = () => {
                 type="button"
                 onClick={async () => {
                   try {
-                    await resetDatabase();
+                    await restaurarDadosDemo();
                     toast.success('Dados de demonstração restaurados.');
                   } catch (e) {
                     toast.error('Erro ao restaurar dados de demonstração.');

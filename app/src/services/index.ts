@@ -49,3 +49,13 @@ export const alunoService: AlunoService =
 
 export const relatorioService: RelatorioService =
   dataSource === 'supabase' ? new SupabaseRelatorioServiceStub() : new MockRelatorioService();
+
+export async function restaurarDadosDemo(): Promise<void> {
+  if (dataSource === 'mock') {
+    const { resetDatabase } = await import('./mock/db');
+    await resetDatabase();
+  } else {
+    throw new Error('Disponível só no modo de demonstração.');
+  }
+}
+

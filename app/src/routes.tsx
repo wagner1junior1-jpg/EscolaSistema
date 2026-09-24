@@ -4,6 +4,7 @@ import HomePage from '@/features/home/HomePage';
 import LoginPage from '@/features/auth/pages/LoginPage';
 import AlunoLoginPage from '@/features/aluno/pages/AlunoLoginPage';
 import AlunoPainelPage from '@/features/aluno/pages/AlunoPainelPage';
+import AlunoAtividadePage from '@/features/aluno/pages/AlunoAtividadePage';
 import ProfessorDashboardPage from '@/features/professor/pages/ProfessorDashboardPage';
 import GestaoDashboardPage from '@/features/gestao/pages/GestaoDashboardPage';
 import { RotaProtegida } from '@/features/auth/AuthProvider';
@@ -22,6 +23,9 @@ export const AppRoutes: React.FC = () => {
 
       {/* 4. Painel do Aluno (Protegido por token de sessão) */}
       <Route path="/aluno/painel" element={<AlunoPainelPage />} />
+
+      {/* 4.1. Player de Atividades e Provas do Aluno */}
+      <Route path="/aluno/atividade/:id" element={<AlunoAtividadePage />} />
 
       {/* 5. Portal do Professor (Protegido por papel: professor) */}
       <Route
