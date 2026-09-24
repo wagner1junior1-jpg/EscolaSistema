@@ -79,6 +79,9 @@ export class SupabaseGestaoServiceStub implements GestaoService {
   async convidarProfessor(): Promise<never> {
     throw new Error(ERR_MSG);
   }
+  async desativarProfessor(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
   async listarAlunos(): Promise<never> {
     throw new Error(ERR_MSG);
   }
@@ -86,6 +89,9 @@ export class SupabaseGestaoServiceStub implements GestaoService {
     throw new Error(ERR_MSG);
   }
   async cadastrarAlunosEmLote(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async atualizarAluno(): Promise<never> {
     throw new Error(ERR_MSG);
   }
   async gerarOuResetarPin(): Promise<never> {
@@ -98,12 +104,6 @@ export class SupabaseGestaoServiceStub implements GestaoService {
     throw new Error(ERR_MSG);
   }
   async excluirAvisoEscola(): Promise<never> {
-    throw new Error(ERR_MSG);
-  }
-  async desativarProfessor(): Promise<never> {
-    throw new Error(ERR_MSG);
-  }
-  async atualizarAluno(): Promise<never> {
     throw new Error(ERR_MSG);
   }
 }
@@ -124,6 +124,9 @@ export class SupabaseProfessorServiceStub implements ProfessorService {
   async atualizarAtividade(): Promise<never> {
     throw new Error(ERR_MSG);
   }
+  async excluirAtividade(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
   async publicarAtividade(): Promise<never> {
     throw new Error(ERR_MSG);
   }
@@ -137,9 +140,6 @@ export class SupabaseProfessorServiceStub implements ProfessorService {
     throw new Error(ERR_MSG);
   }
   async reordenarQuestoes(): Promise<never> {
-    throw new Error(ERR_MSG);
-  }
-  async excluirAtividade(): Promise<never> {
     throw new Error(ERR_MSG);
   }
   async excluirQuestao(): Promise<never> {

@@ -1,5 +1,12 @@
 /**
  * SaberPontual — ProfessorService Mock
+ * 
+ * Regras estritas de autorização (Seções 4, 7.1):
+ * - Métodos de ESCRITA: exclusivos do professor dono da oferta (cadeia questão -> atividade -> oferta -> professor_id).
+ * - Métodos de LEITURA: liberados para o professor dono da oferta, além de 'direcao' e 'coordenacao'.
+ * - Sem nenhum fallback de usuário padrão.
+ * - Validações de status: publicar só de 'rascunho' com >= 1 questão válida; encerrar só de 'publicada'.
+ * - Questão respondida: não permite trocar correta ou alterar alternativas (lança erro claro).
  */
 
 import { ProfessorService, NovaQuestaoPayload } from '../contracts';
@@ -12,42 +19,86 @@ import {
   Frequencia,
   StatusFrequencia,
   Aviso,
+  PrioridadeAviso,
   MapaDeCalorAtividade,
+  Perfil,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
-import { MockAuthService } from './auth.mock';
+import { gerarId } from './ids';
+import { exigirUsuario } from './autorizacao';
 import { calcularMapaDeCalorQuestao } from '../calculos';
 
 export class MockProfessorService implements ProfessorService {
-  private authService = new MockAuthService();
-
-  async minhasOfertas(professorId?: string): Promise<OfertaDetalhada[]> {
-    const db = await getDatabase();
-    let profId = professorId;
-
-    if (!profId) {
-      const user = await this.authService.usuarioAtual();
-      profId = user?.papel === 'professor' ? user.id : 'usr-prof-ana'; // fallback padrão de demonstração
+  /**
+   * Helper para verificar se o usuário autenticado tem permissão de leitura sobre uma oferta
+   */
+  private async validarAcessoLeituraOferta(ofertaId: string): Promise<Perfil> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
+    if (usuario.papel === 'direcao' || usuario.papel === 'coordenacao') {
+      return usuario;
     }
 
-    const ofertasDoProf = db.ofertas.filter((o) => o.professor_id === profId);
+    const db = await getDatabase();
+    const oferta = db.ofertas.find((o) => o.id === ofertaId);
+    if (!oferta) throw new Error('Oferta não encontrada.');
+
+    if (oferta.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    return usuario;
+  }
+
+  /**
+   * Helper para verificar se o usuário autenticado é o professor dono da oferta (escrita)
+   */
+  private async validarAcessoEscritaOferta(ofertaId: string): Promise<Perfil> {
+    const usuario = await exigirUsuario(['professor']);
+    const db = await getDatabase();
+    const oferta = db.ofertas.find((o) => o.id === ofertaId);
+    if (!oferta) throw new Error('Oferta não encontrada.');
+
+    if (oferta.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    return usuario;
+  }
+
+  /**
+   * Helper para obter oferta de uma atividade
+   */
+  private async obterOfertaDaAtividade(atividadeId: string) {
+    const db = await getDatabase();
+    const atividade = db.atividades.find((a) => a.id === atividadeId);
+    if (!atividade) throw new Error('Atividade não encontrada.');
+    const oferta = db.ofertas.find((o) => o.id === atividade.oferta_id);
+    if (!oferta) throw new Error('Oferta associada à atividade não encontrada.');
+    return { atividade, oferta };
+  }
+
+  async minhasOfertas(): Promise<OfertaDetalhada[]> {
+    const usuario = await exigirUsuario(['professor']);
+    const db = await getDatabase();
+
+    const ofertasDoProf = db.ofertas.filter((o) => o.professor_id === usuario.id);
 
     return ofertasDoProf.map((o) => {
       const turma = db.turmas.find((t) => t.id === o.turma_id);
       const disciplina = db.disciplinas.find((d) => d.id === o.disciplina_id);
-      const professor = db.perfis.find((p) => p.id === o.professor_id);
 
       return {
         ...o,
         turma_nome: turma?.nome || 'Turma',
         turma_codigo: turma?.codigo_acesso || '',
         disciplina_nome: disciplina?.nome || 'Disciplina',
-        professor_nome: professor?.nome || 'Professor',
+        professor_nome: usuario.nome,
       };
     });
   }
 
   async listarAtividades(ofertaId: string): Promise<Atividade[]> {
+    await this.validarAcessoLeituraOferta(ofertaId);
     const db = await getDatabase();
     return db.atividades
       .filter((a) => a.oferta_id === ofertaId)
@@ -55,10 +106,10 @@ export class MockProfessorService implements ProfessorService {
   }
 
   async obterAtividade(atividadeId: string): Promise<AtividadeCompleta | null> {
-    const db = await getDatabase();
-    const atividade = db.atividades.find((a) => a.id === atividadeId);
-    if (!atividade) return null;
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoLeituraOferta(oferta.id);
 
+    const db = await getDatabase();
     const questoesDaAtividade = db.questoes
       .filter((q) => q.atividade_id === atividadeId)
       .sort((a, b) => a.ordem - b.ordem);
@@ -84,48 +135,134 @@ export class MockProfessorService implements ProfessorService {
     ofertaId: string,
     dados: { titulo: string; descricao: string; prazo: string | null; periodo_id: string }
   ): Promise<Atividade> {
+    const usuario = await this.validarAcessoEscritaOferta(ofertaId);
     const db = await getDatabase();
+
     const nova: Atividade = {
-      id: `ativ-${Date.now()}`,
+      id: gerarId('ativ'),
       created_at: new Date().toISOString(),
       oferta_id: ofertaId,
       periodo_id: dados.periodo_id,
-      titulo: dados.titulo,
-      descricao: dados.descricao,
+      titulo: dados.titulo.trim(),
+      descricao: dados.descricao.trim(),
       prazo: dados.prazo,
-      status: 'rascunho',
-      criado_por: 'usr-prof-ana', // fallback mock
+      status: 'rascunho', // Sempre rascunho na criação
+      criado_por: usuario.id,
     };
+
     db.atividades.push(nova);
     saveDatabase(db);
     return nova;
   }
 
-  async atualizarAtividade(id: string, dados: Partial<Atividade>): Promise<Atividade> {
+  async atualizarAtividade(
+    id: string,
+    dados: { titulo?: string; descricao?: string; prazo?: string | null; periodo_id?: string }
+  ): Promise<Atividade> {
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(id);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
     const db = await getDatabase();
     const idx = db.atividades.findIndex((a) => a.id === id);
-    if (idx === -1) throw new Error('Atividade não encontrada.');
 
-    db.atividades[idx] = { ...db.atividades[idx], ...dados };
+    // Status NÃO pode ser alterado diretamente por este método (somente via publicar/encerrar)
+    if (dados.titulo !== undefined) atividade.titulo = dados.titulo.trim();
+    if (dados.descricao !== undefined) atividade.descricao = dados.descricao.trim();
+    if (dados.prazo !== undefined) atividade.prazo = dados.prazo;
+    if (dados.periodo_id !== undefined) atividade.periodo_id = dados.periodo_id;
+
+    db.atividades[idx] = atividade;
     saveDatabase(db);
-    return { ...db.atividades[idx] };
+    return atividade;
+  }
+
+  async excluirAtividade(id: string): Promise<void> {
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(id);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    if (atividade.status !== 'rascunho') {
+      throw new Error('Apenas atividades em rascunho e sem respostas podem ser excluídas.');
+    }
+
+    const db = await getDatabase();
+    const questoes = db.questoes.filter((q) => q.atividade_id === id);
+    const questaoIds = questoes.map((q) => q.id);
+
+    const temRespostas = db.respostas.some((r) => questaoIds.includes(r.questao_id));
+    if (temRespostas) {
+      throw new Error('Apenas atividades em rascunho e sem respostas podem ser excluídas.');
+    }
+
+    // Exclui alternativas, questões e a atividade
+    db.alternativas = db.alternativas.filter((alt) => !questaoIds.includes(alt.questao_id));
+    db.questoes = db.questoes.filter((q) => q.atividade_id !== id);
+    db.atividades = db.atividades.filter((a) => a.id !== id);
+
+    saveDatabase(db);
   }
 
   async publicarAtividade(id: string): Promise<void> {
-    await this.atualizarAtividade(id, { status: 'publicada' });
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(id);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    if (atividade.status !== 'rascunho') {
+      throw new Error('Apenas atividades em rascunho podem ser publicadas.');
+    }
+
+    const db = await getDatabase();
+    const questoes = db.questoes.filter((q) => q.atividade_id === id);
+    if (questoes.length === 0) {
+      throw new Error('A atividade precisa ter pelo menos 1 questão para ser publicada.');
+    }
+
+    for (const q of questoes) {
+      const alts = db.alternativas.filter((a) => a.questao_id === q.id);
+      if (alts.length < 2 || alts.length > 5) {
+        throw new Error(
+          `A questão ${q.ordem} possui número inválido de alternativas (deve ter entre 2 e 5).`
+        );
+      }
+      const corretas = alts.filter((a) => a.correta).length;
+      if (corretas !== 1) {
+        throw new Error(`A questão ${q.ordem} deve conter exatamente 1 alternativa correta.`);
+      }
+    }
+
+    atividade.status = 'publicada';
+    saveDatabase(db);
   }
 
   async encerrarAtividade(id: string): Promise<void> {
-    await this.atualizarAtividade(id, { status: 'encerrada' });
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(id);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    if (atividade.status !== 'publicada') {
+      throw new Error('Apenas atividades publicadas podem ser encerradas.');
+    }
+
+    const db = await getDatabase();
+    atividade.status = 'encerrada';
+    saveDatabase(db);
   }
 
   async duplicarAtividade(atividadeId: string, paraOfertaId: string): Promise<Atividade> {
+    const usuario = await exigirUsuario(['professor']);
+    const { atividade: original, oferta: ofertaOrigem } =
+      await this.obterOfertaDaAtividade(atividadeId);
+
+    // O professor deve ser dono da oferta de origem e da oferta de destino
+    if (ofertaOrigem.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
     const db = await getDatabase();
-    const original = await this.obterAtividade(atividadeId);
-    if (!original) throw new Error('Atividade original não encontrada.');
+    const ofertaDestino = db.ofertas.find((o) => o.id === paraOfertaId);
+    if (!ofertaDestino || ofertaDestino.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
 
     const agora = new Date().toISOString();
-    const novaAtivId = `ativ-dup-${Date.now()}`;
+    const novaAtivId = gerarId('ativ');
 
     const novaAtividade: Atividade = {
       id: novaAtivId,
@@ -136,14 +273,17 @@ export class MockProfessorService implements ProfessorService {
       descricao: original.descricao,
       prazo: original.prazo,
       status: 'rascunho',
-      criado_por: original.criado_por,
+      criado_por: usuario.id,
     };
 
     db.atividades.push(novaAtividade);
 
-    // Duplica questões e alternativas
-    for (const q of original.questoes) {
-      const novaQuestaoId = `q-dup-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const questoesOriginais = db.questoes
+      .filter((q) => q.atividade_id === atividadeId)
+      .sort((a, b) => a.ordem - b.ordem);
+
+    for (const q of questoesOriginais) {
+      const novaQuestaoId = gerarId('q');
       const novaQuestao: Questao = {
         id: novaQuestaoId,
         created_at: agora,
@@ -155,9 +295,13 @@ export class MockProfessorService implements ProfessorService {
       };
       db.questoes.push(novaQuestao);
 
-      for (const alt of q.alternativas) {
+      const altsOriginais = db.alternativas
+        .filter((alt) => alt.questao_id === q.id)
+        .sort((a, b) => a.letra.localeCompare(b.letra));
+
+      for (const alt of altsOriginais) {
         const novaAlt: Alternativa = {
-          id: `alt-dup-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+          id: gerarId('alt'),
           created_at: agora,
           questao_id: novaQuestaoId,
           letra: alt.letra,
@@ -174,87 +318,111 @@ export class MockProfessorService implements ProfessorService {
   }
 
   async salvarQuestoes(atividadeId: string, questoes: NovaQuestaoPayload[]): Promise<void> {
+    const { oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
     const db = await getDatabase();
-    const atividade = db.atividades.find((a) => a.id === atividadeId);
-    if (!atividade) throw new Error('Atividade não encontrada.');
-
     const agora = new Date().toISOString();
+    const letrasValidas: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
-    for (const qPayload of questoes) {
-      // Validação: Mínimo 2, máximo 5 alternativas
+    for (let i = 0; i < questoes.length; i++) {
+      const qPayload = questoes[i];
+      const ordemCalculada = qPayload.ordem ?? i + 1;
+
       if (qPayload.alternativas.length < 2 || qPayload.alternativas.length > 5) {
         throw new Error(
-          `A questão ${qPayload.ordem} deve conter entre 2 e 5 alternativas (possui ${qPayload.alternativas.length}).`
+          `A questão ${ordemCalculada} deve conter entre 2 e 5 alternativas (possui ${qPayload.alternativas.length}).`
         );
       }
 
-      // Validação: Exatamente 1 correta
       const totalCorretas = qPayload.alternativas.filter((a) => a.correta).length;
       if (totalCorretas !== 1) {
         throw new Error(
-          `A questão ${qPayload.ordem} deve ter exatamente 1 alternativa correta marcada (possui ${totalCorretas}).`
+          `A questão ${ordemCalculada} deve ter exatamente 1 alternativa correta marcada.`
         );
       }
 
-      const questaoId = qPayload.id || `q-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      const jaTemRespostas = db.respostas.some((r) => r.questao_id === questaoId);
+      const questaoId = qPayload.id;
+      const jaTemRespostas = questaoId
+        ? db.respostas.some((r) => r.questao_id === questaoId)
+        : false;
 
-      // Se já possui resposta de aluno, regra da Seção 7 (Fase C):
-      // "Uma questão já respondida por algum aluno só pode ter o texto editado, não a alternativa correta."
-      if (jaTemRespostas && qPayload.id) {
-        const questaoExistente = db.questoes.find((q) => q.id === questaoId);
-        if (questaoExistente) {
-          questaoExistente.enunciado = qPayload.enunciado;
-          questaoExistente.dica = qPayload.dica;
-          questaoExistente.explicacao = qPayload.explicacao;
+      if (jaTemRespostas && questaoId) {
+        // Regra da Auditoria (Item 7):
+        // Se a questão já foi respondida, verificar se o payload tenta alterar a correta,
+        // adicionar ou remover alternativas. Em caso afirmativo, LANÇAR ERRO explícito!
+        const altsExistentes = db.alternativas
+          .filter((a) => a.questao_id === questaoId)
+          .sort((a, b) => a.letra.localeCompare(b.letra));
+
+        if (qPayload.alternativas.length !== altsExistentes.length) {
+          throw new Error(
+            'Esta questão já foi respondida por alunos: só é possível editar os textos.'
+          );
         }
 
-        // Permite editar texto, mas NÃO a marcação da alternativa correta
-        for (const altPayload of qPayload.alternativas) {
-          if (altPayload.id) {
-            const altExistente = db.alternativas.find((a) => a.id === altPayload.id);
-            if (altExistente) {
-              altExistente.texto = altPayload.texto;
-              altExistente.por_que_errou = altPayload.por_que_errou;
-            }
+        // Verifica se a marcação da alternativa correta foi alterada
+        for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
+          const payloadAlt = qPayload.alternativas[altIdx];
+          const existAlt = altsExistentes[altIdx];
+          if (payloadAlt.correta !== existAlt.correta) {
+            throw new Error(
+              'Esta questão já foi respondida por alunos: só é possível editar os textos.'
+            );
           }
+        }
+
+        // Atualização permitida apenas dos textos
+        const qExistente = db.questoes.find((q) => q.id === questaoId);
+        if (qExistente) {
+          qExistente.enunciado = qPayload.enunciado.trim();
+          qExistente.dica = qPayload.dica;
+          qExistente.explicacao = qPayload.explicacao;
+        }
+
+        for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
+          const payloadAlt = qPayload.alternativas[altIdx];
+          const existAlt = altsExistentes[altIdx];
+          existAlt.texto = payloadAlt.texto.trim();
+          existAlt.por_que_errou = payloadAlt.por_que_errou;
         }
         continue;
       }
 
-      // Se é nova ou ainda não possui respostas: cria/sobrescreve normalmente
-      let questao = db.questoes.find((q) => q.id === questaoId);
+      // Se a questão é nova ou ainda não possui respostas
+      const idFinal = questaoId || gerarId('q');
+      let questao = db.questoes.find((q) => q.id === idFinal);
+
       if (!questao) {
-        const novaQuestao = {
-          id: questaoId,
+        questao = {
+          id: idFinal,
           created_at: agora,
           atividade_id: atividadeId,
-          ordem: qPayload.ordem ?? (db.questoes.length + 1),
-          enunciado: qPayload.enunciado,
+          ordem: ordemCalculada,
+          enunciado: qPayload.enunciado.trim(),
           dica: qPayload.dica,
           explicacao: qPayload.explicacao,
         };
-        db.questoes.push(novaQuestao);
-        questao = novaQuestao;
+        db.questoes.push(questao);
       } else {
-        questao.ordem = qPayload.ordem ?? questao.ordem;
-        questao.enunciado = qPayload.enunciado;
+        questao.ordem = ordemCalculada;
+        questao.enunciado = qPayload.enunciado.trim();
         questao.dica = qPayload.dica;
         questao.explicacao = qPayload.explicacao;
       }
 
-      // Atualiza alternativas
-      db.alternativas = db.alternativas.filter((a) => a.questao_id !== questaoId);
-      const letras: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
-      for (let i = 0; i < qPayload.alternativas.length; i++) {
-        const altPayload = qPayload.alternativas[i];
-        const altId = altPayload.id || `alt-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+      // Atribuição automática das letras na ordem recebida (A, B, C, D, E)
+      db.alternativas = db.alternativas.filter((a) => a.questao_id !== idFinal);
+      for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
+        const altPayload = qPayload.alternativas[altIdx];
+        const letraAtribuida = letrasValidas[altIdx];
+
         db.alternativas.push({
-          id: altId,
+          id: altPayload.id || gerarId('alt'),
           created_at: agora,
-          questao_id: questaoId,
-          letra: altPayload.letra ?? letras[i],
-          texto: altPayload.texto,
+          questao_id: idFinal,
+          letra: letraAtribuida,
+          texto: altPayload.texto.trim(),
           correta: altPayload.correta,
           por_que_errou: altPayload.por_que_errou,
         });
@@ -265,6 +433,9 @@ export class MockProfessorService implements ProfessorService {
   }
 
   async reordenarQuestoes(atividadeId: string, ordemIds: string[]): Promise<void> {
+    const { oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
     const db = await getDatabase();
     ordemIds.forEach((id, index) => {
       const q = db.questoes.find((item) => item.id === id && item.atividade_id === atividadeId);
@@ -273,7 +444,26 @@ export class MockProfessorService implements ProfessorService {
     saveDatabase(db);
   }
 
+  async excluirQuestao(id: string): Promise<void> {
+    const db = await getDatabase();
+    const questao = db.questoes.find((q) => q.id === id);
+    if (!questao) throw new Error('Questão não encontrada.');
+
+    const { oferta } = await this.obterOfertaDaAtividade(questao.atividade_id);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    const jaTemRespostas = db.respostas.some((r) => r.questao_id === id);
+    if (jaTemRespostas) {
+      throw new Error('Não é possível excluir uma questão que já possui respostas.');
+    }
+
+    db.alternativas = db.alternativas.filter((a) => a.questao_id !== id);
+    db.questoes = db.questoes.filter((q) => q.id !== id);
+    saveDatabase(db);
+  }
+
   async listarFrequencia(ofertaId: string, data: string): Promise<Frequencia[]> {
+    await this.validarAcessoLeituraOferta(ofertaId);
     const db = await getDatabase();
     return db.frequencias.filter((f) => f.oferta_id === ofertaId && f.data === data);
   }
@@ -281,11 +471,29 @@ export class MockProfessorService implements ProfessorService {
   async salvarFrequencia(
     ofertaId: string,
     data: string,
-    registros: Array<{ aluno_id: string; status: StatusFrequencia }>,
-    registradoPorId?: string
+    registros: Array<{ aluno_id: string; status: StatusFrequencia }>
   ): Promise<void> {
+    const usuario = await this.validarAcessoEscritaOferta(ofertaId);
     const db = await getDatabase();
-    const profId = registradoPorId || 'usr-prof-ana';
+    const oferta = db.ofertas.find((o) => o.id === ofertaId)!;
+
+    // Validação 1: Data não pode ser futura
+    const hoje = new Date().toISOString().split('T')[0];
+    if (data > hoje) {
+      throw new Error('Não é possível registrar frequência em data futura.');
+    }
+
+    // Validação 2: Cada aluno deve pertencer à turma da oferta
+    const alunosDaTurma = new Set(
+      db.alunos.filter((a) => a.turma_id === oferta.turma_id && a.ativo).map((a) => a.id)
+    );
+
+    for (const reg of registros) {
+      if (!alunosDaTurma.has(reg.aluno_id)) {
+        throw new Error(`O aluno ${reg.aluno_id} não pertence à turma desta oferta.`);
+      }
+    }
+
     const agora = new Date().toISOString();
 
     for (const reg of registros) {
@@ -295,16 +503,16 @@ export class MockProfessorService implements ProfessorService {
 
       if (idx >= 0) {
         db.frequencias[idx].status = reg.status;
-        db.frequencias[idx].registrado_por = profId;
+        db.frequencias[idx].registrado_por = usuario.id;
       } else {
         db.frequencias.push({
-          id: `freq-${reg.aluno_id}-${data}-${Date.now()}`,
+          id: gerarId('freq'),
           created_at: agora,
           oferta_id: ofertaId,
           aluno_id: reg.aluno_id,
           data,
           status: reg.status,
-          registrado_por: profId,
+          registrado_por: usuario.id,
         });
       }
     }
@@ -313,7 +521,18 @@ export class MockProfessorService implements ProfessorService {
   }
 
   async listarRecadosTurma(turmaId: string): Promise<Aviso[]> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
     const db = await getDatabase();
+
+    if (usuario.papel === 'professor') {
+      const temOferta = db.ofertas.some(
+        (o) => o.turma_id === turmaId && o.professor_id === usuario.id
+      );
+      if (!temOferta) {
+        throw new Error('Você não tem permissão para esta ação.');
+      }
+    }
+
     return db.avisos
       .filter((a) => a.turma_id === turmaId)
       .sort((a, b) => new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime());
@@ -321,46 +540,35 @@ export class MockProfessorService implements ProfessorService {
 
   async criarRecadoTurma(
     ofertaId: string,
-    dados: { titulo: string; mensagem: string; prioridade: import('@/lib/types').PrioridadeAviso }
+    dados: { titulo: string; mensagem: string; prioridade: PrioridadeAviso }
   ): Promise<Aviso> {
+    const usuario = await this.validarAcessoEscritaOferta(ofertaId);
     const db = await getDatabase();
-    // Deriva turma_id a partir da oferta
-    const oferta = db.ofertas.find((o) => o.id === ofertaId);
-    const escola = db.escolas[0];
+    const oferta = db.ofertas.find((o) => o.id === ofertaId)!;
+    const turma = db.turmas.find((t) => t.id === oferta.turma_id)!;
+
     const novo: Aviso = {
-      id: `aviso-${Date.now()}`,
+      id: gerarId('aviso'),
       created_at: new Date().toISOString(),
-      publicado_em: new Date().toISOString(),
-      escola_id: escola?.id || 'esc-001',
-      autor_id: 'usr-prof-ana',
-      turma_id: oferta?.turma_id || null,
-      titulo: dados.titulo,
-      mensagem: dados.mensagem,
+      escola_id: turma.escola_id,
+      autor_id: usuario.id,
+      turma_id: turma.id,
+      titulo: dados.titulo.trim(),
+      mensagem: dados.mensagem.trim(),
       prioridade: dados.prioridade,
+      publicado_em: new Date().toISOString(),
     };
+
     db.avisos.push(novo);
     saveDatabase(db);
     return novo;
   }
 
-  async excluirAtividade(id: string): Promise<void> {
-    const db = await getDatabase();
-    db.atividades = db.atividades.filter((a) => a.id !== id);
-    saveDatabase(db);
-  }
-
-  async excluirQuestao(id: string): Promise<void> {
-    const db = await getDatabase();
-    db.questoes = db.questoes.filter((q) => q.id !== id);
-    db.alternativas = db.alternativas.filter((a) => a.questao_id !== id);
-    saveDatabase(db);
-  }
-
   async mapaDeCalor(atividadeId: string): Promise<MapaDeCalorAtividade> {
-    const db = await getDatabase();
-    const atividade = db.atividades.find((a) => a.id === atividadeId);
-    if (!atividade) throw new Error('Atividade não encontrada.');
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoLeituraOferta(oferta.id);
 
+    const db = await getDatabase();
     const questoes = db.questoes
       .filter((q) => q.atividade_id === atividadeId)
       .sort((a, b) => a.ordem - b.ordem);

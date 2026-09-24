@@ -1,5 +1,9 @@
 /**
  * SaberPontual — RelatorioService Mock
+ * 
+ * Regras:
+ * - Apenas 'direcao' e 'coordenacao' podem acessar relatórios pedagógicos e institucionais.
+ * - No conselho de classe, considera estritamente as frequências com data entre data_inicio e data_fim do período.
  */
 
 import { RelatorioService } from '../contracts';
@@ -10,6 +14,7 @@ import {
   SegmentoTurma,
 } from '@/lib/types';
 import { getDatabase } from './db';
+import { exigirUsuario } from './autorizacao';
 import {
   calcularMediaPeriodo,
   consolidarFrequenciaAluno,
@@ -21,6 +26,7 @@ export class MockRelatorioService implements RelatorioService {
     turmaId: string,
     periodoId: string
   ): Promise<RelatorioConselho> {
+    await exigirUsuario(['direcao', 'coordenacao']);
     const db = await getDatabase();
 
     const turma = db.turmas.find((t) => t.id === turmaId);
@@ -72,9 +78,13 @@ export class MockRelatorioService implements RelatorioService {
 
       const mediaGeral = calcularMediaPeriodo(somaAcertos, somaQuestoes);
 
-      // Frequência consolidada de todas as ofertas da turma
+      // Frequência consolidada: estritamente dentro das datas do período
       const registrosFreq = db.frequencias.filter(
-        (f) => ofertaIds.includes(f.oferta_id) && f.aluno_id === aluno.id
+        (f) =>
+          ofertaIds.includes(f.oferta_id) &&
+          f.aluno_id === aluno.id &&
+          f.data >= periodo.data_inicio &&
+          f.data <= periodo.data_fim
       );
       const freqStats = consolidarFrequenciaAluno(registrosFreq);
 
@@ -102,6 +112,7 @@ export class MockRelatorioService implements RelatorioService {
   }
 
   async visaoGeralEscola(): Promise<VisaoGeralEscola> {
+    await exigirUsuario(['direcao', 'coordenacao']);
     const db = await getDatabase();
 
     const totalAlunos = db.alunos.filter((a) => a.ativo).length;
@@ -121,7 +132,6 @@ export class MockRelatorioService implements RelatorioService {
       turmasPorSegmento[t.segmento] = (turmasPorSegmento[t.segmento] || 0) + 1;
     }
 
-    // Aproveitamento médio global baseado em todas as respostas
     const totalRespostas = db.respostas.length;
     const totalAcertos = db.respostas.filter((r) => r.acertou).length;
 

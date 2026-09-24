@@ -1,16 +1,21 @@
 /**
  * SaberPontual — AlunoService Mock
  * 
- * Regras estritas de segurança (docs/ESPECIFICACAO.md Seções 5 e 7.1):
- * - O aluno NUNCA recebe alternativa correta, por_que_errou ou explicação antes de responder.
- * - Bloqueio de PIN após 5 erros em 15 minutos.
- * - A resposta é definitiva e não pode ser alterada.
+ * Regras estritas de segurança e privacidade (Seções 5 e 7.1):
+ * - Carregar atividade: só da turma do aluno e com status 'publicada' ou 'encerrada'.
+ *   Para questões já respondidas, inclui feedback (acertou, alternativa correta, por que errou, explicação).
+ *   Para questões não respondidas: sigilo absoluto (sem correta, sem por que errou, sem explicação).
+ * - Responder: só em atividades com status 'publicada' pertencentes à turma do aluno.
+ * - Login: turma precisa estar ativa; bloqueio por 15 min após 5 erros.
+ * - Boletim: retorna AlunoPublico (sem pin_hash) e considera frequências estritamente entre data_inicio e data_fim do período.
+ * - Avisos: filtrados por escola_id e turma_id do aluno.
  */
 
 import { AlunoService } from '../contracts';
 import {
   AlunoResumido,
   Aluno,
+  AlunoPublico,
   AtividadeParaAluno,
   AtividadeResumoAluno,
   RespostaFeedback,
@@ -22,11 +27,17 @@ import {
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { hashPin, hashToken, gerarTokenAleatorio } from './crypto';
+import { gerarId } from './ids';
 import {
   calcularAproveitamentoAtividade,
   calcularMediaPeriodo,
   consolidarFrequenciaAluno,
 } from '../calculos';
+
+function toAlunoPublico(aluno: Aluno): AlunoPublico {
+  const { pin_hash, ...publico } = aluno;
+  return publico;
+}
 
 export class MockAlunoService implements AlunoService {
   private async obterAlunoPorToken(token: string): Promise<Aluno> {
@@ -82,6 +93,12 @@ export class MockAlunoService implements AlunoService {
       throw new Error('Aluno não encontrado.');
     }
 
+    // Validação da turma do aluno: deve estar ativa
+    const turma = db.turmas.find((t) => t.id === aluno.turma_id);
+    if (!turma || !turma.ativa) {
+      throw new Error('Sua turma está inativa. Procure a secretaria da escola.');
+    }
+
     const agora = new Date();
     const quinzeMinutosAtras = new Date(agora.getTime() - 15 * 60 * 1000);
 
@@ -103,7 +120,7 @@ export class MockAlunoService implements AlunoService {
     const pinCorreto = pinHashInformado === aluno.pin_hash;
 
     const novaTentativa: PinTentativa = {
-      id: `tent-${Date.now()}`,
+      id: gerarId('tent'),
       created_at: agora.toISOString(),
       aluno_id: alunoId,
       tentativa_em: agora.toISOString(),
@@ -129,7 +146,7 @@ export class MockAlunoService implements AlunoService {
     const expiraEm = new Date(agora.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const sessao: AlunoSessao = {
-      id: `sess-${Date.now()}`,
+      id: gerarId('sess'),
       created_at: agora.toISOString(),
       aluno_id: alunoId,
       token_hash: tokenHash,
@@ -202,43 +219,73 @@ export class MockAlunoService implements AlunoService {
     const db = await getDatabase();
 
     const atividade = db.atividades.find((a) => a.id === atividadeId);
-    if (!atividade || atividade.status === 'rascunho') {
-      throw new Error('Atividade não disponível.');
+    if (!atividade) {
+      throw new Error('Atividade não encontrada.');
     }
 
     const oferta = db.ofertas.find((o) => o.id === atividade.oferta_id);
-    const disciplina = db.disciplinas.find((d) => d.id === oferta?.disciplina_id);
-    const professor = db.perfis.find((p) => p.id === oferta?.professor_id);
+    if (!oferta) throw new Error('Oferta não encontrada.');
+
+    // Validação 1: Apenas atividades da turma do aluno
+    if (oferta.turma_id !== aluno.turma_id) {
+      throw new Error('Esta atividade não pertence à sua turma.');
+    }
+
+    // Validação 2: Status deve ser 'publicada' ou 'encerrada'
+    if (atividade.status !== 'publicada' && atividade.status !== 'encerrada') {
+      throw new Error('Atividade indisponível.');
+    }
+
+    const disciplina = db.disciplinas.find((d) => d.id === oferta.disciplina_id);
+    const professor = db.perfis.find((p) => p.id === oferta.professor_id);
 
     const questoes = db.questoes
       .filter((q) => q.atividade_id === atividadeId)
       .sort((a, b) => a.ordem - b.ordem);
 
     const questoesParaAluno = questoes.map((q) => {
-      // REGRA DE SEGURANÇA ABSOLUTA:
-      // O aluno recebe apenas id, letra e texto das alternativas.
-      // Jamais recebe 'correta', 'por_que_errou' ou 'explicacao' antes da resposta!
-      const alternativas = db.alternativas
+      const todasAlts = db.alternativas
         .filter((alt) => alt.questao_id === q.id)
-        .sort((a, b) => a.letra.localeCompare(b.letra))
-        .map((alt) => ({
-          id: alt.id,
-          letra: alt.letra,
-          texto: alt.texto,
-        }));
+        .sort((a, b) => a.letra.localeCompare(b.letra));
 
       const respostaRegistrada = db.respostas.find(
         (r) => r.aluno_id === aluno.id && r.questao_id === q.id
       );
 
+      const alternativasBase = todasAlts.map((alt) => ({
+        id: alt.id,
+        letra: alt.letra,
+        texto: alt.texto,
+      }));
+
+      if (respostaRegistrada) {
+        // Para questões JÁ respondidas, inclui feedback pedagógico
+        const altCorreta = todasAlts.find((a) => a.correta);
+        const altEscolhida = todasAlts.find((a) => a.id === respostaRegistrada.alternativa_id);
+
+        return {
+          id: q.id,
+          ordem: q.ordem,
+          enunciado: q.enunciado,
+          dica: q.dica,
+          alternativas: alternativasBase,
+          respondida: true,
+          alternativa_respondida_id: respostaRegistrada.alternativa_id,
+          acertou: respostaRegistrada.acertou,
+          alternativa_correta_id: altCorreta?.id,
+          por_que_errou: respostaRegistrada.acertou ? null : altEscolhida?.por_que_errou || null,
+          explicacao: q.explicacao,
+        };
+      }
+
+      // Para questões NÃO respondidas: sigilo absoluto
       return {
         id: q.id,
         ordem: q.ordem,
         enunciado: q.enunciado,
         dica: q.dica,
-        alternativas,
-        respondida: !!respostaRegistrada,
-        alternativa_respondida_id: respostaRegistrada?.alternativa_id,
+        alternativas: alternativasBase,
+        respondida: false,
       };
     });
 
@@ -262,16 +309,32 @@ export class MockAlunoService implements AlunoService {
     const aluno = await this.obterAlunoPorToken(token);
     const db = await getDatabase();
 
-    // REGRA DE RESPOSTA DEFINITIVA: unique(aluno_id, questao_id)
+    const questao = db.questoes.find((q) => q.id === questaoId);
+    if (!questao) throw new Error('Questão não encontrada.');
+
+    const atividade = db.atividades.find((a) => a.id === questao.atividade_id);
+    if (!atividade) throw new Error('Atividade não encontrada.');
+
+    const oferta = db.ofertas.find((o) => o.id === atividade.oferta_id);
+    if (!oferta || oferta.turma_id !== aluno.turma_id) {
+      throw new Error('Esta questão não pertence a uma atividade da sua turma.');
+    }
+
+    // Apenas atividades publicadas aceitam respostas
+    if (atividade.status === 'encerrada') {
+      throw new Error('Esta atividade já foi encerrada e não aceita mais respostas.');
+    }
+    if (atividade.status !== 'publicada') {
+      throw new Error('Atividade indisponível para resposta.');
+    }
+
+    // Resposta definitiva: unique(aluno_id, questao_id)
     const jaRespondida = db.respostas.some(
       (r) => r.aluno_id === aluno.id && r.questao_id === questaoId
     );
     if (jaRespondida) {
       throw new Error('Esta questão já foi respondida e não pode ser alterada.');
     }
-
-    const questao = db.questoes.find((q) => q.id === questaoId);
-    if (!questao) throw new Error('Questão não encontrada.');
 
     const alternativas = db.alternativas.filter((a) => a.questao_id === questaoId);
     const alternativaEscolhida = alternativas.find((a) => a.id === alternativaId);
@@ -286,7 +349,7 @@ export class MockAlunoService implements AlunoService {
     const agora = new Date().toISOString();
 
     const novaResposta: Resposta = {
-      id: `resp-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: gerarId('resp'),
       created_at: agora,
       aluno_id: aluno.id,
       questao_id: questaoId,
@@ -323,7 +386,7 @@ export class MockAlunoService implements AlunoService {
       const disc = db.disciplinas.find((d) => d.id === of.disciplina_id);
       const prof = db.perfis.find((p) => p.id === of.professor_id);
 
-      // Atividades concluídas/encerradas do período nesta oferta
+      // Atividades concluídas ou encerradas do período nesta oferta
       const ativs = db.atividades.filter(
         (a) =>
           a.oferta_id === of.id &&
@@ -348,7 +411,6 @@ export class MockAlunoService implements AlunoService {
           somaAcertos += respostas.filter((r) => r.acertou).length;
           somaQuestoes += questoes.length;
         } else if (a.status === 'encerrada') {
-          // Na encerrada, questões sem resposta contam como erro
           somaAcertos += respostas.filter((r) => r.acertou).length;
           somaQuestoes += questoes.length;
         }
@@ -356,9 +418,13 @@ export class MockAlunoService implements AlunoService {
 
       const mediaAproveitamento = calcularMediaPeriodo(somaAcertos, somaQuestoes);
 
-      // Frequência
+      // Frequência: filtrada ESTRITAMENTE pelas datas de início e fim do período
       const freqRegistros = db.frequencias.filter(
-        (f) => f.oferta_id === of.id && f.aluno_id === aluno.id
+        (f) =>
+          f.oferta_id === of.id &&
+          f.aluno_id === aluno.id &&
+          f.data >= periodoAtivo.data_inicio &&
+          f.data <= periodoAtivo.data_fim
       );
       const freqStats = consolidarFrequenciaAluno(freqRegistros);
 
@@ -376,7 +442,7 @@ export class MockAlunoService implements AlunoService {
     });
 
     return {
-      aluno,
+      aluno: toAlunoPublico(aluno), // NUNCA expõe pin_hash
       turma,
       periodo_atual: periodoAtivo,
       disciplinas: disciplinasBoletim,
@@ -387,8 +453,13 @@ export class MockAlunoService implements AlunoService {
     const aluno = await this.obterAlunoPorToken(token);
     const db = await getDatabase();
 
+    // Filtra avisos da mesma escola que sejam gerais ou para a turma do aluno
     return db.avisos
-      .filter((a) => a.turma_id === null || a.turma_id === aluno.turma_id)
+      .filter(
+        (a) =>
+          a.escola_id === aluno.escola_id &&
+          (a.turma_id === null || a.turma_id === aluno.turma_id)
+      )
       .sort((a, b) => new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime());
   }
 }
