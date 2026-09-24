@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   calcularAproveitamentoAtividade,
   calcularMediaPeriodo,
-  calcularFrequencia,
-  consolidarFrequenciaAluno,
-  determinarSituacaoConselho,
+  faixaDesempenho,
+  questoesCriticas,
   calcularMapaDeCalorQuestao,
 } from '../calculos';
-import { Questao, Alternativa, Resposta, Frequencia } from '@/lib/types';
+import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao } from '@/lib/types';
 
 describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', () => {
   describe('1. Aproveitamento em uma atividade', () => {
@@ -32,104 +31,91 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
       expect(calcularMediaPeriodo(7, 8)).toBe(87.5);
     });
 
-    it('deve retornar null se não houver questões avaliadas', () => {
+    it('deve calcular a média a partir de uma lista de atividades', () => {
+      expect(
+        calcularMediaPeriodo([
+          { acertos: 4, totalQuestoes: 5 },
+          { acertos: 3, totalQuestoes: 5 },
+        ])
+      ).toBe(70);
+    });
+
+    it('deve retornar null se não houver questões avaliadas ou lista vazia', () => {
       expect(calcularMediaPeriodo(0, 0)).toBeNull();
+      expect(calcularMediaPeriodo([])).toBeNull();
     });
   });
 
-  describe('3. Frequência escolar e regra de dias sem registro', () => {
-    it('deve somar presenças (P) e justificadas (J) dividindo estritamente pelos dias COM registro', () => {
-      // 10 registros: 8 P, 1 J, 1 F -> (8 + 1) / 10 = 90%
-      expect(calcularFrequencia(8, 1, 10)).toBe(90);
+  describe('3. Faixa de desempenho (Seção 6.1)', () => {
+    it('deve retornar "Sem atividades" quando a média for null', () => {
+      expect(faixaDesempenho(null)).toBe('Sem atividades');
     });
 
-    it('regra canônica: "Dia sem registro do aluno não entra no cálculo"', () => {
-      // Cenário: A escola teve 20 dias de aula no mês.
-      // O aluno foi matriculado recentemente e tem registros em apenas 4 dias:
-      // 3 Presenças (P) e 1 Justificada (J). Os outros 16 dias NÃO possuem registro para ele.
-      // O cálculo deve ser (3 + 1) / 4 = 100%, e NUNCA dividir por 20.
-      const registrosAluno: Frequencia[] = [
-        {
-          id: 'f1',
-          created_at: '',
-          oferta_id: 'of-1',
-          aluno_id: 'a1',
-          data: '2026-09-01',
-          status: 'P',
-          registrado_por: 'prof',
-        },
-        {
-          id: 'f2',
-          created_at: '',
-          oferta_id: 'of-1',
-          aluno_id: 'a1',
-          data: '2026-09-02',
-          status: 'P',
-          registrado_por: 'prof',
-        },
-        {
-          id: 'f3',
-          created_at: '',
-          oferta_id: 'of-1',
-          aluno_id: 'a1',
-          data: '2026-09-03',
-          status: 'P',
-          registrado_por: 'prof',
-        },
-        {
-          id: 'f4',
-          created_at: '',
-          oferta_id: 'of-1',
-          aluno_id: 'a1',
-          data: '2026-09-04',
-          status: 'J',
-          registrado_por: 'prof',
-        },
+    it('deve classificar limites estritos conforme especificação', () => {
+      // < 60: Atenção
+      expect(faixaDesempenho(0)).toBe('Atenção');
+      expect(faixaDesempenho(59.9)).toBe('Atenção');
+
+      // 60 a 79.9: Bom
+      expect(faixaDesempenho(60)).toBe('Bom');
+      expect(faixaDesempenho(75)).toBe('Bom');
+      expect(faixaDesempenho(79.9)).toBe('Bom');
+
+      // >= 80: Ótimo
+      expect(faixaDesempenho(80)).toBe('Ótimo');
+      expect(faixaDesempenho(95)).toBe('Ótimo');
+      expect(faixaDesempenho(100)).toBe('Ótimo');
+    });
+  });
+
+  describe('4. Questões críticas (Seção 6.2)', () => {
+    const criarItem = (
+      id: string,
+      totalRespostas: number,
+      porcentagemAcerto: number
+    ): ItemMapaDeCalorQuestao => ({
+      questao_id: id,
+      enunciado: 'Questão teste ' + id,
+      ordem: 1,
+      total_respostas: totalRespostas,
+      total_acertos: Math.round((totalRespostas * porcentagemAcerto) / 100),
+      porcentagem_acerto: porcentagemAcerto,
+      distribuicao: {
+        A: { alternativa_id: 'alt-a', total: 0, porcentagem: 0 },
+        B: { alternativa_id: 'alt-b', total: 0, porcentagem: 0 },
+        C: { alternativa_id: 'alt-c', total: 0, porcentagem: 0 },
+        D: { alternativa_id: 'alt-d', total: 0, porcentagem: 0 },
+        E: { alternativa_id: 'alt-e', total: 0, porcentagem: 0 },
+      },
+      distrator_mais_escolhido: null,
+    });
+
+    it('deve ignorar questões com menos de 5 respostas', () => {
+      const itens = [
+        criarItem('q-poucas-respostas', 4, 20), // 20% acerto, mas só 4 respostas (< 5)
+        criarItem('q-suficiente-critica', 5, 40), // 40% acerto, 5 respostas
       ];
 
-      const resultado = consolidarFrequenciaAluno(registrosAluno);
-
-      expect(resultado.diasComRegistro).toBe(4);
-      expect(resultado.presencas).toBe(3);
-      expect(resultado.justificadas).toBe(1);
-      expect(resultado.faltas).toBe(0);
-      expect(resultado.porcentagem).toBe(100);
+      const criticas = questoesCriticas(itens);
+      expect(criticas).toHaveLength(1);
+      expect(criticas[0].questao_id).toBe('q-suficiente-critica');
     });
 
-    it('deve retornar null se o aluno não tiver nenhum dia registrado', () => {
-      expect(calcularFrequencia(0, 0, 0)).toBeNull();
-      const resultadoVazio = consolidarFrequenciaAluno([]);
-      expect(resultadoVazio.porcentagem).toBeNull();
-    });
-  });
+    it('deve incluir questões com >= 5 respostas e acerto abaixo de 50%', () => {
+      const itens = [
+        criarItem('q1', 10, 49.9), // crítica
+        criarItem('q2', 10, 50.0), // não crítica (>= 50%)
+        criarItem('q3', 6, 25.0),  // crítica
+      ];
 
-  describe('4. Situação no Conselho de Classe', () => {
-    it('deve classificar como "Sem avaliação" quando nenhuma atividade foi concluída', () => {
-      expect(determinarSituacaoConselho(null, 100, false)).toBe('Sem avaliação');
-      expect(determinarSituacaoConselho(80, 100, false)).toBe('Sem avaliação');
-    });
-
-    it('deve classificar como "Risco por infrequência" se frequência for menor que 75%', () => {
-      expect(determinarSituacaoConselho(90, 70, true)).toBe('Risco por infrequência');
-      expect(determinarSituacaoConselho(50, 60, true)).toBe('Risco por infrequência');
-    });
-
-    it('deve classificar como "Reforço" se média for menor que 60% com frequência adequada', () => {
-      expect(determinarSituacaoConselho(55, 80, true)).toBe('Reforço');
-    });
-
-    it('deve classificar como "Destaque" se média >= 80% e frequência >= 85%', () => {
-      expect(determinarSituacaoConselho(85, 90, true)).toBe('Destaque');
-      expect(determinarSituacaoConselho(80, 85, true)).toBe('Destaque');
-    });
-
-    it('deve classificar como "Adequado" em caso padrão com nota e frequência satisfatórias', () => {
-      expect(determinarSituacaoConselho(70, 80, true)).toBe('Adequado');
-      expect(determinarSituacaoConselho(85, 80, true)).toBe('Adequado'); // nota alta, mas freq < 85
+      const criticas = questoesCriticas(itens);
+      expect(criticas).toHaveLength(2);
+      expect(criticas[0].questao_id).toBe('q3'); // 25% primeiro (menor acerto)
+      expect(criticas[1].questao_id).toBe('q1'); // 49.9% depois
     });
   });
 
-  describe('5. Mapa de calor por questão', () => {
+  describe('5. Mapa de calor por questão (baseado apenas na 1ª resposta)', () => {
     it('deve calcular porcentagem de acertos, distribuição e apontar o distrator mais escolhido', () => {
       const questao: Questao = {
         id: 'q1',
@@ -186,16 +172,16 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
       // 1 marcou (C)
       // 0 marcaram (D)
       const respostas: Resposta[] = [
-        { id: '1', created_at: '', aluno_id: 'a1', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '' },
-        { id: '2', created_at: '', aluno_id: 'a2', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '' },
-        { id: '3', created_at: '', aluno_id: 'a3', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '' },
-        { id: '4', created_at: '', aluno_id: 'a4', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '' },
-        { id: '5', created_at: '', aluno_id: 'a5', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '' },
-        { id: '6', created_at: '', aluno_id: 'a6', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '' },
-        { id: '7', created_at: '', aluno_id: 'a7', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '' },
-        { id: '8', created_at: '', aluno_id: 'a8', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '' },
-        { id: '9', created_at: '', aluno_id: 'a9', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '' },
-        { id: '10', created_at: '', aluno_id: 'a10', questao_id: 'q1', alternativa_id: 'alt-c', acertou: false, respondida_em: '' },
+        { id: '1', created_at: '', aluno_id: 'a1', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '', tentativas: 1, acertou_final: true },
+        { id: '2', created_at: '', aluno_id: 'a2', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '', tentativas: 1, acertou_final: true },
+        { id: '3', created_at: '', aluno_id: 'a3', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '', tentativas: 1, acertou_final: true },
+        { id: '4', created_at: '', aluno_id: 'a4', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '', tentativas: 1, acertou_final: true },
+        { id: '5', created_at: '', aluno_id: 'a5', questao_id: 'q1', alternativa_id: 'alt-a', acertou: true, respondida_em: '', tentativas: 1, acertou_final: true },
+        { id: '6', created_at: '', aluno_id: 'a6', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '', tentativas: 2, acertou_final: true }, // acertou_final não altera 1ª resposta
+        { id: '7', created_at: '', aluno_id: 'a7', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '', tentativas: 1, acertou_final: false },
+        { id: '8', created_at: '', aluno_id: 'a8', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '', tentativas: 1, acertou_final: false },
+        { id: '9', created_at: '', aluno_id: 'a9', questao_id: 'q1', alternativa_id: 'alt-b', acertou: false, respondida_em: '', tentativas: 1, acertou_final: false },
+        { id: '10', created_at: '', aluno_id: 'a10', questao_id: 'q1', alternativa_id: 'alt-c', acertou: false, respondida_em: '', tentativas: 1, acertou_final: false },
       ];
 
       const resultado = calcularMapaDeCalorQuestao(questao, alternativas, respostas);

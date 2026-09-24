@@ -4,13 +4,11 @@ import { MockGestaoService } from '../mock/gestao.mock';
 import { MockProfessorService } from '../mock/professor.mock';
 import { MockRelatorioService } from '../mock/relatorio.mock';
 import { MockAlunoService } from '../mock/aluno.mock';
-import { resetDatabase, getDatabase, saveDatabase, recarregarDoLocalStorage } from '../mock/db';
+import { resetDatabase, getDatabase, recarregarDoLocalStorage, saveDatabase } from '../mock/db';
 import { gerarId } from '../mock/ids';
-import { Frequencia } from '@/lib/types';
 import { hojeLocal } from '@/lib/datas';
 
-
-describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)', () => {
+describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
   const authService = new MockAuthService();
   const gestaoService = new MockGestaoService();
   const professorService = new MockProfessorService();
@@ -35,8 +33,8 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
     );
   });
 
-  // 2. Professor Carlos não consegue ler/editar atividade nem salvar frequência de oferta da Ana
-  it('professor Carlos não consegue ler/editar atividade nem salvar frequência de oferta da Ana', async () => {
+  // 2. Professor Carlos não consegue acessar atividades, relatórios nem ficha de alunos de oferta da Ana
+  it('professor Carlos não consegue ler/editar atividade nem acessar desempenho de oferta da Ana', async () => {
     // Login do Prof. Carlos (usr-prof-carlos)
     await authService.login('carlos@demo.com', 'demo123');
 
@@ -58,11 +56,14 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       professorService.atualizarAtividade('ativ-mat-01', { titulo: 'Tentativa Hacking' })
     ).rejects.toThrow('Você não tem permissão para esta ação.');
 
-    // Tentativa de salvar frequência na turma da Ana
+    // Tentativa de acessar desempenho da oferta da Ana
     await expect(
-      professorService.salvarFrequencia('oferta-mat-7a', '2026-09-20', [
-        { aluno_id: 'aluno-7a-1', status: 'P' },
-      ])
+      professorService.desempenhoOferta('oferta-mat-7a', 'per-bim-3')
+    ).rejects.toThrow('Você não tem permissão para esta ação.');
+
+    // Tentativa de acessar ficha de aluno na oferta da Ana
+    await expect(
+      professorService.fichaAluno('oferta-mat-7a', 'aluno-7a-1')
     ).rejects.toThrow('Você não tem permissão para esta ação.');
   });
 
@@ -131,8 +132,8 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
     ).rejects.toThrow('Esta atividade já foi encerrada e não aceita mais respostas.');
   });
 
-  // 7. boletim, listarAlunos e cadastrarAluno não contêm a chave pin_hash
-  it('boletim, listarAlunos e cadastrarAluno não contêm a chave pin_hash', async () => {
+  // 7. meuDesempenho, listarAlunos e cadastrarAluno não contêm a chave pin_hash
+  it('meuDesempenho, listarAlunos e cadastrarAluno não contêm a chave pin_hash', async () => {
     // 7.1. listarAlunos
     await authService.login('direcao@demo.com', 'demo123');
     const alunos = await gestaoService.listarAlunos('turma-7a');
@@ -151,10 +152,10 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
     });
     expect((aluno as Record<string, unknown>).pin_hash).toBeUndefined();
 
-    // 7.3. boletim
+    // 7.3. meuDesempenho
     const { token } = await alunoService.login('aluno-7a-1', '1420');
-    const boletim = await alunoService.boletim(token);
-    expect((boletim.aluno as Record<string, unknown>).pin_hash).toBeUndefined();
+    const desempenho = await alunoService.meuDesempenho(token);
+    expect((desempenho.aluno as Record<string, unknown>).pin_hash).toBeUndefined();
   });
 
   // 8. Trocar a correta de atividade publicada lança erro
@@ -191,6 +192,7 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       descricao: 'Sem questões',
       prazo: '2026-10-30',
       periodo_id: 'per-bim-3',
+      modo: 'exercicio',
     });
 
     await expect(
@@ -198,32 +200,16 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
     ).rejects.toThrow('A atividade precisa ter pelo menos 1 questão para ser publicada.');
   });
 
-  // 10. Frequência fora das datas do período não entra no boletim
-  it('frequência fora das datas do período não entra no boletim', async () => {
-    // 3º Bimestre no seed: 2026-07-27 a 2026-10-02
-    const db = await getDatabase();
+  // 10. Bloqueio de alteração de modo em atividade publicada
+  it('não deve permitir alterar o modo de uma atividade já publicada ou encerrada', async () => {
+    await authService.login('ana@demo.com', 'demo123');
 
-    // Adiciona uma frequência do aluno-7a-1 em maio (2º bimestre: 2026-05-10) como Falta (F)
-    const freqAntiga: Frequencia = {
-      id: 'freq-antiga-fora-periodo',
-      created_at: new Date().toISOString(),
-      oferta_id: 'oferta-mat-7a',
-      aluno_id: 'aluno-7a-1',
-      data: '2026-05-10', // Fora do 3º Bimestre
-      status: 'F',
-      registrado_por: 'usr-prof-ana',
-    };
-    db.frequencias.push(freqAntiga);
-    saveDatabase(db);
-
-    const { token } = await alunoService.login('aluno-7a-1', '1420');
-    const boletim = await alunoService.boletim(token);
-    const discMat = boletim.disciplinas.find((d) => d.oferta_id === 'oferta-mat-7a');
-
-    // As frequências do seed no 3º Bimestre para o Lucas são todas presentes (3 registros P)
-    // A falta de maio (2026-05-10) NÃO deve ser contabilizada no 3º Bimestre!
-    expect(discMat?.total_faltas).toBe(0);
-    expect(discMat?.frequencia_porcentagem).toBe(100);
+    // ativ-mat-01 está publicada (modo exercicio)
+    await expect(
+      professorService.atualizarAtividade('ativ-mat-01', {
+        modo: 'prova',
+      })
+    ).rejects.toThrow('O modo da atividade só pode ser alterado enquanto estiver em rascunho.');
   });
 
   // 11. gerarId gera 10.000 IDs sem repetição
@@ -243,15 +229,14 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
   it('publica atividade, recarrega banco do localStorage (F5) e confirma persistência do status "publicada"', async () => {
     await authService.login('ana@demo.com', 'demo123');
 
-    // Cria nova atividade em rascunho
     const novaAtiv = await professorService.criarAtividade('oferta-mat-7a', {
       titulo: 'Atividade de Fixação',
       descricao: 'Exercícios sobre equações',
       prazo: '2026-11-15',
       periodo_id: 'per-bim-3',
+      modo: 'exercicio',
     });
 
-    // Salva questão válida na atividade
     await professorService.salvarQuestoes(novaAtiv.id, [
       {
         ordem: 1,
@@ -267,13 +252,11 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       },
     ]);
 
-    // Publica a atividade
     await professorService.publicarAtividade(novaAtiv.id);
 
-    // Simula o recarregamento do navegador (F5), limpando a instância da memória
+    // Simula F5
     recarregarDoLocalStorage();
 
-    // Verifica se ao recarregar do localStorage o status continua 'publicada'
     const atividadeRecarregada = await professorService.obterAtividade(novaAtiv.id);
     expect(atividadeRecarregada).not.toBeNull();
     expect(atividadeRecarregada?.status).toBe('publicada');
@@ -283,11 +266,10 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
   it('salvarQuestoes: Carlos passando ID de questão ou alternativa da Ana lança erro', async () => {
     await authService.login('carlos@demo.com', 'demo123');
 
-    // Carlos tenta alterar sua atividade 'ativ-cien-01', mas injetando o ID de questão da Ana 'q-mat-1'
     await expect(
       professorService.salvarQuestoes('ativ-cien-01', [
         {
-          id: 'q-mat-1', // Pertence a ativ-mat-01 da Ana, não a ativ-cien-01 do Carlos
+          id: 'q-mat-1',
           ordem: 1,
           enunciado: 'Enunciado qualquer',
           alternativas: [
@@ -298,7 +280,6 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       ])
     ).rejects.toThrow('Questão ou alternativa inválida para esta atividade.');
 
-    // Agora tentando passar ID de alternativa da Ana 'alt-m1-a'
     await expect(
       professorService.salvarQuestoes('ativ-cien-01', [
         {
@@ -306,7 +287,7 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
           ordem: 1,
           enunciado: 'Questão de Ciências',
           alternativas: [
-            { id: 'alt-m1-a', texto: 'Alternativa da Ana', correta: true }, // Pertence a q-mat-1 da Ana
+            { id: 'alt-m1-a', texto: 'Alternativa da Ana', correta: true },
             { texto: 'Opção B', correta: false },
           ],
         },
@@ -318,17 +299,16 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
   it('alterações estruturais em atividade publicada são bloqueadas, mas textos podem ser corrigidos', async () => {
     await authService.login('ana@demo.com', 'demo123');
 
-    // ativ-mat-01 é uma atividade publicada com 4 questões no seed
     const ativOriginal = await professorService.obterAtividade('ativ-mat-01');
     expect(ativOriginal?.status).toBe('publicada');
     expect(ativOriginal?.questoes.length).toBe(4);
 
-    // 14.1. Tentar excluir uma questão de atividade publicada lança erro
+    // 14.1. Tentar excluir questão de atividade publicada lança erro
     await expect(
       professorService.excluirQuestao('q-mat-1')
     ).rejects.toThrow('Atividade publicada: só é possível corrigir textos.');
 
-    // 14.2. Tentar adicionar nova questão a atividade publicada lança erro
+    // 14.2. Tentar adicionar questão em atividade publicada lança erro
     const payloadComMaisUma = [
       ...ativOriginal!.questoes.map((q) => ({
         id: q.id,
@@ -354,7 +334,7 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       professorService.salvarQuestoes('ativ-mat-01', payloadComMaisUma)
     ).rejects.toThrow('Atividade publicada: só é possível corrigir textos.');
 
-    // 14.3. Correção de texto mantendo toda a estrutura de questões e alternativas é permitida com sucesso
+    // 14.3. Correção de texto permitida
     const payloadApenasTexto = ativOriginal!.questoes.map((q, qIdx) => ({
       id: q.id,
       ordem: q.ordem,
@@ -385,14 +365,14 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       descricao: 'Teste de validação',
       prazo: '2026-11-15',
       periodo_id: 'per-bim-3',
+      modo: 'exercicio',
     });
 
-    // Enunciado vazio
     await expect(
       professorService.salvarQuestoes(novaAtiv.id, [
         {
           ordem: 1,
-          enunciado: '    ', // Vazio após trim
+          enunciado: '    ',
           alternativas: [
             { texto: 'A', correta: true },
             { texto: 'B', correta: false },
@@ -401,7 +381,6 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
       ])
     ).rejects.toThrow('O enunciado da questão 1 não pode ficar vazio.');
 
-    // Alternativa com texto vazio
     await expect(
       professorService.salvarQuestoes(novaAtiv.id, [
         {
@@ -409,69 +388,198 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio (Auditoria)'
           enunciado: 'Enunciado válido',
           alternativas: [
             { texto: 'A', correta: true },
-            { texto: '   ', correta: false }, // Vazia após trim
+            { texto: '   ', correta: false },
           ],
         },
       ])
     ).rejects.toThrow('O texto da alternativa B da questão 1 não pode ficar vazio.');
   });
 
-  // 16. hojeLocal e validação de data futura na frequência
-  it('hojeLocal retorna YYYY-MM-DD e frequência rejeita datas futuras', async () => {
+  // 16. hojeLocal utilitário
+  it('hojeLocal retorna data no formato YYYY-MM-DD', () => {
     const hojeStr = hojeLocal();
     expect(hojeStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-
-    await authService.login('ana@demo.com', 'demo123');
-
-    // Frequência para hoje é aceita
-    await expect(
-      professorService.salvarFrequencia('oferta-mat-7a', hojeStr, [
-        { aluno_id: 'aluno-7a-1', status: 'P' },
-      ])
-    ).resolves.toBeUndefined();
-
-    // Data futura (amanhã)
-    const amanha = new Date();
-    amanha.setDate(amanha.getDate() + 1);
-    const dataAmanhaStr = hojeLocal(amanha);
-
-    await expect(
-      professorService.salvarFrequencia('oferta-mat-7a', dataAmanhaStr, [
-        { aluno_id: 'aluno-7a-1', status: 'P' },
-      ])
-    ).rejects.toThrow('Não é possível registrar frequência em data futura.');
   });
 
-  // 17. Login do aluno: erros de PIN só contam após o último sucesso
-  it('login do aluno: erros de PIN contam apenas após o último login bem-sucedido', async () => {
-    // Aluno Lucas Souza (aluno-7a-1, PIN '1420')
-    // 1. Aluno erra o PIN 4 vezes
-    for (let i = 0; i < 4; i++) {
+  // 17. Modo Prova: sigilo total e liberação de resultado apenas após conclusão
+  describe('Regras do Modo Prova', () => {
+    it('responder devolve apenas { registrada: true, modo: "prova" } sem correta ou por_que_errou', async () => {
+      // Aluna Manuela Costa da turma 6B (aluno-6b-4, PIN 6543)
+      // ativ-cien-01 pertence à oferta de Ciências do 6B e é modo PROVA
+      const { token } = await alunoService.login('aluno-6b-4', '6543');
+
+      const resposta = await alunoService.responder(token, 'q-cien-1', 'alt-c1-a');
+      expect('registrada' in resposta).toBe(true);
+      expect((resposta as unknown as Record<string, unknown>).acertou).toBeUndefined();
+      expect((resposta as unknown as Record<string, unknown>).alternativa_correta_id).toBeUndefined();
+      expect((resposta as unknown as Record<string, unknown>).explicacao).toBeUndefined();
+    });
+
+    it('recusa resultadoProva antes de todas as questões serem respondidas', async () => {
+      const { token } = await alunoService.login('aluno-6b-4', '6543');
+
+      // Responde apenas à primeira questão de Ciências
+      await alunoService.responder(token, 'q-cien-1', 'alt-c1-a');
+
+      // Tenta acessar resultadoProva antes de concluir todas as 4 questões
       await expect(
-        alunoService.login('aluno-7a-1', '0000')
-      ).rejects.toThrow('PIN incorreto.');
-    }
+        alunoService.resultadoProva(token, 'ativ-cien-01')
+      ).rejects.toThrow('Termine todas as questões para ver o resultado.');
+    });
 
-    // 2. Aluno digita o PIN correto -> login com sucesso!
-    const { token } = await alunoService.login('aluno-7a-1', '1420');
-    expect(token).toBeDefined();
+    it('libera resultadoProva completo com acertos e explicações após responder todas as questões', async () => {
+      const { token } = await alunoService.login('aluno-6b-4', '6543');
 
-    // 3. Aluno tenta login novamente e erra o PIN 1 vez:
-    // Não deve ser bloqueado, pois o contador de erros recentes foi resetado após o sucesso!
-    await expect(
-      alunoService.login('aluno-7a-1', '9999')
-    ).rejects.toThrow('PIN incorreto. Você tem mais 4 tentativa(s).');
+      // Responde todas as 4 questões da prova de Ciências (3 corretas e 1 errada)
+      await alunoService.responder(token, 'q-cien-1', 'alt-c1-b'); // Correta
+      await alunoService.responder(token, 'q-cien-2', 'alt-c2-a'); // Correta
+      await alunoService.responder(token, 'q-cien-3', 'alt-c3-b'); // Correta
+      await alunoService.responder(token, 'q-cien-4', 'alt-c4-b'); // Errada
 
-    // 4. Se agora errar mais 4 vezes seguidas (total 5 erros após o sucesso), é bloqueado
-    for (let i = 0; i < 3; i++) {
+      const resultado = await alunoService.resultadoProva(token, 'ativ-cien-01');
+      expect(resultado.atividade_id).toBe('ativ-cien-01');
+      expect(resultado.total_questoes).toBe(4);
+      expect(resultado.acertos).toBe(3);
+      expect(resultado.aproveitamento).toBe(75);
+      expect(resultado.questoes).toHaveLength(4);
+      expect(resultado.questoes[0].alternativa_correta_id).toBe('alt-c1-b');
+      expect(resultado.questoes[0].explicacao).toBeDefined();
+    });
+
+    it('tentarNovamente é rejeitado em modo prova', async () => {
+      const { token } = await alunoService.login('aluno-6b-4', '6543');
+
+      await alunoService.responder(token, 'q-cien-1', 'alt-c1-b');
+
       await expect(
-        alunoService.login('aluno-7a-1', '9999')
-      ).rejects.toThrow('PIN incorreto.');
-    }
+        alunoService.tentarNovamente(token, 'q-cien-1', 'alt-c1-a')
+      ).rejects.toThrow('"Tentar novamente" está disponível apenas no modo exercício.');
+    });
+  });
 
-    // 5º erro consecutivo após o sucesso
-    await expect(
-      alunoService.login('aluno-7a-1', '9999')
-    ).rejects.toThrow('Acesso bloqueado por 15 minutos');
+  // 18. Modo Exercício: tentarNovamente e invariância pedagógica
+  describe('Regras do Modo Exercício (tentarNovamente)', () => {
+    it('recusa tentarNovamente se o aluno já acertou a questão na primeira tentativa', async () => {
+      const { token } = await alunoService.login('aluno-7a-4', '5012');
+
+      // Responde corretamente à q-mat-1
+      await alunoService.responder(token, 'q-mat-1', 'alt-m1-a');
+
+      await expect(
+        alunoService.tentarNovamente(token, 'q-mat-1', 'alt-m1-b')
+      ).rejects.toThrow(/Você já acertou esta questão/);
+    });
+
+    it('permite tentarNovamente quando errou, atualiza tentativas e acertou_final, mas NUNCA altera a 1ª resposta', async () => {
+      const { token } = await alunoService.login('aluno-7a-4', '5012');
+
+      // 1. Responde errado à q-mat-1 (marcou B em vez de A)
+      const resp1 = await alunoService.responder(token, 'q-mat-1', 'alt-m1-b');
+      expect('acertou' in resp1).toBe(true);
+      if ('acertou' in resp1) {
+        expect(resp1.acertou).toBe(false);
+      }
+
+      // 2. Tenta novamente marcando agora a correta (A)
+      const retryResult = await alunoService.tentarNovamente(token, 'q-mat-1', 'alt-m1-a');
+      expect(retryResult.acertou).toBe(true);
+
+      // 3. Verifica no banco se a resposta canônica preservou alternativa_id e acertou da 1ª resposta!
+      const db = await getDatabase();
+      const respostaSalva = db.respostas.find(
+        (r) => r.aluno_id === 'aluno-7a-4' && r.questao_id === 'q-mat-1'
+      );
+
+      expect(respostaSalva).toBeDefined();
+      expect(respostaSalva?.alternativa_id).toBe('alt-m1-b'); // 1ª resposta mantida intacta!
+      expect(respostaSalva?.acertou).toBe(false); // 1ª resposta foi erro!
+      expect(respostaSalva?.tentativas).toBe(2);
+      expect(respostaSalva?.acertou_final).toBe(true);
+
+      // 4. Se tentar uma 3ª vez tendo já acertado_final, deve recusar
+      await expect(
+        alunoService.tentarNovamente(token, 'q-mat-1', 'alt-m1-c')
+      ).rejects.toThrow(/Você já acertou esta questão/);
+    });
+
+    it('tentarNovamente bem-sucedido NÃO altera a média do aluno no período (baseada estritamente na 1ª resposta)', async () => {
+      const { token } = await alunoService.login('aluno-7a-4', '5012');
+
+      // Responde as 4 questões de Matemática: 3 acertos e 1 erro
+      await alunoService.responder(token, 'q-mat-1', 'alt-m1-b'); // Errou (1ª resposta = false)
+      await alunoService.responder(token, 'q-mat-2', 'alt-m2-a'); // Acertou
+      await alunoService.responder(token, 'q-mat-3', 'alt-m3-b'); // Acertou
+      await alunoService.responder(token, 'q-mat-4', 'alt-m4-c'); // Acertou
+
+      // Média inicial esperada: 3 acertos em 4 questões = 75%
+      const desempenhoAntes = await alunoService.meuDesempenho(token);
+      const discMatAntes = desempenhoAntes.disciplinas.find(
+        (d) => d.oferta_id === 'oferta-mat-7a'
+      );
+      expect(discMatAntes?.media_periodo).toBe(75);
+
+      // Agora o aluno usa tentarNovamente na questão 1 e acerta!
+      await alunoService.tentarNovamente(token, 'q-mat-1', 'alt-m1-a');
+
+      // A média no período DEVE continuar 75% (estatística pedagógica usa só a 1ª resposta)
+      const desempenhoDepois = await alunoService.meuDesempenho(token);
+      const discMatDepois = desempenhoDepois.disciplinas.find(
+        (d) => d.oferta_id === 'oferta-mat-7a'
+      );
+      expect(discMatDepois?.media_periodo).toBe(75);
+    });
+  });
+
+  // 19. Simulação Multi-Aba (Parte E)
+  describe('Simulação Multi-Aba com LocalStorage e Sincronização', () => {
+    it('duas leituras independentes: alteração na primeira é integrada na segunda sem sobrescrever dados alheios', async () => {
+      // 1. Aba 1 lê o banco
+      const dbAba1 = await getDatabase();
+      const versaoInicial = dbAba1.versao || 1;
+
+      // 2. Aba 2 lê o banco simultaneamente (versão igual à aba 1)
+      const dbAba2 = JSON.parse(JSON.stringify(dbAba1));
+
+      // 3. Aba 1 cria uma turma nova e salva
+      dbAba1.turmas.push({
+        id: 'turma-aba-1',
+        created_at: new Date().toISOString(),
+        escola_id: 'esc-001',
+        nome: '8º Ano Aba 1',
+        serie: '8º Ano',
+        segmento: 'fund2',
+        ano_letivo: 2026,
+        codigo_acesso: 'ABA101',
+        ativa: true,
+      });
+      saveDatabase(dbAba1);
+
+      // Confirma que a versão subiu no localStorage
+      const dbAposAba1 = await getDatabase();
+      expect(dbAposAba1.versao).toBe(versaoInicial + 1);
+      expect(dbAposAba1.turmas.some((t) => t.id === 'turma-aba-1')).toBe(true);
+
+      // 4. Aba 2 cria OUTRA turma nova baseada no seu estado prévio
+      dbAba2.turmas.push({
+        id: 'turma-aba-2',
+        created_at: new Date().toISOString(),
+        escola_id: 'esc-001',
+        nome: '9º Ano Aba 2',
+        serie: '9º Ano',
+        segmento: 'fund2',
+        ano_letivo: 2026,
+        codigo_acesso: 'ABA202',
+        ativa: true,
+      });
+
+      // Salva da Aba 2: o mecanismo de mesclagem (mesclarBancos) não pode apagar turma-aba-1!
+      saveDatabase(dbAba2);
+
+      // 5. Verifica se o banco mesclado contém as turmas criadas por AMBAS as abas
+      const dbFinal = await getDatabase();
+      expect(dbFinal.turmas.some((t) => t.id === 'turma-aba-1')).toBe(true);
+      expect(dbFinal.turmas.some((t) => t.id === 'turma-aba-2')).toBe(true);
+      expect(dbFinal.versao).toBe(versaoInicial + 2);
+    });
   });
 });

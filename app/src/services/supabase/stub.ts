@@ -145,12 +145,6 @@ export class SupabaseProfessorServiceStub implements ProfessorService {
   async excluirQuestao(): Promise<never> {
     throw new Error(ERR_MSG);
   }
-  async listarFrequencia(): Promise<never> {
-    throw new Error(ERR_MSG);
-  }
-  async salvarFrequencia(): Promise<never> {
-    throw new Error(ERR_MSG);
-  }
   async listarRecadosTurma(): Promise<never> {
     throw new Error(ERR_MSG);
   }
@@ -158,6 +152,12 @@ export class SupabaseProfessorServiceStub implements ProfessorService {
     throw new Error(ERR_MSG);
   }
   async mapaDeCalor(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async desempenhoOferta(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async fichaAluno(): Promise<never> {
     throw new Error(ERR_MSG);
   }
 }
@@ -178,7 +178,13 @@ export class SupabaseAlunoServiceStub implements AlunoService {
   async responder(): Promise<never> {
     throw new Error(ERR_MSG);
   }
-  async boletim(): Promise<never> {
+  async tentarNovamente(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async resultadoProva(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async meuDesempenho(): Promise<never> {
     throw new Error(ERR_MSG);
   }
   async avisos(): Promise<never> {
@@ -187,10 +193,16 @@ export class SupabaseAlunoServiceStub implements AlunoService {
 }
 
 export class SupabaseRelatorioServiceStub implements RelatorioService {
-  async conselhoDeClasse(): Promise<never> {
+  async visaoGeralEscola(): Promise<never> {
     throw new Error(ERR_MSG);
   }
-  async visaoGeralEscola(): Promise<never> {
+  async desempenhoTurmas(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async alunosEmAtencao(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async questoesCriticasEscola(): Promise<never> {
     throw new Error(ERR_MSG);
   }
 }

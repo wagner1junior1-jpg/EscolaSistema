@@ -3,6 +3,15 @@
 > Este documento define O QUE construir. Qualquer mudança de modelo de dados, stack ou escopo precisa ser aprovada pelo Wagner antes de implementar.
 > O protótipo antigo (pasta `prototipo/`) serve só como referência visual e de fluxo.
 
+## 0. Escopo do produto
+
+SaberPontual é uma **plataforma de questões** para escolas. Tem três portais:
+1. **Aluno**: entra com código da turma + PIN, resolve as atividades e vê os avisos e o próprio desempenho.
+2. **Professor**: cria atividades e questões, acompanha acertos e erros (mapa de calor, desempenho da turma, ficha do aluno) e manda recados para a turma.
+3. **Gestão escolar** (direção e coordenação): cadastros (turmas, disciplinas, professores, alunos, períodos), visão de desempenho da escola e mural institucional.
+
+Não fazem parte do produto: frequência/chamada, conselho de classe e um acesso separado para pais ou responsáveis.
+
 ## 1. Stack (fixa)
 
 - Front-end: Vite + React 18 + TypeScript (strict) + Tailwind CSS (instalado via npm, sem CDN)
@@ -31,8 +40,8 @@ SISTEMA ESCOLAR/
     │   ├── services/          # ÚNICO lugar que acessa dados: contratos + mock/ + supabase/
     │   ├── features/
     │   │   ├── auth/          # login professor/direção, login aluno
-    │   │   ├── aluno/         # portal do aluno + espaço dos pais
-    │   │   ├── professor/     # turmas, atividades, questões, frequência, mural, diagnóstico
+    │   │   ├── aluno/         # painel do aluno
+    │   │   ├── professor/     # turmas, atividades, questões, mural, diagnóstico
     │   │   └── gestao/        # direção/coordenação
     │   ├── components/ui/     # botões, inputs, modal, toast, tabela, card
     │   └── routes.tsx
@@ -45,9 +54,8 @@ SISTEMA ESCOLAR/
 |---|---|---|
 | direcao | e-mail + senha (Supabase Auth) | tudo da sua escola: config, períodos, turmas, disciplinas, professores, avisos da escola, relatórios |
 | coordenacao | e-mail + senha | igual à direção, exceto configurações da escola e gestão de usuários de direção |
-| professor | e-mail + senha | só as ofertas (turma+disciplina) dele: alunos (ver/PIN), atividades, questões, frequência, recados, diagnóstico |
+| professor | e-mail + senha | só as ofertas (turma+disciplina) dele: alunos (ver/PIN), atividades, questões, recados, diagnóstico e desempenho |
 | aluno | código da turma → escolhe nome → PIN 4 dígitos | resolver atividades publicadas das suas turmas, ver avisos, ver o próprio boletim |
-| responsável | mesmo acesso do aluno, aba "Espaço dos Pais" (somente leitura) | ver boletim e frequência do filho |
 
 Regras:
 - Toda tabela tem RLS ativado. Nenhuma tabela é legível pela chave anon sem política.
@@ -72,9 +80,8 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 - **alternativas**: questao_id, letra (`A`..`E`), texto, correta bool, por_que_errou text null
   - Exatamente 1 correta por questão (validar por trigger ou na função de salvar). Mínimo 2, máximo 5 alternativas.
 - **respostas**: aluno_id, questao_id, alternativa_id, acertou bool, respondida_em, tentativas int (padrão 1), acertou_final bool. unique(aluno_id, questao_id).
-  - alternativa_id e acertou guardam SEMPRE a 1ª tentativa, que é a que vale para nota, média, conselho e mapa de calor. Nunca são alterados.
+  - alternativa_id e acertou guardam SEMPRE a 1ª tentativa, que é a que vale para nota, média, relatórios de desempenho e mapa de calor. Nunca são alterados.
   - tentativas e acertou_final só mudam no modo exercício, quando o aluno usa "Tentar novamente".
-- **frequencias**: oferta_id, aluno_id, data date, status (`P`|`F`|`J`), registrado_por. unique(oferta_id, aluno_id, data)
 - **avisos**: escola_id, autor_id → perfis, turma_id null (null = escola toda), titulo, mensagem, prioridade (`baixa`|`media`|`alta`), publicado_em
 - **aluno_sessoes**: aluno_id, token_hash, expira_em, criado_em
 - **pin_tentativas**: aluno_id, tentativa_em, sucesso bool
@@ -94,8 +101,8 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 
 - **Aproveitamento em uma atividade** = acertos / total de questões da atividade × 100. Lista incompleta conta a parte respondida como "em andamento" e só entra na média depois de concluída ou encerrada (na encerrada, questões sem resposta contam como erro).
 - **Média do aluno na oferta e no período** = soma dos acertos / soma das questões, considerando as atividades concluídas ou encerradas do período. Rascunhos nunca entram.
-- **Frequência** = (P + J) / dias com registro para aquele aluno × 100. Dia sem registro do aluno não entra no cálculo.
-- **Situação no conselho**: Destaque (média ≥ 80 e frequência ≥ 85); Adequado (média ≥ 60 e frequência ≥ 75); Reforço (média < 60); Risco por infrequência (frequência < 75); Sem avaliação (nenhuma atividade concluída). Os limites ficam configuráveis por escola.
+- **Faixa de desempenho** (por aluno, na oferta e no período): Ótimo (média ≥ 80); Bom (60 a 79); Atenção (< 60); Sem atividades (nenhuma atividade concluída ou encerrada). Os limites ficam configuráveis por escola.
+- **Questões críticas**: questões com % de acerto < 50, considerando pelo menos 5 respostas.
 - **Mapa de calor**: por questão, % de acerto, distribuição de escolhas por alternativa e distrator mais escolhido com o seu por_que_errou.
 - Cálculos pesados ficam em views ou RPCs no Postgres, não no front.
 
@@ -107,18 +114,18 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 
 **Fase C — Atividades (professor):** CRUD de atividades por oferta; editor de questões com 2 a 5 alternativas, marcação da correta, por_que_errou por alternativa, dica e explicação; editar e reordenar questões; duplicar atividade para outra oferta; publicar e encerrar. Uma questão já respondida por algum aluno só pode ter o texto editado, não a alternativa correta.
 
-**Fase D — Portal do aluno:** login por código, nome e PIN; painel com as atividades pendentes e concluídas por disciplina; player de questões com feedback imediato; tela de resultado; avisos; Espaço dos Pais.
+**Fase D — Portal do aluno:** login por código, nome e PIN; painel com as atividades pendentes e concluídas por disciplina; player de questões com feedback imediato; tela de resultado; avisos da escola e recados da turma; "Meu desempenho" (aproveitamento por disciplina no período).
 
-**Fase E — Acompanhamento:** frequência diária P/F/J por oferta; mural da turma; mapa de calor da atividade; boletim do aluno.
+**Fase E — Acompanhamento (professor):** mural da turma; mapa de calor da atividade; desempenho da turma na oferta (aluno × atividade, com faixa de desempenho); ficha do aluno (atividades, acertos e erros por questão).
 
-**Fase F — Gestão:** visão geral da escola; conselho de classe por turma e período, com impressão; mural institucional; exportação CSV.
+**Fase F — Gestão:** visão geral da escola (alunos, turmas, professores, atividades publicadas, aproveitamento médio); desempenho por turma × disciplina no período; alunos na faixa Atenção; questões críticas da escola; mural institucional; exportação CSV.
 
 **Fase G — Produção:** LGPD (termo de aceite da escola, política de privacidade, exclusão de dados do aluno), deploy na Vercel, backups, domínio.
 
 ## 7.2 Identidade visual do portal do aluno
 
 - Referência: sistema "Jornada do Saber" (pasta `Estudo Meninas`), com capturas de tela e CSS em `docs/referencia-layout-aluno/`.
-- Vale para TODAS as telas do aluno e do responsável (código da turma, escolha do nome, PIN, painel, player de questões, resultado e Espaço dos Pais). As telas de professor e gestão continuam com o visual sóbrio (indigo, fundo slate-50).
+- Vale para TODAS as telas do aluno (código da turma, escolha do nome, PIN, painel, player de questões, resultado e Meu desempenho). As telas de professor e gestão continuam com o visual sóbrio (indigo, fundo slate-50).
 - O que manter: fundo em degradê (#f0f4ff → #fae8ff → #fef3c7) com bolhas desfocadas; cartões "vidro" brancos com borda clara e sombra suave; fontes Nunito (texto) e Outfit (títulos); chips no topo da questão (disciplina, modo, questão X de Y); barra de progresso fina no topo do cartão; alternativas em cartões grandes com a letra em quadrado, que ficam vermelho (escolhida errada, com ❌) e verde (correta, com ✅) após a resposta; faixa de resultado (verde no acerto; degradê vermelho→laranja no erro, com "Não foi dessa vez, mas faz parte aprender!"); cartão rosa "Onde prestar atenção / Por que não é essa" (por_que_errou); cartão verde "Entenda a resposta correta" (explicação); botão "💡 Precisa de uma dica?"; botão 🔊 de ouvir a questão (speechSynthesis, pt-BR); confete e sons curtos gerados pelo navegador no acerto e ao terminar; tela final com placar (questões, acertos, erros, aproveitamento).
 - O que NÃO trazer: estrelas, sequência 🔥, medalhas, ranking, "Nova Questão", "Embaralhar", "Reiniciar", "Trocar filha", e "Tentar novamente" no modo prova.
 - No modo prova, o player não mostra acerto/erro por questão: só "Resposta registrada ✓" e o botão Próxima. A correção completa aparece na tela final.
@@ -137,4 +144,4 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 
 ## 8. Fora do escopo do MVP (não implementar sem pedido)
 
-Imagens nas questões, questões dissertativas, app nativo, chat, pontos/estrelas/medalhas/ranking (confete e sons de incentivo são permitidos, ver 7.2), caderno de erros, notificações push, integração com outros sistemas, pagamentos, multi-idioma.
+Frequência/chamada, conselho de classe, acesso separado de pais/responsáveis, imagens nas questões, questões dissertativas, app nativo, chat, pontos/estrelas/medalhas/ranking (confete e sons de incentivo são permitidos, ver 7.2), caderno de erros, notificações push, integração com outros sistemas, pagamentos, multi-idioma.

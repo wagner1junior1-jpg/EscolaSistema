@@ -7,12 +7,11 @@
 
 import {
   LetraAlternativa,
-  SituacaoConselho,
+  FaixaDesempenho,
   ItemMapaDeCalorQuestao,
   Questao,
   Alternativa,
   Resposta,
-  Frequencia,
 } from '@/lib/types';
 
 /**
@@ -34,84 +33,74 @@ export function calcularAproveitamentoAtividade(
  * Considerando apenas as atividades concluídas ou encerradas do período. Rascunhos nunca entram.
  */
 export function calcularMediaPeriodo(
-  somaAcertos: number,
-  somaQuestoes: number
+  somaAcertosOrAtividades: number | Array<{ acertos: number; totalQuestoes: number }>,
+  somaQuestoes?: number
 ): number | null {
-  if (somaQuestoes <= 0) return null;
-  const valor = (somaAcertos / somaQuestoes) * 100;
+  if (Array.isArray(somaAcertosOrAtividades)) {
+    const acertos = somaAcertosOrAtividades.reduce((acc, a) => acc + a.acertos, 0);
+    const total = somaAcertosOrAtividades.reduce((acc, a) => acc + a.totalQuestoes, 0);
+    if (total <= 0) return null;
+    return Math.round((acertos / total) * 1000) / 10;
+  }
+
+  if (somaQuestoes === undefined || somaQuestoes <= 0) return null;
+  const valor = (somaAcertosOrAtividades / somaQuestoes) * 100;
   return Math.round(valor * 10) / 10;
 }
 
 /**
- * 3. Frequência Escolar
- * Fórmula: (P + J) / dias com registro para aquele aluno * 100
- * Regra obrigatória: "Dia sem registro do aluno não entra no cálculo."
- */
-export function calcularFrequencia(
-  presencas: number,
-  justificadas: number,
-  diasComRegistro: number
-): number | null {
-  if (diasComRegistro <= 0) return null;
-  const valor = ((presencas + justificadas) / diasComRegistro) * 100;
-  return Math.round(valor * 10) / 10;
-}
-
-/**
- * 4. Situação no Conselho de Classe
+ * 3. Faixa de Desempenho
  * Definições oficiais:
- * - Sem avaliação: nenhuma atividade concluída
- * - Risco por infrequência: frequência < 75%
- * - Reforço: média < 60%
- * - Destaque: média >= 80% e frequência >= 85%
- * - Adequado: média >= 60% e frequência >= 75%
+ * - Sem atividades: média null (nenhuma atividade concluída ou encerrada)
+ * - Ótimo: média >= 80
+ * - Bom: média >= 60 e < 80
+ * - Atenção: média < 60
  */
-export interface LimitesConselho {
-  corteDestaqueMedia?: number; // padrão: 80
-  corteDestaqueFreq?: number; // padrão: 85
-  corteAprovadoMedia?: number; // padrão: 60
-  corteAprovadoFreq?: number; // padrão: 75
+export interface LimitesFaixa {
+  otimo?: number; // padrão: 80
+  bom?: number;   // padrão: 60
 }
 
-export function determinarSituacaoConselho(
+export function faixaDesempenho(
   media: number | null,
-  frequencia: number | null,
-  possuiAtividadesAvaliadas: boolean,
-  limites: LimitesConselho = {}
-): SituacaoConselho {
-  if (!possuiAtividadesAvaliadas || media === null) {
-    return 'Sem avaliação';
+  limites: LimitesFaixa = {}
+): FaixaDesempenho {
+  if (media === null || media === undefined) {
+    return 'Sem atividades';
   }
 
-  const corteDestaqueMedia = limites.corteDestaqueMedia ?? 80;
-  const corteDestaqueFreq = limites.corteDestaqueFreq ?? 85;
-  const corteAprovadoMedia = limites.corteAprovadoMedia ?? 60;
-  const corteAprovadoFreq = limites.corteAprovadoFreq ?? 75;
+  const corteOtimo = limites.otimo ?? 80;
+  const corteBom = limites.bom ?? 60;
 
-  const freq = frequencia ?? 100;
-
-  // Se infrequente, o risco de reprovação por falta é primário
-  if (freq < corteAprovadoFreq) {
-    return 'Risco por infrequência';
+  if (media >= corteOtimo) {
+    return 'Ótimo';
   }
-
-  // Se a média estiver abaixo do mínimo pedagógico
-  if (media < corteAprovadoMedia) {
-    return 'Reforço';
+  if (media >= corteBom) {
+    return 'Bom';
   }
+  return 'Atenção';
+}
 
-  // Destaque se atingir os critérios superiores
-  if (media >= corteDestaqueMedia && freq >= corteDestaqueFreq) {
-    return 'Destaque';
-  }
-
-  return 'Adequado';
+/**
+ * 4. Questões Críticas
+ * Definição: questões com % de acerto < corte (padrão 50), considerando pelo menos minRespostas (padrão 5).
+ */
+export function questoesCriticas(
+  itensMapa: ItemMapaDeCalorQuestao[],
+  minRespostas: number = 5,
+  corte: number = 50
+): ItemMapaDeCalorQuestao[] {
+  return itensMapa
+    .filter(
+      (item) => item.total_respostas >= minRespostas && item.porcentagem_acerto < corte
+    )
+    .sort((a, b) => a.porcentagem_acerto - b.porcentagem_acerto);
 }
 
 /**
  * 5. Mapa de Calor por Questão
  * Calcula:
- * - % de acerto
+ * - % de acerto (baseado sempre na 1ª resposta)
  * - Distribuição de escolhas por alternativa
  * - Distrator mais escolhido com seu 'por_que_errou'
  */
@@ -121,6 +110,7 @@ export function calcularMapaDeCalorQuestao(
   respostasDaQuestao: Resposta[]
 ): ItemMapaDeCalorQuestao {
   const totalRespostas = respostasDaQuestao.length;
+  // Sempre considera a primeira tentativa (campo 'acertou')
   const acertos = respostasDaQuestao.filter((r) => r.acertou).length;
   const porcentagemAcerto =
     totalRespostas > 0 ? Math.round((acertos / totalRespostas) * 1000) / 10 : 0;
@@ -131,7 +121,7 @@ export function calcularMapaDeCalorQuestao(
     { total: number; porcentagem: number; alternativa_id: string }
   >;
 
-  // Inicializa mapa para todas as letras presentes
+  // Inicializa mapa para todas as alternativas da questão
   for (const alt of alternativas) {
     const totalEscolhida = respostasDaQuestao.filter(
       (r) => r.alternativa_id === alt.id
@@ -185,29 +175,5 @@ export function calcularMapaDeCalorQuestao(
     porcentagem_acerto: porcentagemAcerto,
     distribuicao,
     distrator_mais_escolhido: distratorMaisEscolhido,
-  };
-}
-
-/**
- * Utilitário para cálculo de frequência a partir da lista de registros brutos de um aluno
- */
-export function consolidarFrequenciaAluno(registrosDoAluno: Frequencia[]): {
-  presencas: number;
-  faltas: number;
-  justificadas: number;
-  diasComRegistro: number;
-  porcentagem: number | null;
-} {
-  const presencas = registrosDoAluno.filter((r) => r.status === 'P').length;
-  const faltas = registrosDoAluno.filter((r) => r.status === 'F').length;
-  const justificadas = registrosDoAluno.filter((r) => r.status === 'J').length;
-  const diasComRegistro = registrosDoAluno.length;
-
-  return {
-    presencas,
-    faltas,
-    justificadas,
-    diasComRegistro,
-    porcentagem: calcularFrequencia(presencas, justificadas, diasComRegistro),
   };
 }

@@ -1,7 +1,7 @@
 /**
  * SaberPontual — Contratos e Interfaces de Serviços
  * 
- * Fonte da verdade: docs/ESPECIFICACAO.md (Seção 7.1)
+ * Fonte da verdade: docs/ESPECIFICACAO.md (Seções 4, 5, 6 e 7.1)
  * Regra: Contexto, autor e escola são sempre derivados da sessão autenticada.
  */
 
@@ -20,15 +20,20 @@ import {
   AtividadeCompleta,
   AtividadeParaAluno,
   AtividadeResumoAluno,
-  Frequencia,
-  StatusFrequencia,
+  ModoAtividade,
   Aviso,
   PrioridadeAviso,
-  RespostaFeedback,
   MapaDeCalorAtividade,
-  BoletimAluno,
-  RelatorioConselho,
+  RespostaAlunoResultado,
+  RespostaExercicio,
+  ResultadoProva,
+  MeuDesempenhoAluno,
+  RelatorioDesempenhoOferta,
+  FichaAluno,
   VisaoGeralEscola,
+  DesempenhoTurmaDisciplinaItem,
+  AlunoEmAtencaoItem,
+  QuestaoCriticaEscolaItem,
 } from '@/lib/types';
 
 // Entrada para criação/edição de questão e suas alternativas
@@ -91,11 +96,11 @@ export interface ProfessorService {
   obterAtividade(atividadeId: string): Promise<AtividadeCompleta | null>;
   criarAtividade(
     ofertaId: string,
-    dados: { titulo: string; descricao: string; prazo: string | null; periodo_id: string }
+    dados: { titulo: string; descricao: string; prazo: string | null; periodo_id: string; modo?: ModoAtividade }
   ): Promise<Atividade>;
   atualizarAtividade(
     id: string,
-    dados: { titulo?: string; descricao?: string; prazo?: string | null; periodo_id?: string }
+    dados: { titulo?: string; descricao?: string; prazo?: string | null; periodo_id?: string; modo?: ModoAtividade }
   ): Promise<Atividade>;
   excluirAtividade(id: string): Promise<void>;
   publicarAtividade(id: string): Promise<void>;
@@ -104,33 +109,33 @@ export interface ProfessorService {
   salvarQuestoes(atividadeId: string, questoes: NovaQuestaoPayload[]): Promise<void>;
   reordenarQuestoes(atividadeId: string, ordemIds: string[]): Promise<void>;
   excluirQuestao(id: string): Promise<void>;
-  listarFrequencia(ofertaId: string, data: string): Promise<Frequencia[]>;
-  salvarFrequencia(
-    ofertaId: string,
-    data: string,
-    registros: Array<{ aluno_id: string; status: StatusFrequencia }>
-  ): Promise<void>;
   listarRecadosTurma(turmaId: string): Promise<Aviso[]>;
   criarRecadoTurma(
     ofertaId: string,
     dados: { titulo: string; mensagem: string; prioridade: PrioridadeAviso }
   ): Promise<Aviso>;
   mapaDeCalor(atividadeId: string): Promise<MapaDeCalorAtividade>;
+  desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta>;
+  fichaAluno(ofertaId: string, alunoId: string): Promise<FichaAluno>;
 }
 
-// 4. AlunoService (Portal do Aluno e Espaço dos Pais)
+// 4. AlunoService (Portal do Aluno)
 export interface AlunoService {
   listarTurma(codigo: string): Promise<AlunoResumido[]>;
   login(alunoId: string, pin: string): Promise<{ token: string; aluno: AlunoResumido }>;
   atividadesPendentes(token: string): Promise<AtividadeResumoAluno[]>;
   carregarAtividade(token: string, atividadeId: string): Promise<AtividadeParaAluno>;
-  responder(token: string, questaoId: string, alternativaId: string): Promise<RespostaFeedback>;
-  boletim(token: string): Promise<BoletimAluno>;
+  responder(token: string, questaoId: string, alternativaId: string): Promise<RespostaAlunoResultado>;
+  tentarNovamente(token: string, questaoId: string, alternativaId: string): Promise<RespostaExercicio>;
+  resultadoProva(token: string, atividadeId: string): Promise<ResultadoProva>;
+  meuDesempenho(token: string): Promise<MeuDesempenhoAluno>;
   avisos(token: string): Promise<Aviso[]>;
 }
 
 // 5. RelatorioService (Coordenação e Direção)
 export interface RelatorioService {
-  conselhoDeClasse(turmaId: string, periodoId: string): Promise<RelatorioConselho>;
   visaoGeralEscola(): Promise<VisaoGeralEscola>;
+  desempenhoTurmas(periodoId: string): Promise<DesempenhoTurmaDisciplinaItem[]>;
+  alunosEmAtencao(periodoId: string): Promise<AlunoEmAtencaoItem[]>;
+  questoesCriticasEscola(periodoId: string): Promise<QuestaoCriticaEscolaItem[]>;
 }

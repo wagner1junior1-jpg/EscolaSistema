@@ -24,15 +24,15 @@ export const AlunoPainelPage: React.FC = () => {
           </div>
           <div>
             <h1 className="font-heading font-bold text-xl text-slate-900">Painel do Aluno</h1>
-            <p className="text-xs text-slate-500">Suas atividades, avisos e boletim em um só lugar</p>
+            <p className="text-xs text-slate-500">Suas atividades, avisos e desempenho em um só lugar</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
-            { icon: <ClipboardList className="w-5 h-5" />, label: 'Atividades', desc: 'Exercícios pendentes e concluídos', colorClass: 'bg-amber-100 text-amber-600' },
+            { icon: <ClipboardList className="w-5 h-5" />, label: 'Atividades', desc: 'Exercícios e provas pendentes', colorClass: 'bg-amber-100 text-amber-600' },
             { icon: <Bell className="w-5 h-5" />, label: 'Avisos', desc: 'Recados da turma e da escola', colorClass: 'bg-sky-100 text-sky-600' },
-            { icon: <Users className="w-5 h-5" />, label: 'Espaço dos Pais', desc: 'Boletim e frequência do aluno', colorClass: 'bg-violet-100 text-violet-600' },
+            { icon: <Users className="w-5 h-5" />, label: 'Meu Desempenho', desc: 'Aproveitamento e atividades concluídas', colorClass: 'bg-violet-100 text-violet-600' },
           ].map((item) => (
             <Card key={item.label} className="p-4 opacity-60">
               <div className={`w-9 h-9 rounded-xl ${item.colorClass} flex items-center justify-center mb-3`}>
@@ -48,7 +48,7 @@ export const AlunoPainelPage: React.FC = () => {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Portal em desenvolvimento</CardTitle>
             <CardDescription>
-              O painel completo com atividades, feedback imediato por questão, avisos e Espaço dos Pais estará disponível em breve.
+              O painel completo com atividades, feedback por questão, avisos e acompanhamento de desempenho estará disponível em breve.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

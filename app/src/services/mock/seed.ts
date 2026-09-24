@@ -17,7 +17,6 @@ import {
   Questao,
   Alternativa,
   Resposta,
-  Frequencia,
   Aviso,
   AlunoSessao,
   PinTentativa,
@@ -25,6 +24,7 @@ import {
 import { hashPin } from './crypto';
 
 export interface MockDatabaseSchema {
+  versao: number;
   escolas: Escola[];
   perfis: Perfil[];
   credenciais: Record<string, string>; // email -> senha pura ("demo123")
@@ -37,11 +37,11 @@ export interface MockDatabaseSchema {
   questoes: Questao[];
   alternativas: Alternativa[];
   respostas: Resposta[];
-  frequencias: Frequencia[];
   avisos: Aviso[];
   aluno_sessoes: AlunoSessao[];
   pin_tentativas: PinTentativa[];
 }
+
 
 export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
   const agora = new Date().toISOString();
@@ -261,6 +261,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       descricao:
         'Descubra o valor da incógnita em situações práticas do dia a dia e treine as regras de isolamento.',
       prazo: '2026-10-15',
+      modo: 'exercicio',
       status: 'publicada',
       criado_por: 'usr-prof-ana',
     },
@@ -272,6 +273,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       titulo: 'Ecologia e Cadeias Alimentares',
       descricao: 'Produtores, consumidores e a importância da preservação dos biomas brasileiros.',
       prazo: '2026-10-18',
+      modo: 'prova',
       status: 'publicada',
       criado_por: 'usr-prof-carlos',
     },
@@ -358,7 +360,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       atividade_id: 'ativ-cien-01',
       ordem: 3,
       enunciado:
-        'Qual grupo de organismos é responsável por reciclar a matéria orgânica morta no ecossistema, devolvendo nutrientes ao solo?',
+        'Qual grupo de organismos atua na reciclagem da matéria orgânica morta no ecossistema, devolvendo nutrientes ao solo?',
       dica: 'Fazem parte deste grupo os fungos e a maioria das bactérias.',
       explicacao:
         'Os decompositores (fungos e bactérias) decompõem restos de animais e vegetais, fechando o ciclo biogeoquímico dos nutrientes.',
@@ -715,6 +717,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m1-a',
       acertou: true,
       respondida_em: '2026-09-20T09:10:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
     {
       id: 'resp-lucas-2',
@@ -724,6 +728,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m2-a',
       acertou: true,
       respondida_em: '2026-09-20T09:12:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
     {
       id: 'resp-lucas-3',
@@ -733,6 +739,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m3-b',
       acertou: true,
       respondida_em: '2026-09-20T09:14:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
     {
       id: 'resp-lucas-4',
@@ -742,6 +750,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m4-c',
       acertou: true,
       respondida_em: '2026-09-20T09:16:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
 
     // Beatriz
@@ -753,6 +763,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m1-b', // Errou: pegadinha troco
       acertou: false,
       respondida_em: '2026-09-20T10:00:00Z',
+      tentativas: 1,
+      acertou_final: false,
     },
     {
       id: 'resp-bia-2',
@@ -762,6 +774,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m2-a',
       acertou: true,
       respondida_em: '2026-09-20T10:02:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
     {
       id: 'resp-bia-3',
@@ -771,6 +785,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m3-b',
       acertou: true,
       respondida_em: '2026-09-20T10:04:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
     {
       id: 'resp-bia-4',
@@ -780,6 +796,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m4-c',
       acertou: true,
       respondida_em: '2026-09-20T10:06:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
 
     // Gabriel
@@ -791,6 +809,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m1-b', // Errou: pegadinha troco
       acertou: false,
       respondida_em: '2026-09-20T11:00:00Z',
+      tentativas: 1,
+      acertou_final: false,
     },
     {
       id: 'resp-gab-2',
@@ -800,6 +820,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m2-b', // Errou: subtraiu em vez de somar
       acertou: false,
       respondida_em: '2026-09-20T11:03:00Z',
+      tentativas: 1,
+      acertou_final: false,
     },
     {
       id: 'resp-gab-3',
@@ -809,6 +831,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m3-b',
       acertou: true,
       respondida_em: '2026-09-20T11:05:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
     {
       id: 'resp-gab-4',
@@ -818,33 +842,12 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       alternativa_id: 'alt-m4-c',
       acertou: true,
       respondida_em: '2026-09-20T11:07:00Z',
+      tentativas: 1,
+      acertou_final: true,
     },
   ];
 
-  // 12. Frequências Registradas
-  const datasFrequencia = ['2026-09-21', '2026-09-22', '2026-09-23'];
-  const frequencias: Frequencia[] = [];
-
-  for (const data of datasFrequencia) {
-    for (const aluno of alunosBrutosTurma7A) {
-      // Pequena variação pedagógica
-      let status: 'P' | 'F' | 'J' = 'P';
-      if (aluno.id === 'aluno-7a-3' && data === '2026-09-22') status = 'F';
-      if (aluno.id === 'aluno-7a-5' && data === '2026-09-23') status = 'J';
-
-      frequencias.push({
-        id: `freq-${aluno.id}-${data}`,
-        created_at: agora,
-        oferta_id: 'oferta-mat-7a',
-        aluno_id: aluno.id,
-        data,
-        status,
-        registrado_por: 'usr-prof-ana',
-      });
-    }
-  }
-
-  // 13. Avisos
+  // 12. Avisos
   const avisos: Aviso[] = [
     {
       id: 'aviso-esc-1',
@@ -852,9 +855,9 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       escola_id: escolaId,
       autor_id: 'usr-dir-001',
       turma_id: null, // Toda a escola
-      titulo: 'Reunião de Pais e Mestres do 3º Bimestre',
+      titulo: 'Reunião Pedagógica do 3º Bimestre',
       mensagem:
-        'Convidamos todas as famílias para a entrega de notas e diálogo pedagógico nesta quinta-feira às 19h.',
+        'Convidamos a comunidade escolar para o diálogo pedagógico nesta quinta-feira às 19h.',
       prioridade: 'alta',
       publicado_em: '2026-09-21T08:00:00Z',
     },
@@ -873,6 +876,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
   ];
 
   return {
+    versao: 1,
     escolas,
     perfis,
     credenciais,
@@ -885,7 +889,6 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     questoes,
     alternativas,
     respostas,
-    frequencias,
     avisos,
     aluno_sessoes: [],
     pin_tentativas: [],

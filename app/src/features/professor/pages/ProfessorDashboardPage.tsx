@@ -24,14 +24,14 @@ export const ProfessorDashboardPage: React.FC = () => {
           </div>
           <div>
             <h1 className="font-heading font-bold text-xl text-slate-900">Portal do Professor</h1>
-            <p className="text-xs text-slate-500">Turmas, atividades, chamada e diagnóstico pedagógico</p>
+            <p className="text-xs text-slate-500">Turmas, atividades, provas e diagnóstico pedagógico</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { icon: <ClipboardCheck className="w-5 h-5" />, label: 'Atividades', desc: 'Criar, publicar e encerrar exercícios', colorClass: 'bg-violet-100 text-violet-600' },
-            { icon: <Calendar className="w-5 h-5" />, label: 'Frequência', desc: 'Chamada diária P / F / J', colorClass: 'bg-sky-100 text-sky-600' },
+            { icon: <Calendar className="w-5 h-5" />, label: 'Desempenho', desc: 'Relatório por turma e aluno', colorClass: 'bg-sky-100 text-sky-600' },
             { icon: <BarChart2 className="w-5 h-5" />, label: 'Diagnóstico', desc: 'Mapa de calor por questão', colorClass: 'bg-emerald-100 text-emerald-600' },
           ].map((item) => (
             <Card key={item.label} className="p-4 opacity-60">
@@ -48,7 +48,7 @@ export const ProfessorDashboardPage: React.FC = () => {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Portal em desenvolvimento</CardTitle>
             <CardDescription>
-              Gerencie turmas, crie atividades com questões de múltipla escolha, registre a frequência diária e acompanhe o desempenho da turma em tempo real.
+              Gerencie turmas, crie atividades com questões de múltipla escolha e acompanhe o desempenho da turma em tempo real.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

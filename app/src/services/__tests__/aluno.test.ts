@@ -66,28 +66,47 @@ describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICA
     });
   });
 
-  describe('Resposta definitiva e recusa de segunda resposta', () => {
-    it('deve aceitar a primeira resposta e devolver o feedback completo', async () => {
+  describe('Resposta definitiva e recusa de segunda resposta direta', () => {
+    it('deve aceitar a primeira resposta e devolver o feedback completo em modo exercício', async () => {
       const { token } = await alunoService.login('aluno-7a-4', '5012'); // Mariana Souza
 
       // Responde à questão 1 de Matemática marcando a alternativa correta (A: alt-m1-a)
       const feedback = await alunoService.responder(token, 'q-mat-1', 'alt-m1-a');
 
-      expect(feedback.acertou).toBe(true);
-      expect(feedback.alternativa_correta_id).toBe('alt-m1-a');
-      expect(feedback.explicacao).toContain('O valor gasto nas figurinhas é 4x');
+      expect('acertou' in feedback).toBe(true);
+      if ('acertou' in feedback) {
+        expect(feedback.acertou).toBe(true);
+        expect(feedback.alternativa_correta_id).toBe('alt-m1-a');
+        expect(feedback.explicacao).toContain('O valor gasto nas figurinhas é 4x');
+      }
     });
 
-    it('deve RECUSAR com erro caso o aluno tente responder a mesma questão novamente', async () => {
+    it('deve RECUSAR com erro caso o aluno tente responder a mesma questão novamente via responder()', async () => {
       const { token } = await alunoService.login('aluno-7a-4', '5012'); // Mariana Souza
 
       // 1ª resposta aceita
       await alunoService.responder(token, 'q-mat-1', 'alt-m1-a');
 
-      // 2ª tentativa na mesma questão deve ser rejeitada imediatamente
+      // 2ª tentativa na mesma questão via responder() deve ser rejeitada imediatamente
       await expect(
         alunoService.responder(token, 'q-mat-1', 'alt-m1-b')
       ).rejects.toThrow('Esta questão já foi respondida e não pode ser alterada.');
+    });
+  });
+
+  describe('Meu Desempenho (antigo boletim)', () => {
+    it('deve retornar desempenho consolidado por disciplina com faixas corretas', async () => {
+      const { token } = await alunoService.login('aluno-7a-1', '1420'); // Lucas Oliveira
+      const desempenho = await alunoService.meuDesempenho(token);
+
+      expect(desempenho.aluno.nome_completo).toBe('Lucas Oliveira');
+      expect(desempenho.disciplinas.length).toBeGreaterThan(0);
+
+      const discMat = desempenho.disciplinas.find((d) => d.disciplina_nome === 'Matemática');
+      expect(discMat).toBeDefined();
+      expect(discMat?.atividades_concluidas).toBe(1);
+      expect(discMat?.media_periodo).toBe(100);
+      expect(discMat?.faixa).toBe('Ótimo');
     });
   });
 });

@@ -78,7 +78,7 @@ export const HomePage: React.FC = () => {
     {
       path: '/gestao',
       title: 'Gestão Escolar',
-      desc: 'Configura escola, períodos, turmas, disciplinas e conselho de classe.',
+      desc: 'Configura escola, períodos, turmas, disciplinas e relatórios pedagógicos.',
       icon: <Building2 className="w-5 h-5" />,
       tag: 'Diretoria',
       bgFrom: 'from-sky-500',
@@ -126,7 +126,7 @@ export const HomePage: React.FC = () => {
             Aprenda mais.<br className="sm:hidden" /> Ensine melhor.
           </h1>
           <p className="text-sm sm:text-base text-slate-500 leading-relaxed max-w-xl mx-auto">
-            Atividades, frequência e diagnóstico pedagógico em uma só plataforma — sem complicação, sem e-mail para o aluno.
+            Atividades, provas e diagnóstico pedagógico em uma só plataforma — sem complicação, sem e-mail para o aluno.
           </p>
         </div>
 

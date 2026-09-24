@@ -2,12 +2,11 @@
  * SaberPontual — AlunoService Mock
  * 
  * Regras estritas de segurança e privacidade (Seções 5 e 7.1):
- * - Carregar atividade: só da turma do aluno e com status 'publicada' ou 'encerrada'.
- *   Para questões já respondidas, inclui feedback (acertou, alternativa correta, por que errou, explicação).
- *   Para questões não respondidas: sigilo absoluto (sem correta, sem por que errou, sem explicação).
- * - Responder: só em atividades com status 'publicada' pertencentes à turma do aluno.
- * - Login: turma precisa estar ativa; bloqueio por 15 min após 5 erros.
- * - Boletim: retorna AlunoPublico (sem pin_hash) e considera frequências estritamente entre data_inicio e data_fim do período.
+ * - Modos prova e exercício:
+ *   - Exercício: feedback imediato; "tentar novamente" permitido se errou; tentativas incrementadas.
+ *   - Prova: resposta sigilosa devolvendo só { registrada: true }; resultadoProva liberado apenas após concluir todas as questões.
+ * - Meu Desempenho: aproveitamento por disciplina e faixa de desempenho.
+ * - Login: turma precisa estar ativa; bloqueio por 15 min após 5 erros seguidos pós-sucesso.
  * - Avisos: filtrados por escola_id e turma_id do aluno.
  */
 
@@ -18,8 +17,12 @@ import {
   AlunoPublico,
   AtividadeParaAluno,
   AtividadeResumoAluno,
-  RespostaFeedback,
-  BoletimAluno,
+  RespostaAlunoResultado,
+  RespostaExercicio,
+  ResultadoProva,
+  ResultadoProvaQuestao,
+  MeuDesempenhoAluno,
+  DesempenhoDisciplinaItem,
   Aviso,
   Resposta,
   PinTentativa,
@@ -31,7 +34,7 @@ import { gerarId } from './ids';
 import {
   calcularAproveitamentoAtividade,
   calcularMediaPeriodo,
-  consolidarFrequenciaAluno,
+  faixaDesempenho,
 } from '../calculos';
 
 function toAlunoPublico(aluno: Aluno): AlunoPublico {
@@ -204,6 +207,7 @@ export class MockAlunoService implements AlunoService {
 
       let aproveitamento: number | undefined = undefined;
       if (concluida) {
+        // Aproveitamento calculado sempre a partir da 1ª resposta
         const acertos = respostasDoAluno.filter((r) => r.acertou).length;
         aproveitamento = calcularAproveitamentoAtividade(acertos, totalQuestoes);
       }
@@ -213,6 +217,7 @@ export class MockAlunoService implements AlunoService {
         titulo: ativ.titulo,
         descricao: ativ.descricao,
         prazo: ativ.prazo,
+        modo: ativ.modo,
         status: ativ.status,
         disciplina_id: disciplina?.id || '',
         disciplina_nome: disciplina?.nome || 'Disciplina',
@@ -236,12 +241,12 @@ export class MockAlunoService implements AlunoService {
     const oferta = db.ofertas.find((o) => o.id === atividade.oferta_id);
     if (!oferta) throw new Error('Oferta não encontrada.');
 
-    // Validação 1: Apenas atividades da turma do aluno
+    // Apenas atividades da turma do aluno
     if (oferta.turma_id !== aluno.turma_id) {
       throw new Error('Esta atividade não pertence à sua turma.');
     }
 
-    // Validação 2: Status deve ser 'publicada' ou 'encerrada'
+    // Status deve ser 'publicada' ou 'encerrada'
     if (atividade.status !== 'publicada' && atividade.status !== 'encerrada') {
       throw new Error('Atividade indisponível.');
     }
@@ -252,6 +257,13 @@ export class MockAlunoService implements AlunoService {
     const questoes = db.questoes
       .filter((q) => q.atividade_id === atividadeId)
       .sort((a, b) => a.ordem - b.ordem);
+
+    // Na prova incompleta, nenhuma questão respondida pode revelar o feedback
+    const totalQuestoes = questoes.length;
+    const respondidasCount = questoes.filter((q) =>
+      db.respostas.some((r) => r.aluno_id === aluno.id && r.questao_id === q.id)
+    ).length;
+    const provaCompleta = totalQuestoes > 0 && respondidasCount === totalQuestoes;
 
     const questoesParaAluno = questoes.map((q) => {
       const todasAlts = db.alternativas
@@ -269,7 +281,20 @@ export class MockAlunoService implements AlunoService {
       }));
 
       if (respostaRegistrada) {
-        // Para questões JÁ respondidas, inclui feedback pedagógico
+        // Se for prova e ainda não tiver concluído todas as questões: NÃO expõe o feedback pedagógico
+        if (atividade.modo === 'prova' && !provaCompleta) {
+          return {
+            id: q.id,
+            ordem: q.ordem,
+            enunciado: q.enunciado,
+            dica: q.dica,
+            alternativas: alternativasBase,
+            respondida: true,
+            alternativa_respondida_id: respostaRegistrada.alternativa_id,
+          };
+        }
+
+        // Se for exercício ou prova concluída: inclui feedback pedagógico
         const altCorreta = todasAlts.find((a) => a.correta);
         const altEscolhida = todasAlts.find((a) => a.id === respostaRegistrada.alternativa_id);
 
@@ -304,6 +329,7 @@ export class MockAlunoService implements AlunoService {
       titulo: atividade.titulo,
       descricao: atividade.descricao,
       prazo: atividade.prazo,
+      modo: atividade.modo,
       status: atividade.status,
       disciplina_nome: disciplina?.nome || 'Disciplina',
       professor_nome: professor?.nome || 'Professor',
@@ -315,7 +341,7 @@ export class MockAlunoService implements AlunoService {
     token: string,
     questaoId: string,
     alternativaId: string
-  ): Promise<RespostaFeedback> {
+  ): Promise<RespostaAlunoResultado> {
     const aluno = await this.obterAlunoPorToken(token);
     const db = await getDatabase();
 
@@ -338,7 +364,7 @@ export class MockAlunoService implements AlunoService {
       throw new Error('Atividade indisponível para resposta.');
     }
 
-    // Resposta definitiva: unique(aluno_id, questao_id)
+    // Resposta definitiva da 1ª tentativa: unique(aluno_id, questao_id)
     const jaRespondida = db.respostas.some(
       (r) => r.aluno_id === aluno.id && r.questao_id === questaoId
     );
@@ -366,12 +392,24 @@ export class MockAlunoService implements AlunoService {
       alternativa_id: alternativaId,
       acertou,
       respondida_em: agora,
+      tentativas: 1,
+      acertou_final: acertou,
     };
 
     db.respostas.push(novaResposta);
     saveDatabase(db);
 
+    // Modo Prova: resposta definitiva sem revelar gabarito
+    if (atividade.modo === 'prova') {
+      return {
+        modo: 'prova',
+        registrada: true,
+      };
+    }
+
+    // Modo Exercício: feedback completo na hora
     return {
+      modo: 'exercicio',
       acertou,
       alternativa_correta_id: alternativaCorreta.id,
       por_que_errou: acertou ? null : alternativaEscolhida.por_que_errou,
@@ -379,7 +417,129 @@ export class MockAlunoService implements AlunoService {
     };
   }
 
-  async boletim(token: string): Promise<BoletimAluno> {
+  async tentarNovamente(
+    token: string,
+    questaoId: string,
+    alternativaId: string
+  ): Promise<RespostaExercicio> {
+    const aluno = await this.obterAlunoPorToken(token);
+    const db = await getDatabase();
+
+    const questao = db.questoes.find((q) => q.id === questaoId);
+    if (!questao) throw new Error('Questão não encontrada.');
+
+    const atividade = db.atividades.find((a) => a.id === questao.atividade_id);
+    if (!atividade) throw new Error('Atividade não encontrada.');
+
+    // Só no modo exercício
+    if (atividade.modo !== 'exercicio') {
+      throw new Error('"Tentar novamente" está disponível apenas no modo exercício.');
+    }
+
+    if (atividade.status !== 'publicada') {
+      throw new Error('Atividade não está aberta para respostas.');
+    }
+
+    const resposta = db.respostas.find(
+      (r) => r.aluno_id === aluno.id && r.questao_id === questaoId
+    );
+    if (!resposta) {
+      throw new Error('Esta questão ainda não foi respondida.');
+    }
+
+    // Só se a 1ª resposta foi errada e acertou_final é false
+    if (resposta.acertou || resposta.acertou_final) {
+      throw new Error('Você já acertou esta questão e não precisa tentar novamente.');
+    }
+
+    const alternativas = db.alternativas.filter((a) => a.questao_id === questaoId);
+    const alternativaEscolhida = alternativas.find((a) => a.id === alternativaId);
+    if (!alternativaEscolhida) throw new Error('Alternativa selecionada inválida.');
+
+    const alternativaCorreta = alternativas.find((a) => a.correta);
+    if (!alternativaCorreta) {
+      throw new Error('Inconsistência pedagógica: questão sem alternativa correta.');
+    }
+
+    const acertouAgora = alternativaEscolhida.correta;
+
+    // Incrementa tentativas e atualiza acertou_final
+    // NUNCA altera alternativa_id nem acertou da 1ª resposta!
+    resposta.tentativas += 1;
+    resposta.acertou_final = acertouAgora;
+
+    saveDatabase(db);
+
+    return {
+      modo: 'exercicio',
+      acertou: acertouAgora,
+      alternativa_correta_id: alternativaCorreta.id,
+      por_que_errou: acertouAgora ? null : alternativaEscolhida.por_que_errou,
+      explicacao: questao.explicacao,
+    };
+  }
+
+  async resultadoProva(token: string, atividadeId: string): Promise<ResultadoProva> {
+    const aluno = await this.obterAlunoPorToken(token);
+    const db = await getDatabase();
+
+    const atividade = db.atividades.find((a) => a.id === atividadeId);
+    if (!atividade) throw new Error('Atividade não encontrada.');
+
+    if (atividade.modo !== 'prova') {
+      throw new Error('O resultado detalhado de prova só se aplica a atividades no modo prova.');
+    }
+
+    const questoes = db.questoes
+      .filter((q) => q.atividade_id === atividadeId)
+      .sort((a, b) => a.ordem - b.ordem);
+
+    const respostas = db.respostas.filter(
+      (r) => r.aluno_id === aluno.id && questoes.some((q) => q.id === r.questao_id)
+    );
+
+    // Só depois de responder TODAS as questões da prova
+    if (respostas.length < questoes.length || questoes.length === 0) {
+      throw new Error('Termine todas as questões para ver o resultado.');
+    }
+
+    let acertos = 0;
+    const questoesResultado: ResultadoProvaQuestao[] = questoes.map((q) => {
+      const r = respostas.find((resp) => resp.questao_id === q.id)!;
+      const alts = db.alternativas.filter((a) => a.questao_id === q.id);
+      const corretaAlt = alts.find((a) => a.correta);
+      const escolhidaAlt = alts.find((a) => a.id === r.alternativa_id);
+
+      if (r.acertou) acertos++;
+
+      return {
+        questao_id: q.id,
+        ordem: q.ordem,
+        enunciado: q.enunciado,
+        alternativa_escolhida_id: r.alternativa_id,
+        alternativa_correta_id: corretaAlt?.id || '',
+        acertou: r.acertou,
+        por_que_errou: r.acertou ? null : escolhidaAlt?.por_que_errou || null,
+        explicacao: q.explicacao,
+      };
+    });
+
+    const total = questoes.length;
+    const erros = total - acertos;
+    const aproveitamento = calcularAproveitamentoAtividade(acertos, total);
+
+    return {
+      atividade_id: atividadeId,
+      titulo: atividade.titulo,
+      total_questoes: total,
+      acertos,
+      erros,
+      aproveitamento,
+      questoes: questoesResultado,
+    };
+  }
+
+  async meuDesempenho(token: string): Promise<MeuDesempenhoAluno> {
     const aluno = await this.obterAlunoPorToken(token);
     const db = await getDatabase();
 
@@ -392,7 +552,7 @@ export class MockAlunoService implements AlunoService {
 
     const ofertas = db.ofertas.filter((o) => o.turma_id === turma.id);
 
-    const disciplinasBoletim = ofertas.map((of) => {
+    const disciplinasDesempenho: DesempenhoDisciplinaItem[] = ofertas.map((of) => {
       const disc = db.disciplinas.find((d) => d.id === of.disciplina_id);
       const prof = db.perfis.find((p) => p.id === of.professor_id);
 
@@ -418,6 +578,7 @@ export class MockAlunoService implements AlunoService {
 
         if (questoes.length > 0 && respostas.length === questoes.length) {
           concluidasCount++;
+          // Usa sempre a 1ª tentativa para a nota/média
           somaAcertos += respostas.filter((r) => r.acertou).length;
           somaQuestoes += questoes.length;
         } else if (a.status === 'encerrada') {
@@ -427,35 +588,23 @@ export class MockAlunoService implements AlunoService {
       }
 
       const mediaAproveitamento = calcularMediaPeriodo(somaAcertos, somaQuestoes);
-
-      // Frequência: filtrada ESTRITAMENTE pelas datas de início e fim do período
-      const freqRegistros = db.frequencias.filter(
-        (f) =>
-          f.oferta_id === of.id &&
-          f.aluno_id === aluno.id &&
-          f.data >= periodoAtivo.data_inicio &&
-          f.data <= periodoAtivo.data_fim
-      );
-      const freqStats = consolidarFrequenciaAluno(freqRegistros);
+      const faixa = faixaDesempenho(mediaAproveitamento);
 
       return {
         oferta_id: of.id,
         disciplina_nome: disc?.nome || 'Disciplina',
         professor_nome: prof?.nome || 'Professor',
         atividades_concluidas: concluidasCount,
-        media_aproveitamento: mediaAproveitamento,
-        frequencia_porcentagem: freqStats.porcentagem,
-        total_presencas: freqStats.presencas,
-        total_faltas: freqStats.faltas,
-        total_justificadas: freqStats.justificadas,
+        media_periodo: mediaAproveitamento,
+        faixa,
       };
     });
 
     return {
-      aluno: toAlunoPublico(aluno), // NUNCA expõe pin_hash
+      aluno: toAlunoPublico(aluno),
       turma,
       periodo_atual: periodoAtivo,
-      disciplinas: disciplinasBoletim,
+      disciplinas: disciplinasDesempenho,
     };
   }
 
@@ -463,7 +612,6 @@ export class MockAlunoService implements AlunoService {
     const aluno = await this.obterAlunoPorToken(token);
     const db = await getDatabase();
 
-    // Filtra avisos da mesma escola que sejam gerais ou para a turma do aluno
     return db.avisos
       .filter(
         (a) =>

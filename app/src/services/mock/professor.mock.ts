@@ -6,7 +6,8 @@
  * - Métodos de LEITURA: liberados para o professor dono da oferta, além de 'direcao' e 'coordenacao'.
  * - Sem nenhum fallback de usuário padrão.
  * - Validações de status: publicar só de 'rascunho' com >= 1 questão válida; encerrar só de 'publicada'.
- * - Questão respondida: não permite trocar correta ou alterar alternativas (lança erro claro).
+ * - Modo prova e exercício: aceito em rascunho, bloqueado após publicação.
+ * - Relatórios de desempenho e ficha do aluno: leitura pelo professor da oferta, coordenação e direção.
  */
 
 import { ProfessorService, NovaQuestaoPayload } from '../contracts';
@@ -16,19 +17,27 @@ import {
   AtividadeCompleta,
   Questao,
   Alternativa,
-  Frequencia,
-  StatusFrequencia,
+  ModoAtividade,
   Aviso,
   PrioridadeAviso,
   MapaDeCalorAtividade,
   Perfil,
+  RelatorioDesempenhoOferta,
+  DesempenhoOfertaAluno,
+  DesempenhoOfertaAtividadeAluno,
+  FichaAluno,
+  FichaAlunoAtividadeItem,
+  FichaAlunoQuestaoItem,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { gerarId } from './ids';
 import { exigirUsuario } from './autorizacao';
-import { calcularMapaDeCalorQuestao } from '../calculos';
-import { hojeLocal } from '@/lib/datas';
-
+import {
+  calcularMapaDeCalorQuestao,
+  calcularAproveitamentoAtividade,
+  calcularMediaPeriodo,
+  faixaDesempenho,
+} from '../calculos';
 
 export class MockProfessorService implements ProfessorService {
   /**
@@ -135,7 +144,7 @@ export class MockProfessorService implements ProfessorService {
 
   async criarAtividade(
     ofertaId: string,
-    dados: { titulo: string; descricao: string; prazo: string | null; periodo_id: string }
+    dados: { titulo: string; descricao: string; prazo: string | null; periodo_id: string; modo?: ModoAtividade }
   ): Promise<Atividade> {
     const usuario = await this.validarAcessoEscritaOferta(ofertaId);
     const db = await getDatabase();
@@ -148,6 +157,7 @@ export class MockProfessorService implements ProfessorService {
       titulo: dados.titulo.trim(),
       descricao: dados.descricao.trim(),
       prazo: dados.prazo,
+      modo: dados.modo ?? 'exercicio', // Padrão exercício conforme docs
       status: 'rascunho', // Sempre rascunho na criação
       criado_por: usuario.id,
     };
@@ -159,23 +169,30 @@ export class MockProfessorService implements ProfessorService {
 
   async atualizarAtividade(
     id: string,
-    dados: { titulo?: string; descricao?: string; prazo?: string | null; periodo_id?: string }
+    dados: { titulo?: string; descricao?: string; prazo?: string | null; periodo_id?: string; modo?: ModoAtividade }
   ): Promise<Atividade> {
     const { atividade, oferta } = await this.obterOfertaDaAtividade(id);
     await this.validarAcessoEscritaOferta(oferta.id);
 
     const db = await getDatabase();
-    const idx = db.atividades.findIndex((a) => a.id === id);
+    const ativInDb = db.atividades.find((a) => a.id === id);
+    if (!ativInDb) throw new Error('Atividade não encontrada.');
 
-    // Status NÃO pode ser alterado diretamente por este método (somente via publicar/encerrar)
-    if (dados.titulo !== undefined) atividade.titulo = dados.titulo.trim();
-    if (dados.descricao !== undefined) atividade.descricao = dados.descricao.trim();
-    if (dados.prazo !== undefined) atividade.prazo = dados.prazo;
-    if (dados.periodo_id !== undefined) atividade.periodo_id = dados.periodo_id;
+    // O modo só pode ser alterado enquanto a atividade estiver em rascunho
+    if (dados.modo !== undefined) {
+      if (atividade.status !== 'rascunho') {
+        throw new Error('O modo da atividade só pode ser alterado enquanto estiver em rascunho.');
+      }
+      ativInDb.modo = dados.modo;
+    }
 
-    db.atividades[idx] = atividade;
+    if (dados.titulo !== undefined) ativInDb.titulo = dados.titulo.trim();
+    if (dados.descricao !== undefined) ativInDb.descricao = dados.descricao.trim();
+    if (dados.prazo !== undefined) ativInDb.prazo = dados.prazo;
+    if (dados.periodo_id !== undefined) ativInDb.periodo_id = dados.periodo_id;
+
     saveDatabase(db);
-    return atividade;
+    return ativInDb;
   }
 
   async excluirAtividade(id: string): Promise<void> {
@@ -280,6 +297,7 @@ export class MockProfessorService implements ProfessorService {
       titulo: `${original.titulo} (Cópia)`,
       descricao: original.descricao,
       prazo: original.prazo,
+      modo: original.modo, // Copia o modo (prova ou exercicio)
       status: 'rascunho',
       criado_por: usuario.id,
     };
@@ -338,7 +356,7 @@ export class MockProfessorService implements ProfessorService {
       const qPayload = questoes[i];
       const ordemCalculada = qPayload.ordem ?? i + 1;
 
-      // Validação de texto do enunciado (ponto 5)
+      // Validação de texto do enunciado
       if (!qPayload.enunciado || !qPayload.enunciado.trim()) {
         throw new Error(`O enunciado da questão ${ordemCalculada} não pode ficar vazio.`);
       }
@@ -358,7 +376,7 @@ export class MockProfessorService implements ProfessorService {
         );
       }
 
-      // Validação de texto das alternativas (ponto 5)
+      // Validação de texto das alternativas
       for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
         const alt = qPayload.alternativas[altIdx];
         if (!alt.texto || !alt.texto.trim()) {
@@ -368,7 +386,7 @@ export class MockProfessorService implements ProfessorService {
         }
       }
 
-      // Validação de integridade de IDs (ponto 3):
+      // Validação de integridade de IDs:
       // Se trouxer id de questão, ela deve pertencer à atividadeId informada
       if (qPayload.id) {
         const qExistente = db.questoes.find((q) => q.id === qPayload.id);
@@ -388,9 +406,8 @@ export class MockProfessorService implements ProfessorService {
       }
     }
 
-    // 2. Regra de edição por status da atividade (ponto 4):
-    // Alterações estruturais só em 'rascunho'.
-    // Em 'publicada' ou 'encerrada', só é permitido corrigir textos.
+    // 2. Regra de edição por status da atividade:
+    // Alterações estruturais só em 'rascunho'. Em 'publicada' ou 'encerrada', só é permitido corrigir textos.
     if (atividade.status !== 'rascunho') {
       const questoesAtuais = db.questoes
         .filter((q) => q.atividade_id === atividadeId)
@@ -536,64 +553,6 @@ export class MockProfessorService implements ProfessorService {
     saveDatabase(db);
   }
 
-  async listarFrequencia(ofertaId: string, data: string): Promise<Frequencia[]> {
-    await this.validarAcessoLeituraOferta(ofertaId);
-    const db = await getDatabase();
-    return db.frequencias.filter((f) => f.oferta_id === ofertaId && f.data === data);
-  }
-
-  async salvarFrequencia(
-    ofertaId: string,
-    data: string,
-    registros: Array<{ aluno_id: string; status: StatusFrequencia }>
-  ): Promise<void> {
-    const usuario = await this.validarAcessoEscritaOferta(ofertaId);
-    const db = await getDatabase();
-    const oferta = db.ofertas.find((o) => o.id === ofertaId)!;
-
-    // Validação 1: Data não pode ser futura no fuso horário local
-    const hoje = hojeLocal();
-    if (data > hoje) {
-      throw new Error('Não é possível registrar frequência em data futura.');
-    }
-
-    // Validação 2: Cada aluno deve pertencer à turma da oferta
-    const alunosDaTurma = new Set(
-      db.alunos.filter((a) => a.turma_id === oferta.turma_id && a.ativo).map((a) => a.id)
-    );
-
-    for (const reg of registros) {
-      if (!alunosDaTurma.has(reg.aluno_id)) {
-        throw new Error(`O aluno ${reg.aluno_id} não pertence à turma desta oferta.`);
-      }
-    }
-
-    const agora = new Date().toISOString();
-
-    for (const reg of registros) {
-      const idx = db.frequencias.findIndex(
-        (f) => f.oferta_id === ofertaId && f.aluno_id === reg.aluno_id && f.data === data
-      );
-
-      if (idx >= 0) {
-        db.frequencias[idx].status = reg.status;
-        db.frequencias[idx].registrado_por = usuario.id;
-      } else {
-        db.frequencias.push({
-          id: gerarId('freq'),
-          created_at: agora,
-          oferta_id: ofertaId,
-          aluno_id: reg.aluno_id,
-          data,
-          status: reg.status,
-          registrado_por: usuario.id,
-        });
-      }
-    }
-
-    saveDatabase(db);
-  }
-
   async listarRecadosTurma(turmaId: string): Promise<Aviso[]> {
     const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
     const db = await getDatabase();
@@ -664,6 +623,193 @@ export class MockProfessorService implements ProfessorService {
       titulo: atividade.titulo,
       total_alunos_responderam: alunoIds.size,
       questoes: questoesMapa,
+    };
+  }
+
+  async desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta> {
+    await this.validarAcessoLeituraOferta(ofertaId);
+    const db = await getDatabase();
+    const oferta = db.ofertas.find((o) => o.id === ofertaId);
+    if (!oferta) throw new Error('Oferta não encontrada.');
+
+    const turma = db.turmas.find((t) => t.id === oferta.turma_id);
+    const disciplina = db.disciplinas.find((d) => d.id === oferta.disciplina_id);
+    const periodo = db.periodos.find((p) => p.id === periodoId);
+
+    // Atividades publicadas ou encerradas da oferta no período
+    const atividadesDoPeriodo = db.atividades
+      .filter(
+        (a) =>
+          a.oferta_id === ofertaId &&
+          a.periodo_id === periodoId &&
+          (a.status === 'publicada' || a.status === 'encerrada')
+      )
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    const alunosDaTurma = db.alunos
+      .filter((a) => a.turma_id === oferta.turma_id && a.ativo)
+      .sort((a, b) => a.numero_chamada - b.numero_chamada);
+
+    const alunosRelatorio: DesempenhoOfertaAluno[] = [];
+
+    for (const aluno of alunosDaTurma) {
+      const ativsAluno: DesempenhoOfertaAtividadeAluno[] = [];
+      let somaAcertosMedia = 0;
+      let somaQuestoesMedia = 0;
+
+      for (const ativ of atividadesDoPeriodo) {
+        const questoes = db.questoes.filter((q) => q.atividade_id === ativ.id);
+        const totalQ = questoes.length;
+        const respostas = db.respostas.filter(
+          (r) => r.aluno_id === aluno.id && questoes.some((q) => q.id === r.questao_id)
+        );
+
+        // Sempre a primeira tentativa para notas e médias (campo r.acertou)
+        const acertos = respostas.filter((r) => r.acertou).length;
+        const concluida = totalQ > 0 && respostas.length === totalQ;
+
+        let aproveitamento: number | null = null;
+        if (concluida) {
+          aproveitamento = calcularAproveitamentoAtividade(acertos, totalQ);
+          somaAcertosMedia += acertos;
+          somaQuestoesMedia += totalQ;
+        } else if (ativ.status === 'encerrada') {
+          // Na atividade encerrada, questões sem resposta contam como erro
+          aproveitamento = calcularAproveitamentoAtividade(acertos, totalQ);
+          somaAcertosMedia += acertos;
+          somaQuestoesMedia += totalQ;
+        }
+
+        ativsAluno.push({
+          atividade_id: ativ.id,
+          titulo: ativ.titulo,
+          modo: ativ.modo,
+          concluida,
+          aproveitamento,
+        });
+      }
+
+      const media = calcularMediaPeriodo(somaAcertosMedia, somaQuestoesMedia);
+      const faixa = faixaDesempenho(media);
+
+      alunosRelatorio.push({
+        aluno_id: aluno.id,
+        nome_completo: aluno.nome_completo,
+        numero_chamada: aluno.numero_chamada,
+        atividades: ativsAluno,
+        media,
+        faixa,
+      });
+    }
+
+    return {
+      oferta_id: ofertaId,
+      turma_nome: turma?.nome || 'Turma',
+      disciplina_nome: disciplina?.nome || 'Disciplina',
+      periodo_nome: periodo?.nome || 'Período',
+      atividades: atividadesDoPeriodo.map((a) => ({ id: a.id, titulo: a.titulo, modo: a.modo })),
+      alunos: alunosRelatorio,
+    };
+  }
+
+  async fichaAluno(ofertaId: string, alunoId: string): Promise<FichaAluno> {
+    await this.validarAcessoLeituraOferta(ofertaId);
+    const db = await getDatabase();
+    const oferta = db.ofertas.find((o) => o.id === ofertaId);
+    if (!oferta) throw new Error('Oferta não encontrada.');
+
+    const turma = db.turmas.find((t) => t.id === oferta.turma_id);
+    const disciplina = db.disciplinas.find((d) => d.id === oferta.disciplina_id);
+    const aluno = db.alunos.find((a) => a.id === alunoId);
+    if (!aluno) throw new Error('Aluno não encontrado.');
+
+    if (aluno.turma_id !== oferta.turma_id) {
+      throw new Error('O aluno não pertence à turma desta oferta.');
+    }
+
+    // Atividades publicadas ou encerradas da oferta
+    const atividades = db.atividades
+      .filter((a) => a.oferta_id === ofertaId && (a.status === 'publicada' || a.status === 'encerrada'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    let somaAcertosMedia = 0;
+    let somaQuestoesMedia = 0;
+    const atividadesFicha: FichaAlunoAtividadeItem[] = [];
+
+    for (const ativ of atividades) {
+      const questoes = db.questoes
+        .filter((q) => q.atividade_id === ativ.id)
+        .sort((a, b) => a.ordem - b.ordem);
+
+      const questoesFicha: FichaAlunoQuestaoItem[] = [];
+      let totalAcertos = 0;
+      let totalRespondidas = 0;
+
+      for (const q of questoes) {
+        const r = db.respostas.find(
+          (resp) => resp.aluno_id === alunoId && resp.questao_id === q.id
+        );
+        const corretaAlt = db.alternativas.find((alt) => alt.questao_id === q.id && alt.correta);
+
+        if (r) {
+          totalRespondidas++;
+          if (r.acertou) totalAcertos++;
+        }
+
+        questoesFicha.push({
+          questao_id: q.id,
+          ordem: q.ordem,
+          enunciado: q.enunciado,
+          alternativa_escolhida_id: r ? r.alternativa_id : null,
+          alternativa_correta_id: corretaAlt?.id || '',
+          acertou: r ? r.acertou : null,
+          tentativas: r ? r.tentativas : 0,
+          acertou_final: r ? r.acertou_final : null,
+        });
+      }
+
+      const totalQ = questoes.length;
+      const concluida = totalQ > 0 && totalRespondidas === totalQ;
+
+      let statusAluno: 'concluida' | 'em_andamento' | 'pendente' = 'pendente';
+      if (concluida) {
+        statusAluno = 'concluida';
+      } else if (totalRespondidas > 0) {
+        statusAluno = 'em_andamento';
+      }
+
+      let aproveitamento: number | null = null;
+      if (concluida) {
+        aproveitamento = calcularAproveitamentoAtividade(totalAcertos, totalQ);
+        somaAcertosMedia += totalAcertos;
+        somaQuestoesMedia += totalQ;
+      } else if (ativ.status === 'encerrada') {
+        aproveitamento = calcularAproveitamentoAtividade(totalAcertos, totalQ);
+        somaAcertosMedia += totalAcertos;
+        somaQuestoesMedia += totalQ;
+      }
+
+      atividadesFicha.push({
+        atividade_id: ativ.id,
+        titulo: ativ.titulo,
+        modo: ativ.modo,
+        status_aluno: statusAluno,
+        aproveitamento,
+        questoes: questoesFicha,
+      });
+    }
+
+    const mediaPeriodo = calcularMediaPeriodo(somaAcertosMedia, somaQuestoesMedia);
+    const faixa = faixaDesempenho(mediaPeriodo);
+    const { pin_hash, ...alunoPublico } = aluno;
+
+    return {
+      aluno: alunoPublico,
+      turma_nome: turma?.nome || 'Turma',
+      disciplina_nome: disciplina?.nome || 'Disciplina',
+      atividades: atividadesFicha,
+      media_periodo: mediaPeriodo,
+      faixa,
     };
   }
 }

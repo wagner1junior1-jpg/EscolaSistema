@@ -1,7 +1,7 @@
 /**
  * SaberPontual — Tipos das Entidades do Banco de Dados
  * 
- * Fonte da verdade: docs/ESPECIFICACAO.md (Seção 4)
+ * Fonte da verdade: docs/ESPECIFICACAO.md (Seção 4, 5 e 6)
  * Todos os nomes de campos seguem snake_case exatamente como especificado.
  */
 
@@ -11,18 +11,13 @@ export type SegmentoTurma = 'fund1' | 'fund2' | 'medio';
 
 export type StatusAtividade = 'rascunho' | 'publicada' | 'encerrada';
 
-export type LetraAlternativa = 'A' | 'B' | 'C' | 'D' | 'E';
+export type ModoAtividade = 'prova' | 'exercicio';
 
-export type StatusFrequencia = 'P' | 'F' | 'J';
+export type LetraAlternativa = 'A' | 'B' | 'C' | 'D' | 'E';
 
 export type PrioridadeAviso = 'baixa' | 'media' | 'alta';
 
-export type SituacaoConselho =
-  | 'Destaque'
-  | 'Adequado'
-  | 'Reforço'
-  | 'Risco por infrequência'
-  | 'Sem avaliação';
+export type FaixaDesempenho = 'Ótimo' | 'Bom' | 'Atenção' | 'Sem atividades';
 
 // 1. escolas
 export interface Escola {
@@ -101,7 +96,6 @@ export interface Aluno {
 // Aluno sem a exposição do hash do PIN (sigilo estrito)
 export type AlunoPublico = Omit<Aluno, 'pin_hash'>;
 
-
 // 8. atividades
 export interface Atividade {
   id: string;
@@ -111,6 +105,7 @@ export interface Atividade {
   titulo: string;
   descricao: string;
   prazo: string | null; // date YYYY-MM-DD ou null
+  modo: ModoAtividade; // padrão 'exercicio'
   status: StatusAtividade;
   criado_por: string;
 }
@@ -146,20 +141,11 @@ export interface Resposta {
   alternativa_id: string;
   acertou: boolean;
   respondida_em: string;
+  tentativas: number; // padrão 1
+  acertou_final: boolean;
 }
 
-// 12. frequencias
-export interface Frequencia {
-  id: string;
-  created_at: string;
-  oferta_id: string;
-  aluno_id: string;
-  data: string; // date YYYY-MM-DD
-  status: StatusFrequencia;
-  registrado_por: string;
-}
-
-// 13. avisos
+// 12. avisos
 export interface Aviso {
   id: string;
   created_at: string;
@@ -172,7 +158,7 @@ export interface Aviso {
   publicado_em: string;
 }
 
-// 14. aluno_sessoes
+// 13. aluno_sessoes
 export interface AlunoSessao {
   id: string;
   created_at: string;
@@ -182,7 +168,7 @@ export interface AlunoSessao {
   criado_em: string;
 }
 
-// 15. pin_tentativas
+// 14. pin_tentativas
 export interface PinTentativa {
   id: string;
   created_at: string;
@@ -202,7 +188,7 @@ export interface AlunoResumido {
   numero_chamada: number;
 }
 
-// Alternativa sem o campo 'correta' e sem 'por_que_errou' (proteção absoluta do aluno)
+// Alternativa sem o campo 'correta' e sem 'por_que_errou' (proteção do aluno)
 export interface AlternativaParaAluno {
   id: string;
   letra: LetraAlternativa;
@@ -218,7 +204,7 @@ export interface QuestaoParaAluno {
   alternativas: AlternativaParaAluno[];
   respondida: boolean;
   alternativa_respondida_id?: string;
-  // Feedback pedagógico exibido exclusivamente após o aluno responder
+  // Feedback pedagógico (no modo prova só é exposto após concluir todas as questões)
   acertou?: boolean;
   alternativa_correta_id?: string;
   por_que_errou?: string | null;
@@ -231,18 +217,60 @@ export interface AtividadeParaAluno {
   titulo: string;
   descricao: string;
   prazo: string | null;
+  modo: ModoAtividade;
   status: StatusAtividade;
   disciplina_nome: string;
   professor_nome: string;
   questoes: QuestaoParaAluno[];
 }
 
-// Feedback imediato devolvido após a submissão de uma resposta
+// Retorno imediato no modo exercício
+export interface RespostaExercicio {
+  modo: 'exercicio';
+  acertou: boolean;
+  alternativa_correta_id: string;
+  por_que_errou: string | null;
+  explicacao: string | null;
+}
+
+// Retorno imediato no modo prova (sem revelar gabarito antes do fim)
+export interface RespostaProva {
+  modo: 'prova';
+  registrada: true;
+}
+
+// União discriminada de resposta do aluno
+export type RespostaAlunoResultado = RespostaExercicio | RespostaProva;
+
+// Feedback compatível para chamadas pedagógicas diretas
 export interface RespostaFeedback {
   acertou: boolean;
   alternativa_correta_id: string;
   por_que_errou: string | null;
   explicacao: string | null;
+}
+
+// Item detalhado do resultado de prova
+export interface ResultadoProvaQuestao {
+  questao_id: string;
+  ordem: number;
+  enunciado: string;
+  alternativa_escolhida_id: string;
+  alternativa_correta_id: string;
+  acertou: boolean;
+  por_que_errou: string | null;
+  explicacao: string | null;
+}
+
+// Resultado final de prova entregue ao aluno após concluir todas as questões
+export interface ResultadoProva {
+  atividade_id: string;
+  titulo: string;
+  total_questoes: number;
+  acertos: number;
+  erros: number;
+  aproveitamento: number;
+  questoes: ResultadoProvaQuestao[];
 }
 
 // Resumo de atividade para o painel do aluno
@@ -251,6 +279,7 @@ export interface AtividadeResumoAluno {
   titulo: string;
   descricao: string;
   prazo: string | null;
+  modo: ModoAtividade;
   status: StatusAtividade;
   disciplina_id: string;
   disciplina_nome: string;
@@ -260,7 +289,7 @@ export interface AtividadeResumoAluno {
   aproveitamento?: number;
 }
 
-// Questão com todas as alternativas (para visão do professor/gestão)
+// Questão com todas as alternativas (para professor/gestão)
 export interface QuestaoComAlternativas extends Questao {
   alternativas: Alternativa[];
 }
@@ -301,47 +330,136 @@ export interface MapaDeCalorAtividade {
   questoes: ItemMapaDeCalorQuestao[];
 }
 
-// Boletim individual do aluno
-export interface BoletimOfertaItem {
+// Item de desempenho por disciplina para o aluno
+export interface DesempenhoDisciplinaItem {
   oferta_id: string;
   disciplina_nome: string;
   professor_nome: string;
   atividades_concluidas: number;
-  media_aproveitamento: number | null;
-  frequencia_porcentagem: number | null;
-  total_presencas: number;
-  total_faltas: number;
-  total_justificadas: number;
+  media_periodo: number | null;
+  faixa: FaixaDesempenho;
 }
 
-export interface BoletimAluno {
+// Meu Desempenho do Aluno (seção 6.3)
+export interface MeuDesempenhoAluno {
   aluno: AlunoPublico;
   turma: Turma;
   periodo_atual: Periodo;
-  disciplinas: BoletimOfertaItem[];
+  disciplinas: DesempenhoDisciplinaItem[];
 }
 
-// Item individual da ata de conselho de classe
-export interface ItemConselhoAluno {
+/* =========================================================================
+ * Novos Relatórios do Professor (Acompanhamento)
+ * ========================================================================= */
+
+export interface DesempenhoOfertaAtividadeAluno {
+  atividade_id: string;
+  titulo: string;
+  modo: ModoAtividade;
+  concluida: boolean;
+  aproveitamento: number | null;
+}
+
+export interface DesempenhoOfertaAluno {
   aluno_id: string;
-  numero_chamada: number;
   nome_completo: string;
-  media_geral: number | null;
-  frequencia_geral: number | null;
-  situacao: SituacaoConselho;
+  numero_chamada: number;
+  atividades: DesempenhoOfertaAtividadeAluno[];
+  media: number | null;
+  faixa: FaixaDesempenho;
 }
 
-export interface RelatorioConselho {
-  turma: Turma;
-  periodo: Periodo;
-  alunos: ItemConselhoAluno[];
+export interface RelatorioDesempenhoOferta {
+  oferta_id: string;
+  turma_nome: string;
+  disciplina_nome: string;
+  periodo_nome: string;
+  atividades: Array<{ id: string; titulo: string; modo: ModoAtividade }>;
+  alunos: DesempenhoOfertaAluno[];
 }
 
-// Indicadores macro para a direção
+export interface FichaAlunoQuestaoItem {
+  questao_id: string;
+  ordem: number;
+  enunciado: string;
+  alternativa_escolhida_id: string | null;
+  alternativa_correta_id: string;
+  acertou: boolean | null;
+  tentativas: number;
+  acertou_final: boolean | null;
+}
+
+export interface FichaAlunoAtividadeItem {
+  atividade_id: string;
+  titulo: string;
+  modo: ModoAtividade;
+  status_aluno: 'concluida' | 'em_andamento' | 'pendente';
+  aproveitamento: number | null;
+  questoes: FichaAlunoQuestaoItem[];
+}
+
+export interface FichaAluno {
+  aluno: AlunoPublico;
+  turma_nome: string;
+  disciplina_nome: string;
+  atividades: FichaAlunoAtividadeItem[];
+  media_periodo: number | null;
+  faixa: FaixaDesempenho;
+}
+
+/* =========================================================================
+ * Novos Relatórios da Gestão
+ * ========================================================================= */
+
 export interface VisaoGeralEscola {
   total_alunos: number;
-  total_professores: number;
   total_turmas: number;
-  aproveitamento_medio_global: number | null;
-  turmas_por_segmento: Record<SegmentoTurma, number>;
+  total_professores: number;
+  total_atividades_publicadas: number;
+  aproveitamento_medio: number | null;
+}
+
+export interface DesempenhoTurmaDisciplinaItem {
+  turma_id: string;
+  turma_nome: string;
+  disciplina_id: string;
+  disciplina_nome: string;
+  professor_nome: string;
+  total_alunos: number;
+  aproveitamento_medio: number | null;
+  faixas: {
+    otimo: number;
+    bom: number;
+    atencao: number;
+    sem_atividades: number;
+  };
+}
+
+export interface AlunoEmAtencaoItem {
+  aluno_id: string;
+  nome_completo: string;
+  numero_chamada: number;
+  turma_nome: string;
+  disciplina_nome: string;
+  professor_nome: string;
+  media: number;
+  faixa: 'Atenção';
+}
+
+export interface QuestaoCriticaEscolaItem {
+  questao_id: string;
+  atividade_id: string;
+  atividade_titulo: string;
+  turma_nome: string;
+  disciplina_nome: string;
+  professor_nome: string;
+  ordem: number;
+  enunciado: string;
+  total_respostas: number;
+  porcentagem_acerto: number;
+  distrator_mais_escolhido: {
+    letra: LetraAlternativa | null;
+    por_que_errou: string | null;
+    total_escolhas: number;
+  } | null;
 }

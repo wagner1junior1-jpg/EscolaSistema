@@ -24,7 +24,7 @@ export const GestaoDashboardPage: React.FC = () => {
           </div>
           <div>
             <h1 className="font-heading font-bold text-xl text-slate-900">Gestão Escolar</h1>
-            <p className="text-xs text-slate-500">Coordenação pedagógica, turmas, períodos e conselho de classe</p>
+            <p className="text-xs text-slate-500">Coordenação pedagógica, turmas, períodos e desempenho escolar</p>
           </div>
         </div>
 
@@ -32,7 +32,7 @@ export const GestaoDashboardPage: React.FC = () => {
           {[
             { icon: <Users className="w-5 h-5" />, label: 'Turmas & Alunos', desc: 'Cadastro, PIN e filipetas', colorClass: 'bg-sky-100 text-sky-600' },
             { icon: <BookMarked className="w-5 h-5" />, label: 'Disciplinas', desc: 'Ofertas e professores', colorClass: 'bg-indigo-100 text-indigo-600' },
-            { icon: <TrendingUp className="w-5 h-5" />, label: 'Conselho', desc: 'Situação por aluno e período', colorClass: 'bg-emerald-100 text-emerald-600' },
+            { icon: <TrendingUp className="w-5 h-5" />, label: 'Desempenho', desc: 'Acompanhamento pedagógico das turmas', colorClass: 'bg-emerald-100 text-emerald-600' },
           ].map((item) => (
             <Card key={item.label} className="p-4 opacity-60">
               <div className={`w-9 h-9 rounded-xl ${item.colorClass} flex items-center justify-center mb-3`}>
@@ -48,7 +48,7 @@ export const GestaoDashboardPage: React.FC = () => {
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Gestão em desenvolvimento</CardTitle>
             <CardDescription>
-              Configure a escola, períodos letivos, disciplinas e turmas. Gerencie professores, acompanhe o conselho de classe e exporte relatórios.
+              Configure a escola, períodos letivos, disciplinas e turmas. Gerencie professores, acompanhe o desempenho das turmas e exporte relatórios.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
