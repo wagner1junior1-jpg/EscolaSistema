@@ -210,6 +210,7 @@ export class MockGestaoService implements GestaoService {
         turma_codigo: turma?.codigo_acesso || '',
         disciplina_nome: disciplina?.nome || 'Disciplina desconhecida',
         professor_nome: professor?.nome || 'Professor não atribuído',
+        turma_serie: turma?.serie,
       };
     });
   }

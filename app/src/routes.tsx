@@ -10,6 +10,7 @@ import ProfessorOfertaPage from '@/features/professor/pages/ProfessorOfertaPage'
 import ProfessorAtividadePage from '@/features/professor/pages/ProfessorAtividadePage';
 import ProfessorResultadosPage from '@/features/professor/pages/ProfessorResultadosPage';
 import ProfessorFichaAlunoPage from '@/features/professor/pages/ProfessorFichaAlunoPage';
+import ProfessorBancoPage from '@/features/professor/pages/ProfessorBancoPage';
 import GestaoDashboardPage from '@/features/gestao/pages/GestaoDashboardPage';
 import { RotaProtegida } from '@/features/auth/AuthProvider';
 
@@ -37,6 +38,14 @@ export const AppRoutes: React.FC = () => {
         element={
           <RotaProtegida papeis={['professor']}>
             <ProfessorDashboardPage />
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/professor/banco"
+        element={
+          <RotaProtegida papeis={['professor']}>
+            <ProfessorBancoPage />
           </RotaProtegida>
         }
       />

@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   HelpCircle,
   Megaphone,
+  Database,
 } from 'lucide-react';
 
 import { GestaoInicioSecao } from '../components/GestaoInicioSecao';
@@ -30,6 +31,7 @@ import { GestaoDesempenhoSecao } from '../components/GestaoDesempenhoSecao';
 import { GestaoAlunosAtencaoSecao } from '../components/GestaoAlunosAtencaoSecao';
 import { GestaoQuestoesCriticasSecao } from '../components/GestaoQuestoesCriticasSecao';
 import { GestaoMuralSecao } from '../components/GestaoMuralSecao';
+import { GestaoBancoSecao } from '../components/GestaoBancoSecao';
 
 type SecaoGestao =
   | 'inicio'
@@ -37,6 +39,7 @@ type SecaoGestao =
   | 'disciplinas'
   | 'professores'
   | 'alunos'
+  | 'banco'
   | 'desempenho'
   | 'atencao'
   | 'questoes_criticas'
@@ -83,6 +86,11 @@ export const GestaoDashboardPage: React.FC = () => {
       id: 'questoes_criticas',
       label: 'Questões Críticas',
       icon: <HelpCircle className="w-4 h-4" />,
+    },
+    {
+      id: 'banco',
+      label: 'Banco de Questões',
+      icon: <Database className="w-4 h-4" />,
     },
     {
       id: 'mural',
@@ -217,6 +225,7 @@ export const GestaoDashboardPage: React.FC = () => {
             {secaoAtiva === 'desempenho' && <GestaoDesempenhoSecao />}
             {secaoAtiva === 'atencao' && <GestaoAlunosAtencaoSecao />}
             {secaoAtiva === 'questoes_criticas' && <GestaoQuestoesCriticasSecao />}
+            {secaoAtiva === 'banco' && <GestaoBancoSecao />}
             {secaoAtiva === 'mural' && <GestaoMuralSecao />}
             {secaoAtiva === 'turmas' && <GestaoTurmasSecao />}
             {secaoAtiva === 'disciplinas' && <GestaoDisciplinasSecao />}

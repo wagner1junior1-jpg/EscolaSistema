@@ -1,6 +1,6 @@
 {
   "_sobre": "Pacote FIXO de dados de demonstração do SaberPontual. Não altere os textos nem os ids sem aprovação do Wagner. Cada questão tem exatamente 1 alternativa correta e todas as erradas têm por_que_errou. Nas respostas, a letra é a 1ª tentativa do aluno (a que vale nota); null = não respondeu.",
-  "versao_seed": 2,
+  "versao_seed": 3,
   "disciplinas_novas": [
     {
       "id": "disc-port",
@@ -842,5 +842,402 @@
     "Beatriz (aluno-7a-2, PIN 3891)": "Já fez tudo e acertou tudo em Frações e na Prova de Ciências: resultado completo liberado.",
     "Professora Ana, mapa de calor de Frações": "Questão 2 (25% de 80) com 2 acertos em 7 = 29%: aparece como QUESTÃO CRÍTICA, e o distrator mais escolhido é a B (3 alunos). Gabriel e Enzo acertaram na retentativa, Matheus errou de novo.",
     "Gestão, alunos em atenção": "Enzo (1/5 em Frações + 3/3 na encerrada = 50%) e Matheus (2/5 + 2/3 = 50%) ficam abaixo de 60% em Matemática no 3º bimestre, sem contar a atividade antiga ativ-mat-01."
-  }
+  },
+  "assuntos": [
+    {
+      "id": "assunto-mat-frac",
+      "disciplina_id": "disc-mat",
+      "nome": "Frações"
+    },
+    {
+      "id": "assunto-mat-porc",
+      "disciplina_id": "disc-mat",
+      "nome": "Porcentagem"
+    },
+    {
+      "id": "assunto-cien-dig",
+      "disciplina_id": "disc-cien",
+      "nome": "Digestão"
+    }
+  ],
+  "banco_questoes": [
+    {
+      "id": "bq-mat-porc-1",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-porc",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "facil",
+      "enunciado": "Quanto é 50% de 120?",
+      "imagem_url": null,
+      "dica": "50% representa a metade de um valor.",
+      "explicacao": "50% = 50/100 = 1/2. Para calcular 50% de 120, dividimos por 2: 120 ÷ 2 = 60.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "60",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "50",
+          "correta": false,
+          "por_que_errou": "Você repetiu o número da porcentagem. 50% de 120 é a metade do total."
+        },
+        {
+          "letra": "C",
+          "texto": "70",
+          "correta": false,
+          "por_que_errou": "Você subtraiu 50 de 120. Porcentagem não é uma simples subtração."
+        },
+        {
+          "letra": "D",
+          "texto": "24",
+          "correta": false,
+          "por_que_errou": "24 seria 20% de 120. 50% corresponde à metade."
+        }
+      ]
+    },
+    {
+      "id": "bq-mat-porc-2",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-porc",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "facil",
+      "enunciado": "Em uma turma de 40 alunos, 25% usam óculos. Quantos alunos dessa turma usam óculos?",
+      "imagem_url": null,
+      "dica": "25% é equivalente a um quarto (1/4) do total.",
+      "explicacao": "25% de 40 = 40 ÷ 4 = 10 alunos usam óculos.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "10",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "15",
+          "correta": false,
+          "por_que_errou": "15 alunos representariam mais de 35% da turma."
+        },
+        {
+          "letra": "C",
+          "texto": "25",
+          "correta": false,
+          "por_que_errou": "Você usou o valor da porcentagem como quantidade de alunos. Calcule 25% de 40."
+        },
+        {
+          "letra": "D",
+          "texto": "4",
+          "correta": false,
+          "por_que_errou": "Você dividiu 40 por 10 em vez de calcular um quarto (dividir por 4)."
+        }
+      ]
+    },
+    {
+      "id": "bq-mat-porc-3",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-porc",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "facil",
+      "enunciado": "Qual é a representação fracionária simplificada de 10%?",
+      "imagem_url": null,
+      "dica": "Escreva 10 sobre 100 e simplifique dividindo numerador e denominador por 10.",
+      "explicacao": "10% = 10/100. Dividindo numerador e denominador por 10, obtemos 1/10.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "1/10",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "1/5",
+          "correta": false,
+          "por_que_errou": "1/5 é equivalente a 20%, e não a 10%."
+        },
+        {
+          "letra": "C",
+          "texto": "1/100",
+          "correta": false,
+          "por_que_errou": "1/100 representa 1%, e não 10%."
+        },
+        {
+          "letra": "D",
+          "texto": "10/1",
+          "correta": false,
+          "por_que_errou": "10/1 equivale a 10 inteiros (1000%), e não 10%."
+        }
+      ]
+    },
+    {
+      "id": "bq-mat-porc-4",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-porc",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "medio",
+      "enunciado": "Um produto que custava R$ 200,00 teve um aumento de 15%. Qual é o novo preço do produto?",
+      "imagem_url": null,
+      "dica": "Primeiro calcule 15% de 200 e depois some ao preço original.",
+      "explicacao": "10% de 200 = 20 e 5% de 200 = 10, totalizando R$ 30,00 de aumento. O novo preço é 200 + 30 = R$ 230,00.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "R$ 230,00",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "R$ 215,00",
+          "correta": false,
+          "por_que_errou": "Você somou 15 reais diretamente ao preço. 15% de 200 corresponde a 30 reais."
+        },
+        {
+          "letra": "C",
+          "texto": "R$ 30,00",
+          "correta": false,
+          "por_que_errou": "R$ 30,00 é apenas o valor do aumento. A pergunta pede o novo preço total."
+        },
+        {
+          "letra": "D",
+          "texto": "R$ 170,00",
+          "correta": false,
+          "por_que_errou": "Houve um aumento, logo o valor deve ser somado, e não subtraído."
+        }
+      ]
+    },
+    {
+      "id": "bq-mat-porc-5",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-porc",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "medio",
+      "enunciado": "Uma loja oferece 20% de desconto para pagamento à vista. Se um casaco custa R$ 150,00, quanto o cliente pagará à vista?",
+      "imagem_url": null,
+      "dica": "Calcule 20% de 150 e subtraia do valor inicial.",
+      "explicacao": "10% de 150 = 15, logo 20% = 30 reais de desconto. Pagamento à vista: 150 − 30 = R$ 120,00.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "R$ 120,00",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "R$ 130,00",
+          "correta": false,
+          "por_que_errou": "Você subtraiu 20 reais em vez de 20%. 20% de 150 é R$ 30,00."
+        },
+        {
+          "letra": "C",
+          "texto": "R$ 30,00",
+          "correta": false,
+          "por_que_errou": "R$ 30,00 é o valor do desconto concedido, não o preço final pago."
+        },
+        {
+          "letra": "D",
+          "texto": "R$ 180,00",
+          "correta": false,
+          "por_que_errou": "Desconto reduz o preço; você acabou somando o valor do desconto."
+        }
+      ]
+    },
+    {
+      "id": "bq-mat-frac-1",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-frac",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "facil",
+      "enunciado": "Qual fração irredutível representa a metade de um inteiro?",
+      "imagem_url": null,
+      "dica": "Divida o inteiro em duas partes iguais e considere uma.",
+      "explicacao": "A metade é representada dividindo-se o todo em 2 partes iguais e pegando 1, ou seja, 1/2.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "1/2",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "2/1",
+          "correta": false,
+          "por_que_errou": "2/1 representa dois inteiros, e não a metade."
+        },
+        {
+          "letra": "C",
+          "texto": "1/4",
+          "correta": false,
+          "por_que_errou": "1/4 representa um quarto (metade da metade), não a metade."
+        },
+        {
+          "letra": "D",
+          "texto": "1/3",
+          "correta": false,
+          "por_que_errou": "1/3 representa a terça parte, e não a metade."
+        }
+      ]
+    },
+    {
+      "id": "bq-mat-frac-2",
+      "disciplina_id": "disc-mat",
+      "assunto_id": "assunto-mat-frac",
+      "criado_por": "usr-prof-ana",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "facil",
+      "enunciado": "Em uma barra de chocolate dividida em 6 pedaços iguais, Marina comeu 2 pedaços. Qual fração simplificada representa o que ela comeu?",
+      "imagem_url": null,
+      "dica": "Ela comeu 2 de 6 pedaços (2/6). Simplifique dividindo por 2.",
+      "explicacao": "A fração comida é 2/6. Dividindo o numerador e o denominador por 2, obtemos 1/3.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "1/3",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "1/2",
+          "correta": false,
+          "por_que_errou": "Para ser 1/2, ela precisaria ter comido 3 dos 6 pedaços."
+        },
+        {
+          "letra": "C",
+          "texto": "2/3",
+          "correta": false,
+          "por_que_errou": "2/3 seriam 4 pedaços de chocolate, mas ela comeu apenas 2."
+        },
+        {
+          "letra": "D",
+          "texto": "1/6",
+          "correta": false,
+          "por_que_errou": "1/6 seria apenas 1 pedaço, mas Marina comeu 2."
+        }
+      ]
+    },
+    {
+      "id": "bq-cien-dig-1",
+      "disciplina_id": "disc-cien",
+      "assunto_id": "assunto-cien-dig",
+      "criado_por": "usr-prof-carlos",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "medio",
+      "enunciado": "Qual é a principal função da bile produzida pelo fígado e armazenada na vesícula biliar?",
+      "imagem_url": null,
+      "dica": "A bile atua como um detergente, emulsificando um tipo específico de nutriente.",
+      "explicacao": "A bile emulsifica as gorduras (lipídios), transformando grandes gotas em gotículas menores para facilitar a ação das enzimas lípases.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "Emulsificar gorduras para facilitar a digestão",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "Digerir proteínas no estômago",
+          "correta": false,
+          "por_que_errou": "A digestão de proteínas no estômago é feita pelo suco gástrico (pepsina), não pela bile."
+        },
+        {
+          "letra": "C",
+          "texto": "Absorver água e sais minerais no intestino grosso",
+          "correta": false,
+          "por_que_errou": "A absorção de água ocorre principalmente no intestino grosso, sem ação direta da bile."
+        },
+        {
+          "letra": "D",
+          "texto": "Produzir insulina para controlar a glicose",
+          "correta": false,
+          "por_que_errou": "A insulina é produzida pelo pâncreas, não pelo fígado/vesícula."
+        }
+      ]
+    },
+    {
+      "id": "bq-cien-dig-2",
+      "disciplina_id": "disc-cien",
+      "assunto_id": "assunto-cien-dig",
+      "criado_por": "usr-prof-carlos",
+      "serie": "7º Ano",
+      "tipo": "objetiva",
+      "dificuldade": "medio",
+      "enunciado": "O que são os movimentos peristálticos realizados pelo esôfago e pelos intestinos?",
+      "imagem_url": null,
+      "dica": "São contrações musculares involuntárias que empurram o alimento pelo tubo digestório.",
+      "explicacao": "Movimentos peristálticos são contrações musculares coordenadas e involuntárias do tubo digestório que empurram o bolo alimentar e o quimo ao longo do trato digestivo.",
+      "resposta_esperada": null,
+      "origem": "manual",
+      "arquivada": false,
+      "alternativas": [
+        {
+          "letra": "A",
+          "texto": "Contrações musculares involuntárias que empurram o alimento pelo tubo digestório",
+          "correta": true,
+          "por_que_errou": null
+        },
+        {
+          "letra": "B",
+          "texto": "Processos enzimáticos de quebra química dos carboidratos na boca",
+          "correta": false,
+          "por_que_errou": "Isso é digestão química; movimentos peristálticos são mecânicos e musculares."
+        },
+        {
+          "letra": "C",
+          "texto": "Abertura voluntária da cárdia para entrada de ar no estômago",
+          "correta": false,
+          "por_que_errou": "Os movimentos peristálticos são involuntários e conduzem o bolo alimentar, não ar."
+        },
+        {
+          "letra": "D",
+          "texto": "Absorção de nutrientes pelas vilosidades intestinais",
+          "correta": false,
+          "por_que_errou": "A absorção é a passagem de nutrientes para o sangue; peristaltismo é o movimento mecânico que transporta o conteúdo."
+        }
+      ]
+    }
+  ]
 }

@@ -11,6 +11,7 @@ import {
   ProfessorService,
   AlunoService,
   RelatorioService,
+  BancoService,
 } from './contracts';
 
 import {
@@ -19,6 +20,7 @@ import {
   MockProfessorService,
   MockAlunoService,
   MockRelatorioService,
+  MockBancoService,
 } from './mock';
 
 import {
@@ -27,6 +29,7 @@ import {
   SupabaseProfessorServiceStub,
   SupabaseAlunoServiceStub,
   SupabaseRelatorioServiceStub,
+  SupabaseBancoServiceStub,
 } from './supabase/stub';
 
 export * from './contracts';
@@ -49,6 +52,13 @@ export const alunoService: AlunoService =
 
 export const relatorioService: RelatorioService =
   dataSource === 'supabase' ? new SupabaseRelatorioServiceStub() : new MockRelatorioService();
+
+export const bancoService: BancoService =
+  dataSource === 'supabase' ? new SupabaseBancoServiceStub() : new MockBancoService();
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { bancoService?: BancoService }).bancoService = bancoService;
+}
 
 export async function restaurarDadosDemo(): Promise<void> {
   if (dataSource === 'mock') {

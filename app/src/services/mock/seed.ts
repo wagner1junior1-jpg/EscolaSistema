@@ -23,6 +23,13 @@ import {
   ModoAtividade,
   StatusAtividade,
   PrioridadeAviso,
+  Assunto,
+  BancoQuestao,
+  BancoAlternativa,
+  LetraAlternativa,
+  DificuldadeQuestao,
+  TipoQuestao,
+  OrigemQuestao,
 } from '@/lib/types';
 import { hashPin } from './crypto';
 import dadosDemo from './dados-demo.json';
@@ -45,6 +52,9 @@ export interface MockDatabaseSchema {
   avisos: Aviso[];
   aluno_sessoes: AlunoSessao[];
   pin_tentativas: PinTentativa[];
+  assuntos: Assunto[];
+  banco_questoes: BancoQuestao[];
+  banco_alternativas: BancoAlternativa[];
 }
 
 
@@ -180,7 +190,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       nome: '6º Ano B',
       serie: '6º Ano',
       segmento: 'fund2',
-      ano_letivo: 2026,
+      ano_letivo: 2025,
       codigo_acesso: 'CIEN6B',
       ativa: true,
     },
@@ -1000,6 +1010,59 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     });
   }
 
+  // 14. Banco de Questões e Assuntos (Fase H1)
+  const assuntos: Assunto[] = [];
+  const banco_questoes: BancoQuestao[] = [];
+  const banco_alternativas: BancoAlternativa[] = [];
+
+  if (dadosDemo.assuntos) {
+    for (const ass of dadosDemo.assuntos) {
+      assuntos.push({
+        id: ass.id,
+        created_at: agora,
+        escola_id: escolaId,
+        disciplina_id: ass.disciplina_id,
+        nome: ass.nome,
+      });
+    }
+  }
+
+  if (dadosDemo.banco_questoes) {
+    for (const bq of dadosDemo.banco_questoes) {
+      banco_questoes.push({
+        id: bq.id,
+        created_at: agora,
+        escola_id: escolaId,
+        disciplina_id: bq.disciplina_id,
+        assunto_id: bq.assunto_id,
+        criado_por: bq.criado_por,
+        serie: bq.serie,
+        tipo: bq.tipo as TipoQuestao,
+        dificuldade: bq.dificuldade as DificuldadeQuestao,
+        enunciado: bq.enunciado,
+        imagem_url: bq.imagem_url,
+        dica: bq.dica,
+        explicacao: bq.explicacao,
+        resposta_esperada: bq.resposta_esperada,
+        origem: bq.origem as OrigemQuestao,
+        arquivada: bq.arquivada,
+        versao: 1,
+      });
+
+      for (const alt of bq.alternativas) {
+        banco_alternativas.push({
+          id: `alt-${bq.id}-${alt.letra.toLowerCase()}`,
+          created_at: agora,
+          banco_questao_id: bq.id,
+          letra: alt.letra as LetraAlternativa,
+          texto: alt.texto,
+          correta: alt.correta,
+          por_que_errou: alt.por_que_errou,
+        });
+      }
+    }
+  }
+
   return {
     versao: 1,
     versao_seed: dadosDemo.versao_seed,
@@ -1018,5 +1081,8 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     avisos,
     aluno_sessoes: [],
     pin_tentativas: [],
+    assuntos,
+    banco_questoes,
+    banco_alternativas,
   };
 }

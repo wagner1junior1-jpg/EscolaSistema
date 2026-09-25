@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { AppShell } from '@/components/layout/AppShell';
-import { Card, CardContent } from '@/components/ui';
+import { Card, CardContent, Button } from '@/components/ui';
 import { professorService, OfertaDetalhada } from '@/services';
 import {
   GraduationCap,
@@ -15,6 +15,7 @@ import {
   Send,
   Archive,
   AlertCircle,
+  Database,
 } from 'lucide-react';
 
 interface OfertaComContagem extends OfertaDetalhada {
@@ -110,6 +111,17 @@ export const ProfessorDashboardPage: React.FC = () => {
                 atividades, avaliações e exercícios diagnósticos.
               </p>
             </div>
+          </div>
+
+          <div className="shrink-0">
+            <Button
+              variant="outline"
+              leftIcon={<Database className="w-4 h-4 text-indigo-600" />}
+              onClick={() => navigate('/professor/banco')}
+              className="border-slate-300 hover:border-indigo-400 font-semibold"
+            >
+              Banco de questões
+            </Button>
           </div>
         </div>
 

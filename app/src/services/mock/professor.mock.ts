@@ -105,6 +105,7 @@ export class MockProfessorService implements ProfessorService {
         turma_codigo: turma?.codigo_acesso || '',
         disciplina_nome: disciplina?.nome || 'Disciplina',
         professor_nome: usuario.nome,
+        turma_serie: turma?.serie,
       };
     });
   }
@@ -490,6 +491,11 @@ export class MockProfessorService implements ProfessorService {
           enunciado: qPayload.enunciado.trim(),
           dica: qPayload.dica ? qPayload.dica.trim() : null,
           explicacao: qPayload.explicacao ? qPayload.explicacao.trim() : null,
+          banco_questao_id: qPayload.banco_questao_id || null,
+          assunto_id: qPayload.assunto_id || null,
+          tipo: 'objetiva',
+          imagem_url: null,
+          resposta_esperada: null,
         };
         db.questoes.push(questao);
       } else {
@@ -497,6 +503,12 @@ export class MockProfessorService implements ProfessorService {
         questao.enunciado = qPayload.enunciado.trim();
         questao.dica = qPayload.dica ? qPayload.dica.trim() : null;
         questao.explicacao = qPayload.explicacao ? qPayload.explicacao.trim() : null;
+        if (qPayload.banco_questao_id !== undefined) {
+          questao.banco_questao_id = qPayload.banco_questao_id;
+        }
+        if (qPayload.assunto_id !== undefined) {
+          questao.assunto_id = qPayload.assunto_id;
+        }
       }
 
       // Reatribuição das alternativas da questão

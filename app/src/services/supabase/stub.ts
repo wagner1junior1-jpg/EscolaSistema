@@ -11,6 +11,7 @@ import {
   ProfessorService,
   AlunoService,
   RelatorioService,
+  BancoService,
 } from '../contracts';
 
 const ERR_MSG = 'Supabase ainda não configurado';
@@ -206,3 +207,34 @@ export class SupabaseRelatorioServiceStub implements RelatorioService {
     throw new Error(ERR_MSG);
   }
 }
+
+export class SupabaseBancoServiceStub implements BancoService {
+  async listarAssuntos(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async criarAssunto(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async listarCombinacoesDoProfessor(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async listarBanco(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async salvarQuestaoBanco(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async duplicarQuestaoBanco(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async arquivarQuestaoBanco(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async adicionarDoBanco(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+  async sortearDoBanco(): Promise<never> {
+    throw new Error(ERR_MSG);
+  }
+}
+

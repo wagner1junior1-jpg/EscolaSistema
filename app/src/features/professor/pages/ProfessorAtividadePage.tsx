@@ -10,16 +10,22 @@ import {
   Input,
   Textarea,
   Select,
+  Modal,
   ConfirmDialog,
   useToast,
 } from '@/components/ui';
 import {
   professorService,
   gestaoService,
+  bancoService,
   AtividadeCompleta,
   Periodo,
   ModoAtividade,
   NovaQuestaoPayload,
+  BancoQuestao,
+  Assunto,
+  DificuldadeQuestao,
+  OfertaDetalhada,
 } from '@/services';
 import {
   ArrowLeft,
@@ -34,6 +40,8 @@ import {
   AlertCircle,
   HelpCircle,
   Check,
+  Database,
+  Shuffle,
 } from 'lucide-react';
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'] as const;
@@ -53,6 +61,10 @@ interface QuestaoEditor {
   enunciado: string;
   dica?: string | null;
   explicacao?: string | null;
+  banco_questao_id?: string | null;
+  assunto_id?: string | null;
+  salvar_no_banco?: boolean;
+  dificuldade?: DificuldadeQuestao;
   alternativas: AlternativaEditor[];
 }
 
@@ -66,6 +78,26 @@ export const ProfessorAtividadePage: React.FC = () => {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
+
+  // Oferta e Assuntos da Atividade
+  const [ofertaAtual, setOfertaAtual] = useState<OfertaDetalhada | null>(null);
+  const [assuntosOferta, setAssuntosOferta] = useState<Assunto[]>([]);
+
+  // Modal Banco de Questões
+  const [modalBancoAberto, setModalBancoAberto] = useState(false);
+  const [abaBanco, setAbaBanco] = useState<'escolher' | 'sortear'>('escolher');
+  const [questoesBanco, setQuestoesBanco] = useState<BancoQuestao[]>([]);
+  const [carregandoBanco, setCarregandoBanco] = useState(false);
+  const [bancoSelecionadas, setBancoSelecionadas] = useState<string[]>([]);
+  const [filtroAssuntoBanco, setFiltroAssuntoBanco] = useState<string>('todos');
+  const [buscaBanco, setBuscaBanco] = useState<string>('');
+
+  // Sorteio
+  const [sorteioAssuntoId, setSorteioAssuntoId] = useState<string>('');
+  const [sorteioQtdFacil, setSorteioQtdFacil] = useState<number>(0);
+  const [sorteioQtdMedio, setSorteioQtdMedio] = useState<number>(0);
+  const [sorteioQtdDificil, setSorteioQtdDificil] = useState<number>(0);
+  const [executandoBanco, setExecutandoBanco] = useState(false);
 
   // Metadados da atividade
   const [titulo, setTitulo] = useState('');
@@ -93,9 +125,10 @@ export const ProfessorAtividadePage: React.FC = () => {
     setErroCarregamento(null);
 
     try {
-      const [ativCarregada, listaPeriodos] = await Promise.all([
+      const [ativCarregada, listaPeriodos, ofertas] = await Promise.all([
         professorService.obterAtividade(id),
         gestaoService.listarPeriodos(),
+        professorService.minhasOfertas(),
       ]);
 
       if (!ativCarregada) {
@@ -104,6 +137,18 @@ export const ProfessorAtividadePage: React.FC = () => {
 
       setAtividade(ativCarregada);
       setPeriodos(listaPeriodos);
+
+      const ofEncontrada = ofertas.find((o) => o.id === ativCarregada.oferta_id) || null;
+      setOfertaAtual(ofEncontrada);
+
+      if (ofEncontrada) {
+        try {
+          const listaAssuntos = await bancoService.listarAssuntos(ofEncontrada.disciplina_id);
+          setAssuntosOferta(listaAssuntos);
+        } catch (e) {
+          console.error('Falha ao carregar assuntos da oferta:', e);
+        }
+      }
 
       // Popula campos de cabeçalho
       setTitulo(ativCarregada.titulo);
@@ -121,6 +166,10 @@ export const ProfessorAtividadePage: React.FC = () => {
           enunciado: q.enunciado || '',
           dica: q.dica || '',
           explicacao: q.explicacao || '',
+          banco_questao_id: q.banco_questao_id || null,
+          assunto_id: q.assunto_id || null,
+          salvar_no_banco: false,
+          dificuldade: 'facil',
           alternativas: (q.alternativas || [])
             .sort((a, b) => a.letra.localeCompare(b.letra))
             .map((alt, altIdx) => ({
@@ -327,6 +376,79 @@ export const ProfessorAtividadePage: React.FC = () => {
     setTemAlteracoesNaoSalvas(true);
   };
 
+  // Handlers para o Modal Banco de Questões
+  const handleAbrirModalBanco = async () => {
+    if (!ofertaAtual) return;
+    setModalBancoAberto(true);
+    setCarregandoBanco(true);
+    setBancoSelecionadas([]);
+    try {
+      const lista = await bancoService.listarBanco({
+        disciplina_id: ofertaAtual.disciplina_id,
+        serie: ofertaAtual.turma_serie || '',
+      });
+      setQuestoesBanco(lista);
+      if (assuntosOferta.length > 0 && !sorteioAssuntoId) {
+        setSorteioAssuntoId(assuntosOferta[0].id);
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao listar banco.');
+    } finally {
+      setCarregandoBanco(false);
+    }
+  };
+
+  const handleAdicionarSelecionadas = async () => {
+    if (!atividade || bancoSelecionadas.length === 0) return;
+    setExecutandoBanco(true);
+    try {
+      await bancoService.adicionarDoBanco(atividade.id, bancoSelecionadas);
+      toast.success(`${bancoSelecionadas.length} questão(ões) adicionada(s) do banco!`);
+      setModalBancoAberto(false);
+      setBancoSelecionadas([]);
+      await carregarAtividade();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar do banco.');
+    } finally {
+      setExecutandoBanco(false);
+    }
+  };
+
+  const handleSortearEAdicionar = async () => {
+    if (!atividade || !sorteioAssuntoId) {
+      toast.error('Selecione um assunto para o sorteio.');
+      return;
+    }
+    const facil = Number(sorteioQtdFacil) || 0;
+    const medio = Number(sorteioQtdMedio) || 0;
+    const dificil = Number(sorteioQtdDificil) || 0;
+    if (facil + medio + dificil <= 0) {
+      toast.error('Informe a quantidade de pelo menos uma dificuldade.');
+      return;
+    }
+    setExecutandoBanco(true);
+    try {
+      const res = await bancoService.sortearDoBanco(atividade.id, sorteioAssuntoId, {
+        facil,
+        medio,
+        dificil,
+      });
+      if (res.aviso) {
+        toast.warning(res.aviso);
+      }
+      toast.success(`${res.adicionadas} questão(ões) sorteada(s) e adicionada(s)!`);
+      setModalBancoAberto(false);
+      setSorteioQtdFacil(0);
+      setSorteioQtdMedio(0);
+      setSorteioQtdDificil(0);
+      await carregarAtividade();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao sortear questões.');
+    } finally {
+      setExecutandoBanco(false);
+    }
+  };
+
   // Validação e Salvamento
   const handleSalvar = async () => {
     if (!atividade || isEncerrada) return;
@@ -373,6 +495,32 @@ export const ProfessorAtividadePage: React.FC = () => {
 
     setSalvando(true);
     try {
+      // Se houver questões manuais com salvar_no_banco marcado, salvar no banco primeiro
+      for (const q of questoes) {
+        if (q.salvar_no_banco && ofertaAtual) {
+          if (!q.assunto_id) {
+            toast.error('Selecione o assunto da questão para salvá-la no banco.');
+            setSalvando(false);
+            return;
+          }
+          await bancoService.salvarQuestaoBanco({
+            disciplina_id: ofertaAtual.disciplina_id,
+            serie: ofertaAtual.turma_serie || '',
+            assunto_id: q.assunto_id,
+            dificuldade: q.dificuldade || 'facil',
+            enunciado: q.enunciado.trim(),
+            dica: q.dica ? q.dica.trim() : null,
+            explicacao: q.explicacao ? q.explicacao.trim() : null,
+            alternativas: q.alternativas.map((alt, altIdx) => ({
+              letra: LETRAS[altIdx],
+              texto: alt.texto.trim(),
+              correta: alt.correta,
+              por_que_errou: alt.correta ? null : alt.por_que_errou ? alt.por_que_errou.trim() : null,
+            })),
+          });
+        }
+      }
+
       // Atualiza metadados da atividade
       await professorService.atualizarAtividade(atividade.id, {
         titulo: titulo.trim(),
@@ -389,6 +537,8 @@ export const ProfessorAtividadePage: React.FC = () => {
         enunciado: q.enunciado.trim(),
         dica: q.dica ? q.dica.trim() : null,
         explicacao: q.explicacao ? q.explicacao.trim() : null,
+        banco_questao_id: q.banco_questao_id || null,
+        assunto_id: q.assunto_id || null,
         alternativas: q.alternativas.map((alt, altIdx) => ({
           id: alt.id,
           letra: LETRAS[altIdx],
@@ -411,6 +561,26 @@ export const ProfessorAtividadePage: React.FC = () => {
       setSalvando(false);
     }
   };
+
+  const questoesBancoFiltradas = questoesBanco.filter((q) => {
+    if (filtroAssuntoBanco !== 'todos' && q.assunto_id !== filtroAssuntoBanco) {
+      return false;
+    }
+    if (buscaBanco.trim()) {
+      const termo = buscaBanco.toLowerCase();
+      const matchEnunciado = q.enunciado.toLowerCase().includes(termo);
+      const matchAlt = (q.alternativas || []).some((a) => a.texto.toLowerCase().includes(termo));
+      if (!matchEnunciado && !matchAlt) return false;
+    }
+    return true;
+  });
+
+  const estoqueAssunto = questoesBanco.filter(
+    (q) => !sorteioAssuntoId || q.assunto_id === sorteioAssuntoId
+  );
+  const estoqueFacil = estoqueAssunto.filter((q) => q.dificuldade === 'facil').length;
+  const estoqueMedio = estoqueAssunto.filter((q) => q.dificuldade === 'medio').length;
+  const estoqueDificil = estoqueAssunto.filter((q) => q.dificuldade === 'dificil').length;
 
   return (
     <AppShell>
@@ -624,14 +794,24 @@ export const ProfessorAtividadePage: React.FC = () => {
                 </div>
 
                 {isRascunho && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<Plus className="w-4 h-4" />}
-                    onClick={handleAdicionarQuestao}
-                  >
-                    Adicionar questão
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Database className="w-4 h-4 text-indigo-600" />}
+                      onClick={handleAbrirModalBanco}
+                    >
+                      Adicionar do banco
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Plus className="w-4 h-4" />}
+                      onClick={handleAdicionarQuestao}
+                    >
+                      Adicionar questão
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -642,18 +822,27 @@ export const ProfessorAtividadePage: React.FC = () => {
                     Nenhuma questão adicionada
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
-                    Esta atividade ainda não possui questões. Clique no botão abaixo para criar a primeira questão.
+                    Esta atividade ainda não possui questões. Adicione questões do banco ou crie manualmente.
                   </p>
                   {isRascunho && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      leftIcon={<Plus className="w-4 h-4" />}
-                      onClick={handleAdicionarQuestao}
-                      className="mt-2"
-                    >
-                      Adicionar primeira questão
-                    </Button>
+                    <div className="flex items-center justify-center gap-3 pt-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        leftIcon={<Database className="w-4 h-4" />}
+                        onClick={handleAbrirModalBanco}
+                      >
+                        Adicionar do banco
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Plus className="w-4 h-4" />}
+                        onClick={handleAdicionarQuestao}
+                      >
+                        Adicionar primeira questão
+                      </Button>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -670,6 +859,12 @@ export const ProfessorAtividadePage: React.FC = () => {
                             <span className="font-heading font-bold text-sm text-slate-800">
                               Questão {qIndex + 1}
                             </span>
+                            {q.banco_questao_id && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                <Database className="w-3 h-3" />
+                                Do banco de questões
+                              </span>
+                            )}
                           </div>
 
                           {/* Controles de Ordenação e Exclusão */}
@@ -879,15 +1074,89 @@ export const ProfessorAtividadePage: React.FC = () => {
                             helperText="Exibida ao aluno no feedback da resposta."
                           />
                         </div>
+                        {/* Opção para salvar no banco de questões */}
+                        {!q.banco_questao_id && isRascunho && (
+                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={!!q.salvar_no_banco}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setQuestoes((prev) => {
+                                    const c = [...prev];
+                                    c[qIndex] = {
+                                      ...c[qIndex],
+                                      salvar_no_banco: checked,
+                                      assunto_id: checked ? c[qIndex].assunto_id || assuntosOferta[0]?.id : c[qIndex].assunto_id,
+                                    };
+                                    return c;
+                                  });
+                                  setTemAlteracoesNaoSalvas(true);
+                                }}
+                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                              />
+                              <span>Salvar também no banco de questões</span>
+                            </label>
+
+                            {q.salvar_no_banco && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <Select
+                                  label="Assunto *"
+                                  value={q.assunto_id || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setQuestoes((prev) => {
+                                      const c = [...prev];
+                                      c[qIndex] = { ...c[qIndex], assunto_id: val };
+                                      return c;
+                                    });
+                                    setTemAlteracoesNaoSalvas(true);
+                                  }}
+                                  options={[
+                                    { value: '', label: 'Selecione um assunto...' },
+                                    ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
+                                  ]}
+                                />
+                                <Select
+                                  label="Dificuldade *"
+                                  value={q.dificuldade || 'facil'}
+                                  onChange={(e) => {
+                                    const val = e.target.value as DificuldadeQuestao;
+                                    setQuestoes((prev) => {
+                                      const c = [...prev];
+                                      c[qIndex] = { ...c[qIndex], dificuldade: val };
+                                      return c;
+                                    });
+                                    setTemAlteracoesNaoSalvas(true);
+                                  }}
+                                  options={[
+                                    { value: 'facil', label: 'Fácil' },
+                                    { value: 'medio', label: 'Médio' },
+                                    { value: 'dificil', label: 'Difícil' },
+                                  ]}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
                 </div>
               )}
 
-              {/* Botão de Rodapé para Adicionar Questão */}
+              {/* Botões de Rodapé para Adicionar Questão */}
               {isRascunho && questoes.length > 0 && (
-                <div className="pt-2 text-center">
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Button
+                    variant="outline"
+                    leftIcon={<Database className="w-4 h-4 text-indigo-600" />}
+                    onClick={handleAbrirModalBanco}
+                    className="w-full sm:w-auto"
+                  >
+                    Adicionar do banco
+                  </Button>
                   <Button
                     variant="outline"
                     leftIcon={<Plus className="w-4 h-4" />}
@@ -937,6 +1206,222 @@ export const ProfessorAtividadePage: React.FC = () => {
         cancelText="Continuar editando"
         variant="danger"
       />
+
+      {/* Modal: Adicionar do Banco de Questões */}
+      <Modal
+        isOpen={modalBancoAberto}
+        onClose={() => setModalBancoAberto(false)}
+        title="Banco de Questões"
+        description={
+          ofertaAtual
+            ? `${ofertaAtual.disciplina_nome || 'Disciplina'} • ${ofertaAtual.turma_nome || ofertaAtual.turma_serie || ''}`
+            : undefined
+        }
+        maxWidth="2xl"
+      >
+        <div className="space-y-4">
+          {/* Abas */}
+          <div className="flex border-b border-slate-200">
+            <button
+              type="button"
+              onClick={() => setAbaBanco('escolher')}
+              className={`pb-2.5 px-4 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+                abaBanco === 'escolher'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Escolher questões
+            </button>
+            <button
+              type="button"
+              onClick={() => setAbaBanco('sortear')}
+              className={`pb-2.5 px-4 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+                abaBanco === 'sortear'
+                  ? 'border-indigo-600 text-indigo-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Sortear questões
+            </button>
+          </div>
+
+          {carregandoBanco ? (
+            <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+              <Loader2 className="w-7 h-7 animate-spin text-indigo-600" />
+              <p className="text-xs">Carregando banco de questões...</p>
+            </div>
+          ) : abaBanco === 'escolher' ? (
+            <div className="space-y-4">
+              {/* Filtros */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="Filtrar por Assunto"
+                  value={filtroAssuntoBanco}
+                  onChange={(e) => setFiltroAssuntoBanco(e.target.value)}
+                  options={[
+                    { value: 'todos', label: 'Todos os assuntos' },
+                    ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
+                  ]}
+                />
+                <Input
+                  label="Buscar enunciado"
+                  value={buscaBanco}
+                  onChange={(e) => setBuscaBanco(e.target.value)}
+                  placeholder="Buscar texto..."
+                />
+              </div>
+
+              {/* Lista com checkboxes */}
+              <div className="max-h-80 overflow-y-auto space-y-2.5 pr-1">
+                {questoesBancoFiltradas.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-8">
+                    Nenhuma questão encontrada para os filtros selecionados.
+                  </p>
+                ) : (
+                  questoesBancoFiltradas.map((bq) => {
+                    const isSelected = bancoSelecionadas.includes(bq.id);
+                    return (
+                      <div
+                        key={bq.id}
+                        onClick={() => {
+                          setBancoSelecionadas((prev) =>
+                            prev.includes(bq.id) ? prev.filter((x) => x !== bq.id) : [...prev, bq.id]
+                          );
+                        }}
+                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                          isSelected
+                            ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-400/30'
+                            : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            className="mt-1 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                          />
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${
+                                  bq.dificuldade === 'facil'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : bq.dificuldade === 'medio'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                                }`}
+                              >
+                                {bq.dificuldade}
+                              </span>
+                              <span className="text-[11px] font-medium text-slate-500">
+                                {bq.assunto_nome}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-800 line-clamp-2 leading-relaxed">
+                              {bq.enunciado}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Botão Adicionar Selecionadas */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-200">
+                <span className="text-xs text-slate-500">
+                  {bancoSelecionadas.length} selecionada(s)
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setModalBancoAberto(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={bancoSelecionadas.length === 0 || executandoBanco}
+                    isLoading={executandoBanco}
+                    onClick={handleAdicionarSelecionadas}
+                  >
+                    Adicionar selecionadas ({bancoSelecionadas.length})
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Aba Sortear */
+            <div className="space-y-4">
+              <Select
+                label="Selecione o Assunto *"
+                value={sorteioAssuntoId}
+                onChange={(e) => setSorteioAssuntoId(e.target.value)}
+                options={assuntosOferta.map((a) => ({ value: a.id, label: a.nome }))}
+              />
+
+              {/* Estoque disponível */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
+                <div className="font-semibold text-slate-700">Estoque disponível neste assunto:</div>
+                <div className="flex items-center gap-4">
+                  <span>Fáceis: <strong className="text-slate-900">{estoqueFacil}</strong></span>
+                  <span>Médias: <strong className="text-slate-900">{estoqueMedio}</strong></span>
+                  <span>Difíceis: <strong className="text-slate-900">{estoqueDificil}</strong></span>
+                </div>
+              </div>
+
+              {/* Quantidades desejadas */}
+              <div className="grid grid-cols-3 gap-3">
+                <Input
+                  label="Fáceis"
+                  type="number"
+                  min={0}
+                  max={estoqueFacil}
+                  value={sorteioQtdFacil}
+                  onChange={(e) => setSorteioQtdFacil(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                />
+                <Input
+                  label="Médias"
+                  type="number"
+                  min={0}
+                  max={estoqueMedio}
+                  value={sorteioQtdMedio}
+                  onChange={(e) => setSorteioQtdMedio(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                />
+                <Input
+                  label="Difíceis"
+                  type="number"
+                  min={0}
+                  max={estoqueDificil}
+                  value={sorteioQtdDificil}
+                  onChange={(e) => setSorteioQtdDificil(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                />
+              </div>
+
+              {/* Ações */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                <Button variant="ghost" size="sm" onClick={() => setModalBancoAberto(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<Shuffle className="w-4 h-4" />}
+                  disabled={
+                    (Number(sorteioQtdFacil) || 0) + (Number(sorteioQtdMedio) || 0) + (Number(sorteioQtdDificil) || 0) <= 0 ||
+                    executandoBanco
+                  }
+                  isLoading={executandoBanco}
+                  onClick={handleSortearEAdicionar}
+                >
+                  Sortear e adicionar
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </AppShell>
   );
 };

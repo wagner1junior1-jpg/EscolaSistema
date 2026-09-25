@@ -34,6 +34,9 @@ import {
   DesempenhoTurmaDisciplinaItem,
   AlunoEmAtencaoItem,
   QuestaoCriticaEscolaItem,
+  Assunto,
+  BancoQuestao,
+  DificuldadeQuestao,
 } from '@/lib/types';
 
 // Entrada para criação/edição de questão e suas alternativas
@@ -43,6 +46,10 @@ export interface NovaQuestaoPayload {
   enunciado: string;
   dica?: string | null;
   explicacao?: string | null;
+  banco_questao_id?: string | null;
+  assunto_id?: string | null;
+  salvar_no_banco?: boolean;
+  dificuldade?: DificuldadeQuestao;
   alternativas: Array<{
     id?: string;
     letra?: 'A' | 'B' | 'C' | 'D' | 'E';
@@ -50,6 +57,40 @@ export interface NovaQuestaoPayload {
     correta: boolean;
     por_que_errou?: string | null;
   }>;
+}
+
+export interface SalvarBancoQuestaoPayload {
+  id?: string;
+  disciplina_id: string;
+  assunto_id: string;
+  serie: string;
+  dificuldade: DificuldadeQuestao;
+  enunciado: string;
+  dica?: string | null;
+  explicacao?: string | null;
+  versao?: number;
+  alternativas: Array<{
+    id?: string;
+    letra?: 'A' | 'B' | 'C' | 'D' | 'E';
+    texto: string;
+    correta: boolean;
+    por_que_errou?: string | null;
+  }>;
+}
+
+export interface FiltrosBanco {
+  disciplina_id: string;
+  serie: string;
+  assunto_id?: string;
+  dificuldade?: DificuldadeQuestao;
+  escopo?: 'minhas' | 'escola';
+}
+
+export interface CombinacaoProfessor {
+  disciplina_id: string;
+  disciplina_nome: string;
+  serie: string;
+  label: string;
 }
 
 // 1. AuthService
@@ -139,3 +180,23 @@ export interface RelatorioService {
   alunosEmAtencao(periodoId: string): Promise<AlunoEmAtencaoItem[]>;
   questoesCriticasEscola(periodoId: string): Promise<QuestaoCriticaEscolaItem[]>;
 }
+
+// 6. ServicoBanco / BancoService (docs/ESPECIFICACAO.md 9.2, 9.5)
+export interface ServicoBanco {
+  listarAssuntos(disciplinaId: string): Promise<Assunto[]>;
+  criarAssunto(disciplinaId: string, nome: string): Promise<Assunto>;
+  listarCombinacoesDoProfessor(): Promise<CombinacaoProfessor[]>;
+  listarBanco(filtros: FiltrosBanco): Promise<BancoQuestao[]>;
+  salvarQuestaoBanco(dados: SalvarBancoQuestaoPayload): Promise<BancoQuestao>;
+  duplicarQuestaoBanco(id: string): Promise<BancoQuestao>;
+  arquivarQuestaoBanco(id: string): Promise<void>;
+  adicionarDoBanco(atividadeId: string, bancoIds: string[]): Promise<void>;
+  sortearDoBanco(
+    atividadeId: string,
+    assuntoId: string,
+    quantidades: { facil: number; medio: number; dificil: number }
+  ): Promise<{ adicionadas: number; aviso?: string }>;
+}
+
+export type BancoService = ServicoBanco;
+

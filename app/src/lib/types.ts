@@ -119,6 +119,11 @@ export interface Questao {
   enunciado: string;
   dica: string | null;
   explicacao: string | null;
+  banco_questao_id?: string | null;
+  assunto_id?: string | null;
+  tipo?: TipoQuestao;
+  imagem_url?: string | null;
+  resposta_esperada?: string | null;
 }
 
 // 10. alternativas
@@ -175,6 +180,55 @@ export interface PinTentativa {
   aluno_id: string;
   tentativa_em: string;
   sucesso: boolean;
+}
+
+// 15. assuntos (Fase H1 - docs/ESPECIFICACAO.md 9.2)
+export interface Assunto {
+  id: string;
+  created_at: string;
+  escola_id: string;
+  disciplina_id: string;
+  nome: string;
+}
+
+// 16. banco_questoes (Fase H1 - docs/ESPECIFICACAO.md 9.2)
+export type DificuldadeQuestao = 'facil' | 'medio' | 'dificil';
+export type TipoQuestao = 'objetiva' | 'discursiva';
+export type OrigemQuestao = 'manual' | 'ia';
+
+export interface BancoQuestao {
+  id: string;
+  created_at: string;
+  escola_id: string;
+  disciplina_id: string;
+  assunto_id: string;
+  criado_por: string;
+  serie: string;
+  tipo: TipoQuestao;
+  dificuldade: DificuldadeQuestao;
+  enunciado: string;
+  imagem_url: string | null;
+  dica: string | null;
+  explicacao: string | null;
+  resposta_esperada: string | null;
+  origem: OrigemQuestao;
+  arquivada: boolean;
+  versao?: number;
+  alternativas?: BancoAlternativa[];
+  autor_nome?: string;
+  assunto_nome?: string;
+  disciplina_nome?: string;
+}
+
+// 17. banco_alternativas (Fase H1 - docs/ESPECIFICACAO.md 9.2)
+export interface BancoAlternativa {
+  id: string;
+  created_at: string;
+  banco_questao_id: string;
+  letra: LetraAlternativa;
+  texto: string;
+  correta: boolean;
+  por_que_errou: string | null;
 }
 
 /* =========================================================================
@@ -315,6 +369,7 @@ export interface OfertaDetalhada extends Oferta {
   turma_codigo: string;
   disciplina_nome: string;
   professor_nome: string;
+  turma_serie?: string;
 }
 
 // Item do mapa de calor de uma questão
