@@ -7,7 +7,7 @@
 
 SaberPontual é uma **plataforma de questões** para escolas. Tem três portais:
 1. **Aluno**: entra com código da turma + PIN, resolve as atividades e vê os avisos e o próprio desempenho.
-2. **Professor**: cria atividades e questões, acompanha acertos e erros (mapa de calor, desempenho da turma, ficha do aluno) e manda recados para a turma.
+2. **Professor**: monta o banco de questões (por matéria e assunto, com ajuda de IA a partir de fotos — ver seção 9), cria atividades, acompanha acertos e erros (mapa de calor, desempenho da turma, ficha do aluno) e manda recados para a turma.
 3. **Gestão escolar** (direção e coordenação): cadastros (turmas, disciplinas, professores, alunos, períodos), visão de desempenho da escola e mural institucional.
 
 Não fazem parte do produto: frequência/chamada, conselho de classe e um acesso separado para pais ou responsáveis.
@@ -144,4 +144,97 @@ Todas as tabelas: `id uuid pk default gen_random_uuid()`, `created_at timestampt
 
 ## 8. Fora do escopo do MVP (não implementar sem pedido)
 
-Frequência/chamada, conselho de classe, acesso separado de pais/responsáveis, imagens nas questões, questões dissertativas, app nativo, chat, pontos/estrelas/medalhas/ranking (confete e sons de incentivo são permitidos, ver 7.2), caderno de erros, notificações push, integração com outros sistemas, pagamentos, multi-idioma.
+Frequência/chamada, conselho de classe, acesso separado de pais/responsáveis, app nativo, chat, pontos/estrelas/medalhas/ranking (confete e sons de incentivo são permitidos, ver 7.2), caderno de erros, notificações push, integração com outros sistemas, pagamentos, multi-idioma.
+
+## 9. Fase H — Banco de questões, IA, imagens e discursivas (aprovado pelo Wagner em 25/09/2026)
+
+Objetivo: o professor monta um banco de questões por matéria e assunto e cria questões em minutos com ajuda de IA a partir de uma foto do conteúdo. Os relatórios atuais (seções 6 e 7, Fases E e F) continuam valendo.
+
+### 9.1 Decisões
+- Discursivas são corrigidas **só pelo professor**, com 3 notas: **certo = 1**, **parcial = 0,5** e **errado = 0**.
+- O banco é **compartilhado entre os professores da mesma matéria e da mesma escola**. Só o autor edita; os outros usam "Duplicar para editar". A gestão vê o banco em modo leitura.
+- A IA **nunca publica sozinha**. Tudo o que ela gera entra como sugestão, e o professor aprova, edita ou descarta cada questão.
+- Ao adicionar uma questão do banco a uma atividade, o sistema **copia** a questão para a atividade (guardando `banco_questao_id`). Editar o banco depois não muda atividades já montadas.
+
+### 9.2 Modelo de dados (acréscimos)
+- **assuntos**: escola_id, disciplina_id, nome (ex.: "Frações"). unique(disciplina_id, nome). Professor da disciplina cria; gestão edita/arquiva.
+- **banco_questoes**:
+  - vínculo: escola_id, disciplina_id, assunto_id, criado_por → perfis;
+  - classificação: serie (ex.: "7º Ano"), tipo (`objetiva`|`discursiva`), dificuldade (`facil`|`medio`|`dificil`);
+  - conteúdo: enunciado, imagem_url null, dica null, explicacao null, resposta_esperada null (só discursiva; é o gabarito para o professor);
+  - controle: origem (`manual`|`ia`), arquivada bool.
+- **banco_alternativas**: banco_questao_id, letra, texto, correta, por_que_errou (as mesmas regras de `alternativas`).
+- **questoes** ganha: tipo, imagem_url null, resposta_esperada null, banco_questao_id null, assunto_id null.
+  - A discursiva não tem alternativas. A objetiva continua com 2 a 5 alternativas e exatamente 1 correta.
+- **respostas** ganha:
+  - `pontuacao numeric null`: 1 ou 0 na objetiva; 1, 0,5 ou 0 na discursiva; null enquanto não for corrigida;
+  - `texto_resposta text null`: máximo de 2000 caracteres;
+  - campos da correção: `correcao` (`pendente`|`certo`|`parcial`|`errado`) null, `comentario_professor` null, `corrigido_por` null, `corrigido_em` null.
+  - Na discursiva, alternativa_id e acertou ficam null.
+- **ia_geracoes** (controle de uso e custo): escola_id, professor_id, criado_em, qtd_fotos, qtd_objetivas, qtd_discursivas, status (`ok`|`erro`), custo_estimado null.
+- **escolas** ganha `cota_ia_mensal int` (padrão 200 gerações por mês).
+
+### 9.3 Cálculos (substituem as definições da seção 6 onde houver conflito)
+- **Aproveitamento** e **média** passam a usar `soma(pontuacao) / total de questões`. Na objetiva, isso dá o mesmo resultado de hoje.
+- Continua valendo só a 1ª resposta (tentativas e acertou_final não entram).
+- Uma atividade com discursiva **pendente de correção** fica "aguardando correção" para aquele aluno e só entra na média depois de corrigida. Na atividade encerrada, questão sem resposta vale 0.
+- **Questões críticas** e **mapa de calor** da discursiva: % = média da pontuação. Não há distrator; a tela mostra a distribuição certo/parcial/errado.
+
+### 9.4 Aluno e discursiva
+- O aluno digita a resposta (contador de caracteres; máximo de 2000). Na discursiva não existe "Tentar novamente".
+- **Modo exercício:** depois de enviar, aparece "Resposta enviada ✓. Seu professor vai corrigir." e a explicação, se houver. A resposta esperada só aparece depois da correção.
+- **Modo prova:** igual à objetiva. Nada é mostrado até a prova terminar e, na discursiva, até ser corrigida.
+- Quando o professor corrige, o aluno vê a nota (certo, parcial ou errado) e o comentário no resultado da atividade.
+- As mesmas regras de segurança da seção 5 valem para resposta_esperada, explicação e a alternativa correta.
+
+### 9.5 Professor — Banco de questões
+- Novo item no menu: **Banco de questões**.
+- Filtros: disciplina (só as dele), assunto, série, tipo, dificuldade, origem, e "Minhas" ou "Da escola".
+- Ações: Nova questão, **Gerar com IA**, Editar (só o autor), Duplicar para editar, Arquivar, **Adicionar à atividade** (só atividades em rascunho da mesma disciplina).
+- No editor de atividade, **"Adicionar do banco"**: escolhe o assunto e a quantidade por dificuldade (ex.: 5 fáceis e 3 médias) ou marca uma a uma.
+- Questão nova criada direto na atividade: o professor pode marcar "Salvar também no banco".
+
+### 9.6 Professor — Gerar com IA
+1. O professor informa:
+   - a disciplina, o assunto (pode criar um novo) e a série;
+   - a quantidade de objetivas (0 a 10) e de discursivas (0 a 5), com pelo menos 1 no total;
+   - a dificuldade (fácil, médio, difícil ou misturada).
+2. Envia de 1 a 5 fotos (JPG, PNG ou WEBP), ou cola um texto. O navegador reduz cada foto para no máximo 1600px e cerca de 300 KB antes de enviar.
+3. Opções:
+   - "Anexar a foto às questões" (vira imagem_url; senão a foto só é usada para ler o conteúdo);
+   - "Só transcrever o texto" (devolve o texto lido para o professor editar, sem gerar questões).
+4. A IA devolve JSON, validado por zod:
+   - objetivas com 4 alternativas, 1 correta, por_que_errou em cada errada, explicação e dica;
+   - discursivas com resposta_esperada e explicação;
+   - linguagem adequada à série.
+   Se o JSON vier inválido, o sistema tenta mais uma vez e depois mostra o erro.
+5. **Tela de revisão:** um cartão por questão, com os botões Aprovar, Editar e Descartar, e "Aprovar todas" depois de editar. Só as aprovadas vão para o banco (origem `ia`).
+6. Aviso fixo na tela de envio: "Não envie fotos com nome ou dados de alunos."
+7. Limite: a cota mensal da escola. Ao atingir, aparece a mensagem "Limite de gerações do mês atingido. Fale com a direção.". A gestão vê o uso do mês na Início.
+
+### 9.7 Onde a IA roda
+- Contrato `services/contracts.ts` → `ServicoIA`, com `gerarQuestoes(params)` e `transcreverImagem(fotos)`.
+- **Mock:** `services/mock/ia.ts` devolve questões fixas coerentes com o assunto e a série pedidos, após 1,5 s. Tem um modo de erro para teste. Não chama nenhuma API externa e não gasta nada.
+- **Supabase:** Edge Function `gerar-questoes`.
+  - A chave do provedor de IA fica só nos secrets do Supabase, **nunca** no front nem no repositório.
+  - O provedor fica atrás da interface. Recomendado: modelo com visão da Anthropic (Claude), a ser confirmado.
+  - A função confere o papel professor, a cota da escola e registra em ia_geracoes.
+- **Imagens:**
+  - no Supabase, bucket privado `questoes` com URLs assinadas;
+  - no mock, data URL já comprimida. O mock deve avisar se o localStorage passar de 4 MB.
+
+### 9.8 Lista de reforço (sugestão 3 do Antigravity, aprovada)
+- Nova tabela **atividade_alunos** (atividade_id, aluno_id). Se ela não tiver linhas, a atividade vale para a turma toda; se tiver, só os alunos listados a veem.
+- Nos Resultados da atividade e nas Questões Críticas, o botão **"Criar reforço"** cria uma atividade **em rascunho**:
+  - modo exercício, na mesma oferta;
+  - com questões do banco dos mesmos assuntos das questões erradas (as mesmas questões podem entrar se o professor marcar);
+  - destinada só aos alunos que erraram (pontuação < 1 na 1ª resposta).
+- O professor revisa e publica. O reforço entra nas médias como qualquer atividade.
+
+### 9.9 Ordem de implementação
+- H1: assuntos + banco de questões + "Adicionar do banco" (sem IA).
+- H2: imagens nas questões (upload, compressão, exibição no player e no editor).
+- H3: discursivas (aluno, correção pelo professor com a fila "Correções pendentes", novos cálculos e relatórios).
+- H4: Gerar com IA no mock + tela de revisão + cota.
+- H5: Lista de reforço.
+- A Edge Function real entra junto com a migração para o Supabase.
