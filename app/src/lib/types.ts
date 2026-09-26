@@ -144,8 +144,10 @@ export interface ItemCorrecaoPendente {
   questao_id: string;
   aluno_id: string;
   aluno_nome: string;
+  nome_aluno: string;
   questao_ordem: number;
   questao_enunciado: string;
+  enunciado: string;
   resposta_esperada: string | null;
   texto_resposta: string | null;
   respondida_em: string;
@@ -157,11 +159,11 @@ export interface Resposta {
   created_at: string;
   aluno_id: string;
   questao_id: string;
-  alternativa_id: string;
-  acertou: boolean;
+  alternativa_id: string | null;
+  acertou: boolean | null;
   respondida_em: string;
   tentativas: number; // padrão 1
-  acertou_final: boolean;
+  acertou_final: boolean | null;
   texto_resposta?: string | null;
   pontuacao?: number | null;
   correcao?: StatusCorrecao | null;

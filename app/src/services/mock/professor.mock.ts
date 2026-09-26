@@ -39,6 +39,7 @@ import {
   calcularMediaPeriodo,
   faixaDesempenho,
   mediaDoAlunoNasAtividades,
+  pontuacaoDaResposta,
 } from '../calculos';
 
 export class MockProfessorService implements ProfessorService {
@@ -823,15 +824,90 @@ export class MockProfessorService implements ProfessorService {
     };
   }
 
-  async listarCorrecoesPendentes(_atividadeId: string): Promise<ItemCorrecaoPendente[]> {
-    throw new Error('Ainda não implementado');
+  async listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]> {
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    const usuario = await exigirUsuario(['professor']);
+
+    if (oferta.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    const db = await getDatabase();
+    const questoesDiscursivas = db.questoes.filter(
+      (q) => q.atividade_id === atividadeId && q.tipo === 'discursiva'
+    );
+    const questoesMap = new Map(questoesDiscursivas.map((q) => [q.id, q]));
+
+    const respostasPendentes = db.respostas.filter(
+      (r) => questoesMap.has(r.questao_id) && r.correcao === 'pendente'
+    );
+
+    respostasPendentes.sort(
+      (a, b) => new Date(a.respondida_em).getTime() - new Date(b.respondida_em).getTime()
+    );
+
+    return respostasPendentes.map((r) => {
+      const questao = questoesMap.get(r.questao_id)!;
+      const aluno = db.alunos.find((a) => a.id === r.aluno_id);
+      const nomeAluno = aluno ? aluno.nome_completo : 'Aluno';
+
+      return {
+        resposta_id: r.id,
+        atividade_id: atividade.id,
+        questao_id: questao.id,
+        aluno_id: r.aluno_id,
+        aluno_nome: nomeAluno,
+        nome_aluno: nomeAluno,
+        questao_ordem: questao.ordem,
+        questao_enunciado: questao.enunciado,
+        enunciado: questao.enunciado,
+        resposta_esperada: questao.resposta_esperada ?? null,
+        texto_resposta: r.texto_resposta ?? null,
+        respondida_em: r.respondida_em,
+      };
+    });
   }
 
   async corrigirResposta(
-    _respostaId: string,
-    _correcao: 'certo' | 'parcial' | 'errado',
-    _comentario?: string
+    respostaId: string,
+    correcao: 'certo' | 'parcial' | 'errado',
+    comentario?: string
   ): Promise<void> {
-    throw new Error('Ainda não implementado');
+    const db = await getDatabase();
+    const resposta = db.respostas.find((r) => r.id === respostaId);
+    if (!resposta) {
+      throw new Error('Resposta não encontrada.');
+    }
+
+    const questao = db.questoes.find((q) => q.id === resposta.questao_id);
+    if (!questao) {
+      throw new Error('Questão não encontrada.');
+    }
+
+    if (questao.tipo !== 'discursiva') {
+      throw new Error('Esta questão não é discursiva.');
+    }
+
+    const { oferta } = await this.obterOfertaDaAtividade(questao.atividade_id);
+    const usuario = await exigirUsuario(['professor']);
+
+    if (oferta.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    if (comentario && comentario.length > 500) {
+      throw new Error('O comentário do professor deve ter no máximo 500 caracteres.');
+    }
+
+    const pontuacao = pontuacaoDaResposta(questao, { correcao });
+    const agora = new Date().toISOString();
+
+    resposta.correcao = correcao;
+    resposta.pontuacao = pontuacao;
+    resposta.comentario_professor = comentario ? comentario.trim() : null;
+    resposta.corrigido_por = usuario.id;
+    resposta.corrigido_em = agora;
+
+    saveDatabase(db);
   }
 }

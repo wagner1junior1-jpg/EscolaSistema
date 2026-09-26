@@ -292,7 +292,7 @@ export class MockAlunoService implements AlunoService {
             dica: q.dica,
             alternativas: alternativasBase,
             respondida: true,
-            alternativa_respondida_id: respostaRegistrada.alternativa_id,
+            alternativa_respondida_id: respostaRegistrada.alternativa_id || undefined,
           };
         }
 
@@ -306,13 +306,13 @@ export class MockAlunoService implements AlunoService {
           dica: q.dica,
           alternativas: alternativasBase,
           respondida: true,
-          alternativa_respondida_id: respostaRegistrada.alternativa_id,
-          acertou: respostaRegistrada.acertou,
+          alternativa_respondida_id: respostaRegistrada.alternativa_id || undefined,
+          acertou: respostaRegistrada.acertou ?? undefined,
           alternativa_correta_id: altCorreta?.id,
           por_que_errou: respostaRegistrada.acertou ? null : altEscolhida?.por_que_errou || null,
           explicacao: q.explicacao,
           tentativas: respostaRegistrada.tentativas ?? 1,
-          acertou_final: respostaRegistrada.acertou_final ?? respostaRegistrada.acertou,
+          acertou_final: (respostaRegistrada.acertou_final ?? respostaRegistrada.acertou) ?? undefined,
         };
       }
 
@@ -367,6 +367,10 @@ export class MockAlunoService implements AlunoService {
 
     const questao = db.questoes.find((q) => q.id === questaoId);
     if (!questao) throw new Error('Questão não encontrada.');
+
+    if (questao.tipo === 'discursiva') {
+      throw new Error('Esta questão é discursiva e não aceita alternativas.');
+    }
 
     const atividade = db.atividades.find((a) => a.id === questao.atividade_id);
     if (!atividade) throw new Error('Atividade não encontrada.');
@@ -562,7 +566,7 @@ export class MockAlunoService implements AlunoService {
         enunciado: q.enunciado,
         alternativa_escolhida_id: r.alternativa_id,
         alternativa_correta_id: corretaAlt?.id || '',
-        acertou: r.acertou,
+        acertou: r.acertou ?? false,
         por_que_errou: r.acertou ? null : escolhidaAlt?.por_que_errou || null,
         explicacao: q.explicacao,
       };
@@ -648,10 +652,81 @@ export class MockAlunoService implements AlunoService {
   }
 
   async responderDiscursiva(
-    _token: string,
-    _questaoId: string,
-    _texto: string
+    token: string,
+    questaoId: string,
+    texto: string
   ): Promise<{ registrada: true; explicacao?: string | null }> {
-    throw new Error('Ainda não implementado');
+    const aluno = await this.obterAlunoPorToken(token);
+    const db = await getDatabase();
+
+    const questao = db.questoes.find((q) => q.id === questaoId);
+    if (!questao) throw new Error('Questão não encontrada.');
+
+    const atividade = db.atividades.find((a) => a.id === questao.atividade_id);
+    if (!atividade) throw new Error('Atividade não encontrada.');
+
+    const oferta = db.ofertas.find((o) => o.id === atividade.oferta_id);
+    if (!oferta || oferta.turma_id !== aluno.turma_id) {
+      throw new Error('Esta questão não pertence a uma atividade da sua turma.');
+    }
+
+    if (atividade.status === 'encerrada') {
+      throw new Error('Esta atividade já foi encerrada e não aceita mais respostas.');
+    }
+    if (atividade.status !== 'publicada') {
+      throw new Error('Atividade indisponível para resposta.');
+    }
+
+    if (questao.tipo !== 'discursiva') {
+      throw new Error('Esta questão não é discursiva.');
+    }
+
+    const textoFormatado = (texto || '').trim();
+    if (!textoFormatado) {
+      throw new Error('A resposta não pode ser vazia.');
+    }
+    if (textoFormatado.length > 2000) {
+      throw new Error('A resposta deve ter no máximo 2000 caracteres.');
+    }
+
+    const jaRespondida = db.respostas.some(
+      (r) => r.aluno_id === aluno.id && r.questao_id === questaoId
+    );
+    if (jaRespondida) {
+      throw new Error('Questão já respondida.');
+    }
+
+    const agora = new Date().toISOString();
+    const novaResposta: Resposta = {
+      id: gerarId('resp'),
+      created_at: agora,
+      aluno_id: aluno.id,
+      questao_id: questaoId,
+      alternativa_id: null,
+      acertou: null,
+      respondida_em: agora,
+      tentativas: 1,
+      acertou_final: null,
+      texto_resposta: textoFormatado,
+      correcao: 'pendente',
+      pontuacao: null,
+      comentario_professor: null,
+      corrigido_por: null,
+      corrigido_em: null,
+    };
+
+    db.respostas.push(novaResposta);
+    saveDatabase(db);
+
+    if (atividade.modo === 'exercicio') {
+      return {
+        registrada: true,
+        explicacao: questao.explicacao || null,
+      };
+    }
+
+    return {
+      registrada: true,
+    };
   }
 }

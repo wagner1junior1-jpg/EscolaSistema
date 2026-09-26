@@ -264,17 +264,24 @@ export function calcularMapaDeCalorQuestao(
  * - Discursiva: certo = 1, parcial = 0.5, errado = 0, pendente ou sem correção = null
  */
 export function pontuacaoDaResposta(
-  questao: { tipo?: TipoQuestao | null } | null | undefined,
-  resposta: {
+  questaoOuCorrecao: { tipo?: TipoQuestao | null } | StatusCorrecao | null | undefined,
+  resposta?: {
     acertou?: boolean | null;
     correcao?: StatusCorrecao | null;
     pontuacao?: number | null;
   } | null | undefined
 ): number | null {
+  if (typeof questaoOuCorrecao === 'string') {
+    if (questaoOuCorrecao === 'certo') return 1;
+    if (questaoOuCorrecao === 'parcial') return 0.5;
+    if (questaoOuCorrecao === 'errado') return 0;
+    return null;
+  }
+
   if (!resposta) return null;
 
   // Questão discursiva
-  if (questao?.tipo === 'discursiva') {
+  if (questaoOuCorrecao?.tipo === 'discursiva') {
     if (resposta.correcao === 'certo') return 1;
     if (resposta.correcao === 'parcial') return 0.5;
     if (resposta.correcao === 'errado') return 0;
