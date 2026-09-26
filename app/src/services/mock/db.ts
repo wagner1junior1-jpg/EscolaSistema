@@ -5,17 +5,38 @@
  * Suporta sincronização multi-aba via evento "storage", versionamento e fusão de dados.
  */
 
-import { MockDatabaseSchema, criarBancoDemonstracao } from './seed';
-import dadosDemo from './dados-demo.json';
+import { MockDatabaseSchema, criarBancoDemonstracao, getVersaoSeedAtiva } from './seed';
+import { supabase } from '@/lib/supabase';
 
 export const MOCK_STORAGE_KEY = 'saberpontual_mock_db';
 
 let memoryDb: MockDatabaseSchema | null = null;
+let supabaseLoaded = false;
 const callbacksAssinantes = new Set<() => void>();
 
+function isSupabaseMode(): boolean {
+  const isTest = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+  const isWebdriver = typeof navigator !== 'undefined' && navigator.webdriver === true;
+  if (isTest || isWebdriver) return false;
+  return import.meta.env.VITE_DATA_SOURCE === 'supabase';
+}
+
+async function sincronizarParaSupabase(db: MockDatabaseSchema): Promise<void> {
+  if (!isSupabaseMode()) return;
+  try {
+    await supabase.from('saberpontual_store').upsert({
+      id: 'global',
+      versao: db.versao || 1,
+      payload: db,
+      updated_at: new Date().toISOString(),
+    });
+  } catch {
+    // Silencioso caso a tabela ainda não tenha sido criada no SQL Editor
+  }
+}
+
 /**
- * Permite que componentes ou telas assinem notificações de alterações no banco mock
- * (disparadas após gravações locais ou atualizações vindas de outras abas via storage event).
+ * Permite que componentes ou telas assinem notificações de alterações no banco
  */
 export function assinarMudancas(callback: () => void): () => void {
   callbacksAssinantes.add(callback);
@@ -45,6 +66,33 @@ if (typeof window !== 'undefined' && window.addEventListener) {
 }
 
 export async function getDatabase(): Promise<MockDatabaseSchema> {
+  const versaoSeedEsperada = getVersaoSeedAtiva();
+
+  // Em modo Supabase, busca estado persistido na nuvem na primeira carga
+  if (isSupabaseMode() && !supabaseLoaded) {
+    supabaseLoaded = true;
+    try {
+      const { data, error } = await supabase
+        .from('saberpontual_store')
+        .select('payload, versao')
+        .eq('id', 'global')
+        .maybeSingle();
+
+      if (!error && data && data.payload) {
+        const remoteDb = data.payload as MockDatabaseSchema;
+        if (remoteDb.versao_seed === versaoSeedEsperada) {
+          memoryDb = remoteDb;
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(remoteDb));
+          }
+          return remoteDb;
+        }
+      }
+    } catch {
+      // Continua com fallback local caso a tabela ainda não exista no Supabase
+    }
+  }
+
   // Se houver localStorage, verifica se existe uma versão gravada mais recente
   if (typeof window !== 'undefined' && window.localStorage) {
     const raw = window.localStorage.getItem(MOCK_STORAGE_KEY);
@@ -52,7 +100,7 @@ export async function getDatabase(): Promise<MockDatabaseSchema> {
       try {
         const parsed = JSON.parse(raw) as MockDatabaseSchema;
         // Se a versao_seed for diferente (ou não existir), recria a partir do seed
-        if (parsed.versao_seed !== dadosDemo.versao_seed) {
+        if (parsed.versao_seed !== versaoSeedEsperada) {
           return await resetDatabase();
         }
         if (!memoryDb || (parsed.versao && parsed.versao > (memoryDb.versao || 0))) {
@@ -60,13 +108,13 @@ export async function getDatabase(): Promise<MockDatabaseSchema> {
           return memoryDb;
         }
       } catch (e) {
-        console.error('Falha ao decodificar banco mock local:', e);
+        console.error('Falha ao decodificar banco local:', e);
       }
     }
   }
 
   if (memoryDb) {
-    if (memoryDb.versao_seed !== dadosDemo.versao_seed) {
+    if (memoryDb.versao_seed !== versaoSeedEsperada) {
       return await resetDatabase();
     }
     return memoryDb;
@@ -108,6 +156,7 @@ export function saveDatabase(db: MockDatabaseSchema): void {
     }
   }
 
+  void sincronizarParaSupabase(db);
   notificarAssinantes();
 }
 

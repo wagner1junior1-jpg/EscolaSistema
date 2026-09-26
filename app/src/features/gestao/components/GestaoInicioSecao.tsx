@@ -13,7 +13,7 @@ import {
   Loader2,
   AlertCircle,
 } from 'lucide-react';
-import { relatorioService } from '@/services';
+import { relatorioService, assinarMudancas } from '@/services';
 import { VisaoGeralEscola } from '@/lib/types';
 
 interface GestaoInicioSecaoProps {
@@ -53,8 +53,15 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
 
     carregarDados();
 
+    const desassinar = assinarMudancas(() => {
+      if (ativo) {
+        carregarDados();
+      }
+    });
+
     return () => {
       ativo = false;
+      desassinar();
     };
   }, []);
 

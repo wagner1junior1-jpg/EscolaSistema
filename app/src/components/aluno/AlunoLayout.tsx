@@ -57,7 +57,7 @@ export const AlunoLayout: React.FC<AlunoLayoutProps> = ({
       />
 
       {/* Conteúdo principal */}
-      <div className={`relative z-10 min-h-screen flex flex-col ${containerClassName}`}>
+      <div className={`relative z-10 min-h-screen flex flex-col w-full max-w-full overflow-x-hidden safe-top safe-bottom ${containerClassName}`}>
         {children}
       </div>
     </div>

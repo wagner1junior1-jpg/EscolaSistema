@@ -231,25 +231,34 @@ export class MockBancoService implements ServicoBanco {
       throw new Error('O enunciado da questão não pode ficar vazio.');
     }
 
-    // Validação de alternativas
-    if (!dados.alternativas || dados.alternativas.length < 2 || dados.alternativas.length > 5) {
-      throw new Error('A questão deve conter entre 2 e 5 alternativas.');
-    }
+    const tipoQuestao = dados.tipo || 'objetiva';
 
-    const corretas = dados.alternativas.filter((a) => a.correta);
-    if (corretas.length !== 1) {
-      throw new Error('A questão deve ter exatamente 1 alternativa correta marcada.');
-    }
-
-    for (let i = 0; i < dados.alternativas.length; i++) {
-      const alt = dados.alternativas[i];
-      if (!alt.texto || !alt.texto.trim()) {
-        throw new Error(`O texto da alternativa ${LETRAS_PADRAO[i]} não pode ficar vazio.`);
+    // Validação específica por tipo
+    if (tipoQuestao === 'discursiva') {
+      if (!dados.resposta_esperada || !dados.resposta_esperada.trim()) {
+        throw new Error('A resposta esperada (gabarito do professor) é obrigatória para questões discursivas.');
       }
-      if (!alt.correta && (!alt.por_que_errou || !alt.por_que_errou.trim())) {
-        throw new Error(
-          `A alternativa ${LETRAS_PADRAO[i]} (incorreta) deve conter a explicação do erro (por que errou).`
-        );
+    } else {
+      // Validação de alternativas para objetivas
+      if (!dados.alternativas || dados.alternativas.length < 2 || dados.alternativas.length > 5) {
+        throw new Error('A questão deve conter entre 2 e 5 alternativas.');
+      }
+
+      const corretas = dados.alternativas.filter((a) => a.correta);
+      if (corretas.length !== 1) {
+        throw new Error('A questão deve ter exatamente 1 alternativa correta marcada.');
+      }
+
+      for (let i = 0; i < dados.alternativas.length; i++) {
+        const alt = dados.alternativas[i];
+        if (!alt.texto || !alt.texto.trim()) {
+          throw new Error(`O texto da alternativa ${LETRAS_PADRAO[i]} não pode ficar vazio.`);
+        }
+        if (!alt.correta && (!alt.por_que_errou || !alt.por_que_errou.trim())) {
+          throw new Error(
+            `A alternativa ${LETRAS_PADRAO[i]} (incorreta) deve conter a explicação do erro (por que errou).`
+          );
+        }
       }
     }
 
@@ -279,29 +288,34 @@ export class MockBancoService implements ServicoBanco {
       questao.enunciado = dados.enunciado.trim();
       questao.assunto_id = dados.assunto_id;
       questao.dificuldade = dados.dificuldade;
+      questao.tipo = tipoQuestao;
+      questao.resposta_esperada = dados.resposta_esperada ? dados.resposta_esperada.trim() : null;
+      questao.imagem_url = dados.imagem_url || questao.imagem_url || null;
       questao.dica = dados.dica ? dados.dica.trim() : null;
       questao.explicacao = dados.explicacao ? dados.explicacao.trim() : null;
       questao.versao = (questao.versao || 1) + 1;
 
-      // Substitui alternativas
+      // Substitui alternativas (apenas para objetivas)
       db.banco_alternativas = db.banco_alternativas.filter(
         (a) => a.banco_questao_id !== questao.id
       );
 
       const novasAlternativas: BancoAlternativa[] = [];
-      for (let i = 0; i < dados.alternativas.length; i++) {
-        const alt = dados.alternativas[i];
-        const novaAlt: BancoAlternativa = {
-          id: alt.id || gerarId('alt'),
-          created_at: agora,
-          banco_questao_id: questao.id,
-          letra: LETRAS_PADRAO[i],
-          texto: alt.texto.trim(),
-          correta: alt.correta,
-          por_que_errou: alt.correta ? null : alt.por_que_errou?.trim() || null,
-        };
-        db.banco_alternativas.push(novaAlt);
-        novasAlternativas.push(novaAlt);
+      if (tipoQuestao === 'objetiva' && dados.alternativas) {
+        for (let i = 0; i < dados.alternativas.length; i++) {
+          const alt = dados.alternativas[i];
+          const novaAlt: BancoAlternativa = {
+            id: alt.id || gerarId('alt'),
+            created_at: agora,
+            banco_questao_id: questao.id,
+            letra: LETRAS_PADRAO[i],
+            texto: alt.texto.trim(),
+            correta: alt.correta,
+            por_que_errou: alt.correta ? null : alt.por_que_errou?.trim() || null,
+          };
+          db.banco_alternativas.push(novaAlt);
+          novasAlternativas.push(novaAlt);
+        }
       }
 
       saveDatabase(db);
@@ -328,14 +342,14 @@ export class MockBancoService implements ServicoBanco {
       assunto_id: dados.assunto_id,
       criado_por: usuario.id,
       serie: dados.serie,
-      tipo: 'objetiva',
+      tipo: tipoQuestao,
       dificuldade: dados.dificuldade,
       enunciado: dados.enunciado.trim(),
-      imagem_url: null,
+      imagem_url: dados.imagem_url || null,
       dica: dados.dica ? dados.dica.trim() : null,
       explicacao: dados.explicacao ? dados.explicacao.trim() : null,
-      resposta_esperada: null,
-      origem: 'manual',
+      resposta_esperada: dados.resposta_esperada ? dados.resposta_esperada.trim() : null,
+      origem: dados.origem || 'manual',
       arquivada: false,
       versao: 1,
     };
@@ -343,19 +357,21 @@ export class MockBancoService implements ServicoBanco {
     db.banco_questoes.push(novaQuestao);
 
     const novasAlternativas: BancoAlternativa[] = [];
-    for (let i = 0; i < dados.alternativas.length; i++) {
-      const alt = dados.alternativas[i];
-      const novaAlt: BancoAlternativa = {
-        id: gerarId('alt'),
-        created_at: agora,
-        banco_questao_id: novoId,
-        letra: LETRAS_PADRAO[i],
-        texto: alt.texto.trim(),
-        correta: alt.correta,
-        por_que_errou: alt.correta ? null : alt.por_que_errou?.trim() || null,
-      };
-      db.banco_alternativas.push(novaAlt);
-      novasAlternativas.push(novaAlt);
+    if (tipoQuestao === 'objetiva' && dados.alternativas) {
+      for (let i = 0; i < dados.alternativas.length; i++) {
+        const alt = dados.alternativas[i];
+        const novaAlt: BancoAlternativa = {
+          id: gerarId('alt'),
+          created_at: agora,
+          banco_questao_id: novoId,
+          letra: LETRAS_PADRAO[i],
+          texto: alt.texto.trim(),
+          correta: alt.correta,
+          por_que_errou: alt.correta ? null : alt.por_que_errou?.trim() || null,
+        };
+        db.banco_alternativas.push(novaAlt);
+        novasAlternativas.push(novaAlt);
+      }
     }
 
     saveDatabase(db);

@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '../AuthProvider';
 import { useToast } from '@/components/ui';
-import { LogIn, School, Mail, Lock, ArrowLeft, AlertCircle, Loader2, Sparkles, RotateCcw } from 'lucide-react';
-import { restaurarDadosDemo } from '@/services';
+import { LogIn, School, Mail, Lock, ArrowLeft, AlertCircle, Loader2, Sparkles, RotateCcw, GraduationCap, ArrowRight } from 'lucide-react';
+import { restaurarDadosDemo, alunoService } from '@/services';
 
 const loginSchema = z.object({
   email: z
@@ -52,8 +52,7 @@ export const LoginPage: React.FC = () => {
   const toast = useToast();
   const [erroGeral, setErroGeral] = useState<string | null>(null);
 
-  const isMock =
-    !import.meta.env.VITE_DATA_SOURCE || import.meta.env.VITE_DATA_SOURCE === 'mock';
+  const isMock = true;
 
   const {
     register,
@@ -111,6 +110,28 @@ export const LoginPage: React.FC = () => {
     setValue('senha', 'demo123', { shouldValidate: true });
     clearErrors();
     setErroGeral(null);
+  };
+
+  const entrarDiretoDemo = async (email: string) => {
+    setErroGeral(null);
+    try {
+      const usuario = await entrar(email, 'demo123');
+      const destinoPadrao = usuario.papel === 'professor' ? '/professor' : '/gestao';
+      navigate(destinoPadrao, { replace: true });
+    } catch (err) {
+      setErroGeral(err instanceof Error ? err.message : 'Erro ao entrar.');
+    }
+  };
+
+  const entrarDiretoAlunoDemo = async () => {
+    setErroGeral(null);
+    try {
+      const { token } = await alunoService.login('aluno-7a-1', '1420');
+      localStorage.setItem('saberpontual_aluno_token', token);
+      navigate('/aluno/painel', { replace: true });
+    } catch (err) {
+      setErroGeral(err instanceof Error ? err.message : 'Erro ao entrar como aluno.');
+    }
   };
 
   return (
@@ -239,7 +260,7 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Caixa de Usuários de Demonstração (apenas no modo mock) */}
+          {/* Caixa de Usuários de Demonstração */}
           {isMock && (
             <div className="pt-4 border-t border-slate-100 space-y-3">
               <div className="flex items-center gap-1.5 text-xs font-heading font-bold text-slate-700">
@@ -251,11 +272,10 @@ export const LoginPage: React.FC = () => {
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 {usuariosDemo.map((u) => (
-                  <button
+                  <div
                     key={u.email}
-                    type="button"
                     onClick={() => preencherDemo(u.email)}
-                    className="p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-left transition-all group focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-left transition-all group cursor-pointer"
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-700 truncate">
@@ -267,12 +287,51 @@ export const LoginPage: React.FC = () => {
                         {u.papel}
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
-                      {u.email}
-                    </span>
-                  </button>
+                    <div className="flex items-center justify-between gap-1 mt-1">
+                      <span className="text-[11px] text-slate-400 font-mono truncate">
+                        {u.email}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          entrarDiretoDemo(u.email);
+                        }}
+                        className="inline-flex items-center gap-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0"
+                        title={`Acessar como ${u.nome}`}
+                      >
+                        <span>Acessar</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
+
+              {/* Atalho Direto para Visão do Aluno */}
+              <button
+                type="button"
+                onClick={entrarDiretoAlunoDemo}
+                className="w-full p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 hover:border-emerald-300 text-left transition-all flex items-center justify-between gap-2 cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-800 group-hover:text-emerald-800 truncate">
+                      Visão do Aluno (Lucas Oliveira)
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate">
+                      6º Ano A • Código: 7A-MAT • PIN: 1420
+                    </div>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg shrink-0">
+                  <span>1-Clique</span>
+                  <ArrowRight className="w-3 h-3" />
+                </span>
+              </button>
 
               <button
                 type="button"

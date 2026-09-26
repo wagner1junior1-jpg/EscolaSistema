@@ -7,3 +7,4 @@ export * from './Modal';
 export * from './ConfirmDialog';
 export * from './Tabs';
 export * from './Toast';
+export * from './MathText';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande, ChipInfo } from '@/components/aluno';
 import { alunoService } from '@/services';
@@ -11,6 +11,7 @@ import {
   Delete,
   AlertCircle,
   Loader2,
+  X,
 } from 'lucide-react';
 
 type PassoLoginAluno = 'codigo' | 'nome' | 'pin';
@@ -22,6 +23,7 @@ export const AlunoLoginPage: React.FC = () => {
   const [passo, setPasso] = useState<PassoLoginAluno>('codigo');
   const [codigoTurma, setCodigoTurma] = useState('');
   const [alunos, setAlunos] = useState<AlunoResumido[]>([]);
+  const [buscaAluno, setBuscaAluno] = useState('');
   const [alunoSelecionado, setAlunoSelecionado] = useState<AlunoResumido | null>(null);
   const [pin, setPin] = useState('');
   const [carregando, setCarregando] = useState(false);
@@ -70,6 +72,7 @@ export const AlunoLoginPage: React.FC = () => {
 
       setAlunos(listaAlunos.sort((a, b) => a.numero_chamada - b.numero_chamada));
       setCodigoTurma(codigoLimpo);
+      setBuscaAluno('');
       setPasso('nome');
     } catch (err) {
       if (err instanceof Error) {
@@ -86,6 +89,16 @@ export const AlunoLoginPage: React.FC = () => {
   };
 
   // Passo B: Selecionar o aluno
+  const alunosFiltrados = useMemo(() => {
+    const termo = buscaAluno.trim().toLowerCase();
+    if (!termo) return alunos;
+    return alunos.filter(
+      (a) =>
+        a.nome_completo.toLowerCase().includes(termo) ||
+        String(a.numero_chamada).includes(termo)
+    );
+  }, [alunos, buscaAluno]);
+
   const handleSelecionarAluno = (aluno: AlunoResumido) => {
     setAlunoSelecionado(aluno);
     setPin('');
@@ -207,30 +220,30 @@ export const AlunoLoginPage: React.FC = () => {
                 <div>
                   <label
                     htmlFor="codigo-turma"
-                    className="block text-xs sm:text-sm font-heading font-bold text-slate-700 mb-1.5"
+                    className="block text-xs sm:text-sm font-heading font-bold text-slate-700 mb-1.5 text-center"
                   >
                     Código da Turma
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Search className="w-4 h-4" />
-                    </div>
                     <input
                       id="codigo-turma"
                       type="text"
                       autoFocus
                       autoComplete="off"
-                      placeholder="Ex: 7A-MAT"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      placeholder="Ex: 5A-MAT"
                       value={codigoTurma}
                       onChange={(e) => {
                         setCodigoTurma(e.target.value.toUpperCase());
                         setErro(null);
                       }}
-                      className="block w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-slate-200 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500 text-base font-heading font-bold uppercase tracking-wider text-slate-900 placeholder-slate-400 bg-white transition-all min-h-[48px] focus:outline-none"
+                      className="block w-full text-center px-4 py-3 rounded-2xl border-2 border-slate-200 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500 text-xl sm:text-2xl font-heading font-black uppercase tracking-widest text-slate-900 placeholder-slate-400 bg-white transition-all min-h-[52px] focus:outline-none"
                     />
                   </div>
-                  <p className="mt-1.5 text-[11px] text-slate-400">
-                    O código é em letras maiúsculas (exemplo: 7A-MAT ou 6B-CIE).
+                  <p className="mt-2 text-center text-xs text-slate-400">
+                    O código é em letras maiúsculas (ex: 5A-MAT ou 6B-CIE).
                   </p>
                 </div>
 
@@ -238,7 +251,7 @@ export const AlunoLoginPage: React.FC = () => {
                   type="submit"
                   variant="primary"
                   isLoading={carregando}
-                  className="w-full text-base sm:text-lg"
+                  className="w-full text-base sm:text-lg min-h-[52px]"
                 >
                   Continuar
                 </BotaoGrande>
@@ -247,17 +260,17 @@ export const AlunoLoginPage: React.FC = () => {
           )}
 
           {/* ============================================================== */}
-          {/* PASSO B: SELEÇÃO DO NOME (sem scroll interno, rola a página) */}
+          {/* PASSO B: SELEÇÃO DO NOME COM FILTRO RÁPIDO */}
           {/* ============================================================== */}
           {passo === 'nome' && (
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div>
-                  <h1 className="font-heading font-extrabold text-xl sm:text-2xl text-slate-900 tracking-tight">
+                  <h1 className="font-heading font-black text-xl sm:text-2xl text-slate-900 tracking-tight">
                     Quem é você?
                   </h1>
                   <p className="text-xs text-slate-500 font-sans mt-0.5">
-                    Toque no seu nome na lista da turma:
+                    {alunos.length} alunos na turma
                   </p>
                 </div>
                 <button
@@ -272,28 +285,58 @@ export const AlunoLoginPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Lista de alunos em cartões grandes — página inteira rola */}
-              <div className="space-y-2.5">
-                {alunos.map((aluno) => (
+              {/* Barra de Busca Rápida (Fundamental para turmas com 20-35 alunos) */}
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <Search className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Buscar seu nome ou número..."
+                  value={buscaAluno}
+                  onChange={(e) => setBuscaAluno(e.target.value)}
+                  className="w-full pl-9 pr-9 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-sans placeholder-slate-400 bg-white focus:outline-none min-h-[44px]"
+                />
+                {buscaAluno && (
                   <button
-                    key={aluno.id}
                     type="button"
-                    onClick={() => handleSelecionarAluno(aluno)}
-                    className="w-full p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/40 text-left transition-all flex items-center justify-between gap-3 group shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[56px] cursor-pointer"
+                    onClick={() => setBuscaAluno('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    aria-label="Limpar busca"
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-100 text-indigo-700 font-heading font-extrabold text-xs sm:text-sm flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                        {aluno.numero_chamada}
-                      </div>
-                      <span className="font-heading font-bold text-sm sm:text-base text-slate-800 group-hover:text-indigo-900 truncate">
-                        {aluno.nome_completo}
-                      </span>
-                    </div>
-                    <span className="text-xs font-semibold text-slate-400 group-hover:text-indigo-600 shrink-0">
-                      Entrar →
-                    </span>
+                    <X className="w-4 h-4" />
                   </button>
-                ))}
+                )}
+              </div>
+
+              {/* Lista de Alunos em cartões touch grandes */}
+              <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-0.5 no-scrollbar">
+                {alunosFiltrados.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs sm:text-sm">
+                    Nenhum aluno encontrado para "{buscaAluno}".
+                  </div>
+                ) : (
+                  alunosFiltrados.map((aluno) => (
+                    <button
+                      key={aluno.id}
+                      type="button"
+                      onClick={() => handleSelecionarAluno(aluno)}
+                      className="w-full p-3 sm:p-3.5 rounded-2xl border-2 border-slate-200 hover:border-indigo-400 active:border-indigo-600 bg-white hover:bg-indigo-50/40 active:bg-indigo-50 text-left transition-all flex items-center justify-between gap-3 group shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 min-h-[56px] cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 font-heading font-black text-xs sm:text-sm flex items-center justify-center shrink-0 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                          {aluno.numero_chamada}
+                        </div>
+                        <span className="font-heading font-bold text-sm sm:text-base text-slate-800 group-hover:text-indigo-900 truncate">
+                          {aluno.nome_completo}
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-indigo-600 shrink-0">
+                        Entrar →
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
 
               <div className="pt-2">
@@ -305,7 +348,7 @@ export const AlunoLoginPage: React.FC = () => {
                     setErro(null);
                   }}
                   leftIcon={<ArrowLeft className="w-4 h-4" />}
-                  className="w-full text-sm"
+                  className="w-full text-sm min-h-[48px]"
                 >
                   Voltar
                 </BotaoGrande>
@@ -317,16 +360,16 @@ export const AlunoLoginPage: React.FC = () => {
           {/* PASSO C: DIGITAÇÃO DO PIN */}
           {/* ============================================================== */}
           {passo === 'pin' && alunoSelecionado && (
-            <div className="space-y-5 text-center">
+            <div className="space-y-4 text-center">
               <div className="space-y-1">
                 <span className="text-xs font-heading font-bold text-indigo-600 uppercase tracking-wider">
                   Nº {alunoSelecionado.numero_chamada}
                 </span>
-                <h1 className="font-heading font-black text-2xl text-slate-900 tracking-tight">
+                <h1 className="font-heading font-black text-xl sm:text-2xl text-slate-900 tracking-tight truncate px-2">
                   {alunoSelecionado.nome_completo}
                 </h1>
                 <p className="text-xs text-slate-500 font-sans">
-                  Digite seu PIN secreto de 4 dígitos
+                  Digite seu PIN de 4 dígitos
                 </p>
               </div>
 
@@ -341,9 +384,9 @@ export const AlunoLoginPage: React.FC = () => {
                 </div>
               )}
 
-              {/* 4 Caixas do PIN (NUNCA mostrar os dígitos, somente preenchimento) */}
+              {/* 4 Caixas do PIN */}
               <div
-                className="flex items-center justify-center gap-3 sm:gap-4 py-2 cursor-pointer"
+                className="flex items-center justify-center gap-2.5 sm:gap-3.5 py-1 cursor-pointer"
                 onClick={handleFocarInputNaoTouch}
               >
                 {[0, 1, 2, 3].map((index) => {
@@ -356,7 +399,7 @@ export const AlunoLoginPage: React.FC = () => {
                         w-12 h-14 sm:w-14 sm:h-16 rounded-2xl flex items-center justify-center border-2 transition-all
                         ${
                           preenchido
-                            ? 'border-indigo-600 bg-indigo-50/50 shadow-sm scale-105'
+                            ? 'border-indigo-600 bg-indigo-50/60 shadow-sm scale-105'
                             : atual
                             ? 'border-indigo-400 bg-white ring-2 ring-indigo-200'
                             : 'border-slate-200 bg-slate-50/70'
@@ -394,15 +437,15 @@ export const AlunoLoginPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Teclado Numérico na Tela (botões >= 48px, h-14) */}
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-3 max-w-[280px] sm:max-w-[300px] mx-auto pt-1">
+              {/* Teclado Numérico na Tela (botões h-14 a h-16, toque confortável) */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[290px] sm:max-w-[310px] w-full mx-auto pt-1">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((num) => (
                   <button
                     key={num}
                     type="button"
                     disabled={carregando || pin.length >= 4}
                     onClick={() => handleDigitoTeclado(num)}
-                    className="h-14 min-h-[48px] rounded-2xl border-2 border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/60 active:scale-95 text-slate-800 font-heading font-extrabold text-xl shadow-sm transition-all flex items-center justify-center disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="h-14 sm:h-16 min-h-[52px] rounded-2xl border-2 border-slate-200 hover:border-indigo-400 active:border-indigo-600 bg-white hover:bg-indigo-50/60 active:bg-indigo-100 active:scale-95 text-slate-800 font-heading font-black text-2xl shadow-sm transition-all flex items-center justify-center disabled:opacity-40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {num}
                   </button>
@@ -413,7 +456,7 @@ export const AlunoLoginPage: React.FC = () => {
                   disabled={carregando || pin.length === 0}
                   onClick={handleLimparPin}
                   aria-label="Limpar PIN"
-                  className="h-14 min-h-[48px] rounded-2xl border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 active:scale-95 text-slate-500 font-heading font-bold text-xs uppercase shadow-sm transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  className="h-14 sm:h-16 min-h-[52px] rounded-2xl border border-slate-200 hover:border-slate-300 active:bg-slate-200 bg-slate-100/90 active:scale-95 text-slate-600 font-heading font-bold text-xs uppercase shadow-sm transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
                 >
                   Limpar
                 </button>
@@ -422,7 +465,7 @@ export const AlunoLoginPage: React.FC = () => {
                   type="button"
                   disabled={carregando || pin.length >= 4}
                   onClick={() => handleDigitoTeclado('0')}
-                  className="h-14 min-h-[48px] rounded-2xl border-2 border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/60 active:scale-95 text-slate-800 font-heading font-extrabold text-xl shadow-sm transition-all flex items-center justify-center disabled:opacity-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="h-14 sm:h-16 min-h-[52px] rounded-2xl border-2 border-slate-200 hover:border-indigo-400 active:border-indigo-600 bg-white hover:bg-indigo-50/60 active:bg-indigo-100 active:scale-95 text-slate-800 font-heading font-black text-2xl shadow-sm transition-all flex items-center justify-center disabled:opacity-40 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   0
                 </button>
@@ -432,14 +475,14 @@ export const AlunoLoginPage: React.FC = () => {
                   disabled={carregando || pin.length === 0}
                   onClick={handleApagarDigito}
                   aria-label="Apagar último dígito"
-                  className="h-14 min-h-[48px] rounded-2xl border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 active:scale-95 text-slate-600 shadow-sm transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  className="h-14 sm:h-16 min-h-[52px] rounded-2xl border border-slate-200 hover:border-slate-300 active:bg-slate-200 bg-slate-100/90 active:scale-95 text-slate-600 shadow-sm transition-all flex items-center justify-center disabled:opacity-30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300"
                 >
-                  <Delete className="w-5 h-5" />
+                  <Delete className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
 
               {/* Botão Voltar para lista de alunos */}
-              <div className="pt-3">
+              <div className="pt-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -447,9 +490,9 @@ export const AlunoLoginPage: React.FC = () => {
                     setPin('');
                     setErro(null);
                   }}
-                  className="text-xs font-heading font-bold text-slate-500 hover:text-indigo-600 transition-colors p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="text-xs font-heading font-bold text-slate-500 hover:text-indigo-600 transition-colors p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 inline-flex items-center gap-1"
                 >
-                  ← Não sou {alunoSelecionado.nome_completo} (Trocar aluno)
+                  ← Trocar de aluno
                 </button>
               </div>
             </div>

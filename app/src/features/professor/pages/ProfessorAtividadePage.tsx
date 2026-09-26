@@ -42,6 +42,8 @@ import {
   Check,
   Database,
   Shuffle,
+  Copy,
+  CheckCircle2,
 } from 'lucide-react';
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'] as const;
@@ -89,6 +91,7 @@ export const ProfessorAtividadePage: React.FC = () => {
   const [questoesBanco, setQuestoesBanco] = useState<BancoQuestao[]>([]);
   const [carregandoBanco, setCarregandoBanco] = useState(false);
   const [bancoSelecionadas, setBancoSelecionadas] = useState<string[]>([]);
+  const [bancoExpandidas, setBancoExpandidas] = useState<Set<string>>(new Set());
   const [filtroAssuntoBanco, setFiltroAssuntoBanco] = useState<string>('todos');
   const [buscaBanco, setBuscaBanco] = useState<string>('');
 
@@ -108,6 +111,25 @@ export const ProfessorAtividadePage: React.FC = () => {
 
   // Questões
   const [questoes, setQuestoes] = useState<QuestaoEditor[]>([]);
+  // Controle de formato compacto / acordeão
+  const [questoesExpandidas, setQuestoesExpandidas] = useState<Set<number>>(new Set());
+
+  const toggleQuestaoExpandida = (qIndex: number) => {
+    setQuestoesExpandidas((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(qIndex)) novo.delete(qIndex);
+      else novo.add(qIndex);
+      return novo;
+    });
+  };
+
+  const recolherTodasQuestoes = () => {
+    setQuestoesExpandidas(new Set());
+  };
+
+  const expandirTodasQuestoes = () => {
+    setQuestoesExpandidas(new Set(questoes.map((_, i) => i)));
+  };
 
   // Controle de alterações não salvas
   const [temAlteracoesNaoSalvas, setTemAlteracoesNaoSalvas] = useState(false);
@@ -182,6 +204,16 @@ export const ProfessorAtividadePage: React.FC = () => {
         }));
 
       setQuestoes(questoesMapeadas);
+      setQuestoesExpandidas((prev) => {
+        if (ativCarregada.status === 'publicada' && questoesMapeadas.length > 0) {
+          return new Set([0]);
+        }
+        if (prev.size > 0) {
+          return new Set([...prev].filter((i) => i < questoesMapeadas.length));
+        }
+        // Por padrão, exibe apenas 1 linha por pergunta; o professor clica para abrir
+        return new Set();
+      });
       setTemAlteracoesNaoSalvas(false);
     } catch (err: unknown) {
       setErroCarregamento(
@@ -239,8 +271,66 @@ export const ProfessorAtividadePage: React.FC = () => {
       ],
     };
 
-    setQuestoes((prev) => [...prev, novaQuestao]);
+    setQuestoes((prev) => {
+      const novoIndex = prev.length;
+      setQuestoesExpandidas((exp) => new Set([...exp, novoIndex]));
+      return [...prev, novaQuestao];
+    });
     setTemAlteracoesNaoSalvas(true);
+  };
+
+  const handleDuplicarQuestao = (index: number) => {
+    if (!isRascunho) return;
+    const original = questoes[index];
+    if (!original) return;
+
+    const copiaQuestao: QuestaoEditor = {
+      ordem: index + 2,
+      enunciado: original.enunciado ? `${original.enunciado} (Cópia)` : '',
+      dica: original.dica || '',
+      explicacao: original.explicacao || '',
+      banco_questao_id: null,
+      assunto_id: original.assunto_id || (assuntosOferta.length > 0 ? assuntosOferta[0].id : null),
+      salvar_no_banco: false,
+      dificuldade: original.dificuldade || 'medio',
+      alternativas: original.alternativas.map((alt) => ({
+        letra: alt.letra,
+        texto: alt.texto,
+        correta: alt.correta,
+        por_que_errou: alt.por_que_errou || '',
+      })),
+    };
+
+    const novoIndex = index + 1;
+    setQuestoes((prev) => {
+      const novaLista = [...prev];
+      novaLista.splice(novoIndex, 0, copiaQuestao);
+      return novaLista.map((q, idx) => ({ ...q, ordem: idx + 1 }));
+    });
+
+    setQuestoesExpandidas((prev) => {
+      const novo = new Set<number>();
+      prev.forEach((idx) => {
+        if (idx < novoIndex) novo.add(idx);
+        else novo.add(idx + 1);
+      });
+      novo.add(novoIndex);
+      return novo;
+    });
+
+    setTemAlteracoesNaoSalvas(true);
+    toast.success(`Questão ${index + 1} duplicada na posição ${novoIndex + 1}.`);
+  };
+
+  const obterStatusQuestao = (q: QuestaoEditor): 'incompleta' | 'sem_distrator' | 'pronta' => {
+    if (!q.enunciado.trim()) return 'incompleta';
+    if (q.alternativas.length < 2) return 'incompleta';
+    const temAlgumaVazia = q.alternativas.some((a) => !a.texto.trim());
+    const temCorreta = q.alternativas.some((a) => a.correta);
+    if (temAlgumaVazia || !temCorreta) return 'incompleta';
+    const faltaDistrator = q.alternativas.some((a) => !a.correta && !a.por_que_errou?.trim());
+    if (faltaDistrator) return 'sem_distrator';
+    return 'pronta';
   };
 
   const handleMoverQuestao = (index: number, direcao: 'up' | 'down') => {
@@ -257,6 +347,18 @@ export const ProfessorAtividadePage: React.FC = () => {
       // Reatribui ordem sequencial
       return copia.map((q, idx) => ({ ...q, ordem: idx + 1 }));
     });
+
+    setQuestoesExpandidas((prev) => {
+      const novo = new Set(prev);
+      const indexWasExp = novo.has(index);
+      const novoWasExp = novo.has(novoIndex);
+      if (indexWasExp) novo.add(novoIndex);
+      else novo.delete(novoIndex);
+      if (novoWasExp) novo.add(index);
+      else novo.delete(index);
+      return novo;
+    });
+
     setTemAlteracoesNaoSalvas(true);
   };
 
@@ -273,6 +375,15 @@ export const ProfessorAtividadePage: React.FC = () => {
       setQuestoes((prev) => {
         const filtradas = prev.filter((_, idx) => idx !== questaoParaExcluirIndex);
         return filtradas.map((item, idx) => ({ ...item, ordem: idx + 1 }));
+      });
+
+      setQuestoesExpandidas((prev) => {
+        const novo = new Set<number>();
+        prev.forEach((idx) => {
+          if (idx < questaoParaExcluirIndex) novo.add(idx);
+          else if (idx > questaoParaExcluirIndex) novo.add(idx - 1);
+        });
+        return novo;
       });
 
       toast.success('Questão excluída com sucesso.');
@@ -793,26 +904,49 @@ export const ProfessorAtividadePage: React.FC = () => {
                   </p>
                 </div>
 
-                {isRascunho && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<Database className="w-4 h-4 text-indigo-600" />}
-                      onClick={handleAbrirModalBanco}
-                    >
-                      Adicionar do banco
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<Plus className="w-4 h-4" />}
-                      onClick={handleAdicionarQuestao}
-                    >
-                      Adicionar questão
-                    </Button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {questoes.length > 0 && (
+                    <div className="flex items-center gap-1.5 mr-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={recolherTodasQuestoes}
+                        title="Recolher todas as questões para formato compacto"
+                      >
+                        Recolher todas
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={expandirTodasQuestoes}
+                        title="Expandir todas as questões para edição completa"
+                      >
+                        Expandir todas
+                      </Button>
+                    </div>
+                  )}
+
+                  {isRascunho && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Database className="w-4 h-4 text-indigo-600" />}
+                        onClick={handleAbrirModalBanco}
+                      >
+                        Adicionar do banco
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<Plus className="w-4 h-4" />}
+                        onClick={handleAdicionarQuestao}
+                      >
+                        Adicionar questão
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
 
               {questoes.length === 0 ? (
@@ -847,68 +981,157 @@ export const ProfessorAtividadePage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {questoes.map((q, qIndex) => (
-                    <Card key={q.id || `nova-${qIndex}`} className="border-slate-200 shadow-xs">
-                      {/* Topo da Questão */}
-                      <CardHeader className="bg-slate-50/70 border-b border-slate-200/80 py-3.5 px-5 sm:px-6">
+                  {questoes.map((q, qIndex) => {
+                    const isExpanded = questoesExpandidas.has(qIndex);
+                    const altCorreta = q.alternativas.find((a) => a.correta);
+                    const statusQuestao = obterStatusQuestao(q);
+
+                    return (
+                    <Card key={q.id || `nova-${qIndex}`} className="border-slate-200 shadow-xs overflow-hidden">
+                      {/* Topo da Questão / Linha Compacta */}
+                      <CardHeader
+                        className={`py-3 px-4 sm:px-6 transition-colors cursor-pointer select-none ${
+                          isExpanded ? 'bg-slate-50/80 border-b border-slate-200' : 'bg-white hover:bg-slate-50/70'
+                        }`}
+                        onClick={() => toggleQuestaoExpandida(qIndex)}
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-2.5">
-                            <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-heading font-black text-xs flex items-center justify-center shadow-xs">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="w-7 h-7 rounded-lg bg-indigo-600 text-white font-heading font-black text-xs flex items-center justify-center shadow-2xs shrink-0">
                               {qIndex + 1}
                             </span>
-                            <span className="font-heading font-bold text-sm text-slate-800">
+                            <span className="font-heading font-bold text-sm text-slate-800 shrink-0">
                               Questão {qIndex + 1}
                             </span>
-                            {q.banco_questao_id && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                <Database className="w-3 h-3" />
-                                Do banco de questões
+
+                            {/* Etiqueta de Tipo */}
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                              Objetiva
+                            </span>
+
+                            {/* Selo Visual de Status */}
+                            {statusQuestao === 'pronta' && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0"
+                                title="Questão pronta: enunciado, alternativas, gabarito e distratores preenchidos"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                Pronta
                               </span>
                             )}
+                            {statusQuestao === 'sem_distrator' && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0"
+                                title="Questão válida, mas sem diagnóstico de erro em todas as incorretas"
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                Sem distrator
+                              </span>
+                            )}
+                            {statusQuestao === 'incompleta' && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shrink-0"
+                                title="Falta enunciado ou texto em alguma alternativa"
+                              >
+                                <AlertCircle className="w-3 h-3" />
+                                Incompleta
+                              </span>
+                            )}
+
+                            {q.banco_questao_id && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                                <Database className="w-3 h-3" />
+                                Do banco
+                              </span>
+                            )}
+
+                            {/* APENAS 1 LINHA DA PERGUNTA */}
+                            <span
+                              className={`text-xs sm:text-sm font-medium text-slate-800 truncate flex-1 min-w-0 ${
+                                !q.enunciado.trim() ? 'italic text-slate-400' : ''
+                              }`}
+                              title={q.enunciado || 'Sem enunciado'}
+                            >
+                              {q.enunciado.trim() ? q.enunciado : '(Sem enunciado definido)'}
+                            </span>
+
+                            {/* Resumo das Alternativas */}
+                            <span className="text-[11px] text-slate-400 font-medium shrink-0 hidden lg:inline-flex">
+                              {q.alternativas.length} alt • Correta: <strong className="ml-1 text-emerald-700">{altCorreta?.letra || '-'}</strong>
+                            </span>
                           </div>
 
-                          {/* Controles de Ordenação e Exclusão */}
-                          {isRascunho && (
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleMoverQuestao(qIndex, 'up')}
-                                disabled={qIndex === 0}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                title="Mover para cima"
-                                aria-label="Mover questão para cima"
-                              >
-                                <ChevronUp className="w-4 h-4" />
-                              </button>
+                          {/* Controles de Ação Rápida */}
+                          <div
+                            className="flex items-center gap-1 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {isRascunho && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDuplicarQuestao(qIndex)}
+                                  className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition-colors"
+                                  title="Duplicar questão"
+                                  aria-label="Duplicar questão"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleMoverQuestao(qIndex, 'down')}
-                                disabled={qIndex === questoes.length - 1}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                title="Mover para baixo"
-                                aria-label="Mover questão para baixo"
-                              >
-                                <ChevronDown className="w-4 h-4" />
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoverQuestao(qIndex, 'up')}
+                                  disabled={qIndex === 0}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                  title="Mover para cima"
+                                  aria-label="Mover questão para cima"
+                                >
+                                  <ChevronUp className="w-4 h-4" />
+                                </button>
 
-                              <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoverQuestao(qIndex, 'down')}
+                                  disabled={qIndex === questoes.length - 1}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                  title="Mover para baixo"
+                                  aria-label="Mover questão para baixo"
+                                >
+                                  <ChevronDown className="w-4 h-4" />
+                                </button>
 
-                              <button
-                                type="button"
-                                onClick={() => setQuestaoParaExcluirIndex(qIndex)}
-                                className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
-                                title="Excluir questão"
-                                aria-label="Excluir questão"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
+                                <button
+                                  type="button"
+                                  onClick={() => setQuestaoParaExcluirIndex(qIndex)}
+                                  className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+                                  title="Excluir questão"
+                                  aria-label="Excluir questão"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+
+                                <div className="w-[1px] h-4 bg-slate-300 mx-1" />
+                              </>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => toggleQuestaoExpandida(qIndex)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors"
+                              title={isExpanded ? 'Recolher questão' : 'Expandir para editar'}
+                            >
+                              <span>{isExpanded ? 'Recolher' : 'Editar'}</span>
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                  isExpanded ? 'rotate-180 text-indigo-700' : 'text-indigo-500'
+                                }`}
+                              />
+                            </button>
+                          </div>
                         </div>
                       </CardHeader>
 
-                      <CardContent className="p-5 sm:p-6 space-y-5">
+                      <CardContent className={isExpanded ? 'p-5 sm:p-6 space-y-5' : 'hidden'}>
                         {/* Enunciado */}
                         <Textarea
                           label="Enunciado da Questão *"
@@ -1142,7 +1365,8 @@ export const ProfessorAtividadePage: React.FC = () => {
                         )}
                       </CardContent>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -1279,51 +1503,96 @@ export const ProfessorAtividadePage: React.FC = () => {
                     Nenhuma questão encontrada para os filtros selecionados.
                   </p>
                 ) : (
-                  questoesBancoFiltradas.map((bq) => {
+                  questoesBancoFiltradas.map((bq, idx) => {
                     const isSelected = bancoSelecionadas.includes(bq.id);
+                    const isExpandedModal = bancoExpandidas.has(bq.id);
                     return (
                       <div
                         key={bq.id}
                         onClick={() => {
-                          setBancoSelecionadas((prev) =>
-                            prev.includes(bq.id) ? prev.filter((x) => x !== bq.id) : [...prev, bq.id]
-                          );
+                          setBancoExpandidas((prev) => {
+                            const novo = new Set(prev);
+                            if (novo.has(bq.id)) novo.delete(bq.id);
+                            else novo.add(bq.id);
+                            return novo;
+                          });
                         }}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                        className={`py-2.5 px-3 rounded-xl border text-left cursor-pointer transition-all space-y-2 ${
                           isSelected
                             ? 'bg-indigo-50/50 border-indigo-300 ring-1 ring-indigo-400/30'
                             : 'bg-white border-slate-200 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-start gap-3">
+                        <div className="flex items-center gap-2.5">
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => {}}
-                            className="mt-1 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => {
+                              setBancoSelecionadas((prev) =>
+                                prev.includes(bq.id) ? prev.filter((x) => x !== bq.id) : [...prev, bq.id]
+                              );
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 shrink-0 cursor-pointer"
                           />
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span
-                                className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border ${
-                                  bq.dificuldade === 'facil'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                    : bq.dificuldade === 'medio'
-                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                          <span className="text-[11px] font-bold text-slate-500 shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border shrink-0 ${
+                              bq.dificuldade === 'facil'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : bq.dificuldade === 'medio'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-rose-50 text-rose-800 border-rose-200'
+                            }`}
+                          >
+                            {bq.dificuldade}
+                          </span>
+
+                          {/* APENAS 1 LINHA DA PERGUNTA */}
+                          <span
+                            className="text-xs font-medium text-slate-800 truncate flex-1 min-w-0"
+                            title={bq.enunciado}
+                          >
+                            {bq.enunciado}
+                          </span>
+
+                          <ChevronDown
+                            className={`w-4 h-4 text-indigo-500 shrink-0 transition-transform ${
+                              isExpandedModal ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </div>
+
+                        {isExpandedModal && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="ml-6 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs cursor-default"
+                          >
+                            <div className="font-medium text-slate-800 whitespace-pre-wrap pb-1.5 border-b border-slate-200">
+                              {bq.enunciado}
+                            </div>
+                            {(bq.alternativas || []).map((alt) => (
+                              <div
+                                key={alt.id || alt.letra}
+                                className={`p-1.5 rounded-lg border flex items-start gap-2 ${
+                                  alt.correta
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900 font-semibold'
+                                    : 'bg-white border-slate-200 text-slate-700'
                                 }`}
                               >
-                                {bq.dificuldade}
-                              </span>
-                              <span className="text-[11px] font-medium text-slate-500">
-                                {bq.assunto_nome}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-800 line-clamp-2 leading-relaxed">
-                              {bq.enunciado}
-                            </p>
+                                <span className="font-bold">{alt.letra})</span>
+                                <span className="flex-1">{alt.texto}</span>
+                                {alt.correta && (
+                                  <span className="text-[10px] font-bold uppercase bg-emerald-600 text-white px-1.5 py-0.5 rounded">
+                                    Correta
+                                  </span>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        </div>
+                        )}
                       </div>
                     );
                   })

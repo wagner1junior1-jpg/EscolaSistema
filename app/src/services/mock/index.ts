@@ -7,3 +7,5 @@ export * from './professor.mock';
 export * from './aluno.mock';
 export * from './relatorio.mock';
 export * from './banco.mock';
+export * from './ia.mock';
+

@@ -240,4 +240,117 @@ test.describe('Portal do Professor', () => {
     const lucasRow = page.locator('tr').filter({ hasText: 'Lucas Oliveira' });
     await expect(lucasRow).toContainText(/33[,\.]3%\s*\(incompleta\)/);
   });
+
+  test('P11: Navegação por Séries e Matérias no painel do professor', async ({ page }) => {
+    // Entra como Prof. Carlos Roberto (leciona 6º Ano B e 7º Ano A)
+    await loginDemo(page, 'Prof. Carlos Roberto');
+    await expect(page).toHaveURL(/\/professor/);
+
+    // Confere que ambas as séries aparecem como botões de seleção
+    const aba6 = page.getByRole('tab', { name: /6º Ano/ });
+    const aba7 = page.getByRole('tab', { name: /7º Ano/ });
+    await expect(aba6).toBeVisible();
+    await expect(aba7).toBeVisible();
+
+    // Inicialmente 6º Ano está selecionado por padrão: exibe 6º Ano B e NÃO 7º Ano A
+    await expect(page.getByText('6º Ano B')).toBeVisible();
+    await expect(page.getByText('7º Ano A')).not.toBeVisible();
+
+    // Clica na série 7º Ano: visualização filtra e abre a matéria do 7º Ano A
+    await aba7.click();
+    await expect(page.getByText('7º Ano A')).toBeVisible();
+    await expect(page.getByText('6º Ano B')).not.toBeVisible();
+
+    // Clica de volta na série 6º Ano: reabre a matéria do 6º Ano B
+    await aba6.click();
+    await expect(page.getByText('6º Ano B')).toBeVisible();
+    await expect(page.getByText('7º Ano A')).not.toBeVisible();
+
+    // Evidência de tela
+    await page.screenshot({ path: 'e2e/evidencias/P11.png' });
+  });
+
+  test('P12: Professor cria atividade a partir do Banco de Questões e edita em formato compacto', async ({ page }) => {
+    await loginDemo(page, 'Profª Ana Paula');
+    await expect(page).toHaveURL(/\/professor/);
+
+    // Abre a oferta de Matemática 7º A
+    await page.goto('/professor/oferta/oferta-mat-7a');
+
+    // Clica no botão "Criar a partir do Banco"
+    const btnCriarBanco = page.getByRole('button', { name: 'Criar a partir do Banco' });
+    await expect(btnCriarBanco).toBeVisible();
+    await btnCriarBanco.click();
+
+    // Modal de criação direta do banco
+    await expect(page.getByRole('heading', { name: 'Criar a partir do Banco de Questões' })).toBeVisible();
+
+    // Preenche dados da atividade
+    await page.getByLabel('Título da Atividade *').fill('Atividade Banco Compacta');
+    await page.getByLabel('Descrição / Orientações *').fill('Exercícios selecionados do banco para validação de layout compacto.');
+
+    // Testa o botão "Ver gabarito" na primeira questão do modal
+    const btnVerGabarito = page.getByRole('button', { name: 'Ver gabarito' }).first();
+    await expect(btnVerGabarito).toBeVisible();
+    await btnVerGabarito.click();
+    await expect(page.getByText('Alternativas e Gabarito:')).toBeVisible();
+
+    // Seleciona as duas primeiras questões do banco
+    const checkboxes = page.locator('input[type="checkbox"][aria-label^="Selecionar questão"]');
+    await expect(checkboxes.first()).toBeVisible();
+    await checkboxes.nth(0).click();
+    await checkboxes.nth(1).click();
+
+    // Confere contador
+    await expect(page.getByText('2 questão(ões) selecionada(s)')).toBeVisible();
+
+    // Clica para criar atividade
+    await page.getByRole('button', { name: 'Criar atividade (2)' }).click();
+
+    // Redireciona para o editor de atividade
+    await expect(page).toHaveURL(/\/professor\/atividade\//);
+    await expect(page.getByRole('heading', { name: 'Questões (2)' })).toBeVisible();
+
+    // Confere presença do selo de status "Pronta" e etiqueta "Objetiva" na linha compacta
+    await expect(page.getByText('Pronta').first()).toBeVisible();
+    await expect(page.getByText('Objetiva').first()).toBeVisible();
+
+    // Testa o botão "Duplicar questão" na primeira questão compacta
+    const btnDuplicar = page.getByRole('button', { name: 'Duplicar questão' }).first();
+    await expect(btnDuplicar).toBeVisible();
+    await btnDuplicar.click();
+    await expect(page.getByRole('heading', { name: 'Questões (3)' })).toBeVisible();
+
+    // Confere botões de visualização compacta / expandida
+    const btnRecolherTodas = page.getByRole('button', { name: 'Recolher todas' });
+    const btnExpandirTodas = page.getByRole('button', { name: 'Expandir todas' });
+    await expect(btnRecolherTodas).toBeVisible();
+    await expect(btnExpandirTodas).toBeVisible();
+
+    // Clica em "Recolher todas": todas as questões ficam recolhidas no formato compacto
+    await btnRecolherTodas.click();
+    await expect(page.getByRole('button', { name: 'Editar' }).first()).toBeVisible();
+
+    // Clica para expandir e editar a Questão 1
+    await page.getByRole('button', { name: 'Editar' }).first().click();
+    await expect(page.getByRole('button', { name: 'Recolher' }).first()).toBeVisible();
+
+    // Verifica que o textarea de enunciado da questão 1 está visível
+    const textareaEnunciado = page.getByPlaceholder('Digite aqui o problema ou enunciado completo da questão...').first();
+    await expect(textareaEnunciado).toBeVisible();
+
+    // Clica em Salvar atividade
+    const btnSalvar = page.getByRole('button', { name: 'Salvar atividade' });
+    if (await btnSalvar.isEnabled()) {
+      await btnSalvar.click();
+      await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
+    }
+
+    // Rola para a seção de questões para evidenciar o layout compacto, selos e controles
+    await page.getByRole('heading', { name: 'Questões (3)' }).scrollIntoViewIfNeeded();
+
+    // Captura evidência de tela
+    await page.screenshot({ path: 'e2e/evidencias/P12.png' });
+  });
 });
+

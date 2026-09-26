@@ -12,6 +12,7 @@ import {
   Modal,
   ConfirmDialog,
   useToast,
+  MathText,
 } from '@/components/ui';
 import {
   bancoService,
@@ -20,6 +21,7 @@ import {
   CombinacaoProfessor,
   DificuldadeQuestao,
 } from '@/services';
+import { ModalGeradorIA } from '../components/ModalGeradorIA';
 import {
   Plus,
   ArrowLeft,
@@ -31,6 +33,8 @@ import {
   CheckCircle2,
   FolderPlus,
   HelpCircle,
+  Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 
 const DIFICULDADE_ROTULO: Record<DificuldadeQuestao, string> = {
@@ -94,9 +98,24 @@ export const ProfessorBancoPage: React.FC = () => {
   const [novoAssuntoNome, setNovoAssuntoNome] = useState('');
   const [salvandoAssunto, setSalvandoAssunto] = useState(false);
 
+  // Modal do Gerador de IA
+  const [modalIAAberto, setModalIAAberto] = useState(false);
+
   // Confirmação para arquivar
   const [questaoParaArquivar, setQuestaoParaArquivar] = useState<BancoQuestao | null>(null);
   const [arquivando, setArquivando] = useState(false);
+
+  // Controle de expansão (1 linha por padrão; clica para abrir)
+  const [questoesExpandidas, setQuestoesExpandidas] = useState<Set<string>>(new Set());
+
+  const toggleExpandirQuestao = (id: string) => {
+    setQuestoesExpandidas((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
 
   // 1. Carrega combinações de ofertas do professor
   useEffect(() => {
@@ -122,6 +141,26 @@ export const ProfessorBancoPage: React.FC = () => {
   const combAtual = combinacoes.find(
     (c) => `${c.disciplina_id}__${c.serie}` === combinacaoSelecionada
   );
+
+  // Séries únicas ordenadas e matérias filtradas pela série selecionada
+  const seriesDisponiveis = Array.from(new Set(combinacoes.map((c) => c.serie))).sort((a, b) =>
+    a.localeCompare(b, 'pt-BR', { numeric: true })
+  );
+  const serieAtual = combAtual?.serie || seriesDisponiveis[0] || '';
+  const materiasDaSerie = combinacoes.filter((c) => c.serie === serieAtual);
+
+  const handleMudarSerie = (novaSerie: string) => {
+    const primeiraDaSerie = combinacoes.find((c) => c.serie === novaSerie);
+    if (primeiraDaSerie) {
+      setCombinacaoSelecionada(`${primeiraDaSerie.disciplina_id}__${primeiraDaSerie.serie}`);
+      setFiltroAssunto('todos');
+    }
+  };
+
+  const handleMudarMateria = (novaCombinacao: string) => {
+    setCombinacaoSelecionada(novaCombinacao);
+    setFiltroAssunto('todos');
+  };
 
   // 2. Carrega assuntos da disciplina selecionada
   useEffect(() => {
@@ -360,6 +399,15 @@ export const ProfessorBancoPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2.5">
               <Button
                 variant="outline"
+                leftIcon={<Sparkles className="w-4 h-4 text-amber-500" />}
+                onClick={() => setModalIAAberto(true)}
+                disabled={!combAtual}
+                className="border-amber-300 hover:border-amber-400 bg-amber-50/50 hover:bg-amber-50 text-amber-900 font-bold shadow-xs"
+              >
+                Cadastrar por IA
+              </Button>
+              <Button
+                variant="outline"
                 leftIcon={<FolderPlus className="w-4 h-4" />}
                 onClick={() => setModalAssuntoAberto(true)}
                 disabled={!combAtual}
@@ -378,45 +426,67 @@ export const ProfessorBancoPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Barra de Filtros e Seletores */}
+        {/* Barra de Filtros em Cascata: 1º Série -> 2º Matéria -> 3º Assunto -> 4º Dificuldade -> 5º Escopo */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Seletor Matéria · Série */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            {/* 1º Seletor: Série */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                Matéria e Série
+                1. Série
               </label>
               {carregandoCombinacoes ? (
                 <div className="h-10 flex items-center text-xs text-slate-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
                   Carregando...
                 </div>
-              ) : combinacoes.length === 0 ? (
-                <p className="text-xs text-slate-500 py-2">Nenhuma oferta atribuída.</p>
+              ) : seriesDisponiveis.length === 0 ? (
+                <p className="text-xs text-slate-500 py-2">Nenhuma série atribuída.</p>
               ) : (
                 <Select
-                  value={combinacaoSelecionada}
-                  onChange={(e) => setCombinacaoSelecionada(e.target.value)}
+                  aria-label="Filtrar por Série"
+                  value={serieAtual}
+                  onChange={(e) => handleMudarSerie(e.target.value)}
                   className="w-full font-semibold"
                 >
-                  {combinacoes.map((c) => (
-                    <option
-                      key={`${c.disciplina_id}__${c.serie}`}
-                      value={`${c.disciplina_id}__${c.serie}`}
-                    >
-                      {c.label}
+                  {seriesDisponiveis.map((serie) => (
+                    <option key={serie} value={serie}>
+                      {serie}
                     </option>
                   ))}
                 </Select>
               )}
             </div>
 
-            {/* Filtro por Assunto */}
+            {/* 2º Seletor: Matéria */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                Assunto
+                2. Matéria
               </label>
               <Select
+                aria-label="Filtrar por Matéria"
+                value={combinacaoSelecionada}
+                onChange={(e) => handleMudarMateria(e.target.value)}
+                className="w-full font-semibold"
+                disabled={!serieAtual || materiasDaSerie.length === 0}
+              >
+                {materiasDaSerie.map((c) => (
+                  <option
+                    key={`${c.disciplina_id}__${c.serie}`}
+                    value={`${c.disciplina_id}__${c.serie}`}
+                  >
+                    {c.disciplina_nome}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {/* 3º Seletor: Assunto */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                3. Assunto
+              </label>
+              <Select
+                aria-label="Filtrar por Assunto"
                 value={filtroAssunto}
                 onChange={(e) => setFiltroAssunto(e.target.value)}
                 className="w-full"
@@ -431,12 +501,13 @@ export const ProfessorBancoPage: React.FC = () => {
               </Select>
             </div>
 
-            {/* Filtro por Dificuldade */}
+            {/* 4º Seletor: Dificuldade */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                Dificuldade
+                4. Dificuldade
               </label>
               <Select
+                aria-label="Filtrar por Dificuldade"
                 value={filtroDificuldade}
                 onChange={(e) => setFiltroDificuldade(e.target.value)}
                 className="w-full"
@@ -449,7 +520,7 @@ export const ProfessorBancoPage: React.FC = () => {
               </Select>
             </div>
 
-            {/* Filtro Escopo (Minhas / Da escola) */}
+            {/* 5º Seletor: Escopo (Da escola / Minhas) */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                 Escopo
@@ -518,135 +589,203 @@ export const ProfessorBancoPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="text-xs font-semibold text-slate-500 px-1">
-              Exibindo {questoes.length} questão(ões) no banco
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <div className="text-xs font-semibold text-slate-500">
+                Exibindo {questoes.length} questão(ões) no banco — clique na pergunta para abrir
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuestoesExpandidas(new Set())}
+                  className="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+                >
+                  Recolher todas
+                </button>
+                <span className="text-slate-300">•</span>
+                <button
+                  type="button"
+                  onClick={() => setQuestoesExpandidas(new Set(questoes.map((q) => q.id)))}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                >
+                  Expandir todas
+                </button>
+              </div>
             </div>
 
             {questoes.map((q, idx) => {
               const souAutor = q.criado_por === usuario?.id;
+              const isExpanded = questoesExpandidas.has(q.id);
 
               return (
-                <Card key={q.id} className="border-slate-200">
-                  <CardContent className="p-5 sm:p-6 space-y-4">
-                    {/* Linha superior: Tags e Ações */}
-                    <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500">
-                          #{idx + 1}
+                <Card key={q.id} className="border-slate-200 overflow-hidden">
+                  {/* Linha única compacta da pergunta — clica para abrir/recolher */}
+                  <div
+                    onClick={() => toggleExpandirQuestao(q.id)}
+                    className={`py-3 px-4 sm:px-5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                      isExpanded
+                        ? 'bg-slate-50/90 border-b border-slate-200'
+                        : 'bg-white hover:bg-slate-50/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-xs font-bold text-slate-500 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                          DIFICULDADE_COR[q.dificuldade]
+                        }`}
+                      >
+                        {DIFICULDADE_ROTULO[q.dificuldade]}
+                      </span>
+                      {q.assunto_nome && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                          {q.assunto_nome}
                         </span>
-                        <span
-                          className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                            DIFICULDADE_COR[q.dificuldade]
-                          }`}
-                        >
-                          {DIFICULDADE_ROTULO[q.dificuldade]}
-                        </span>
-                        {q.assunto_nome && (
-                          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                            {q.assunto_nome}
-                          </span>
-                        )}
-                        <span className="text-xs text-slate-400">
-                          por {souAutor ? 'Você' : q.autor_nome}
-                        </span>
-                      </div>
+                      )}
 
-                      {/* Botões de Ação */}
-                      <div className="flex items-center gap-1.5">
-                        {souAutor ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              leftIcon={<Edit2 className="w-3.5 h-3.5" />}
-                              onClick={() => handleAbrirEditarQuestao(q)}
-                            >
-                              Editar
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                              leftIcon={<Archive className="w-3.5 h-3.5" />}
-                              onClick={() => setQuestaoParaArquivar(q)}
-                            >
-                              Arquivar
-                            </Button>
-                          </>
-                        ) : (
+                      {/* APENAS 1 LINHA DA PERGUNTA */}
+                      <span
+                        className="text-sm font-medium text-slate-800 truncate flex-1 min-w-0"
+                        title={q.enunciado}
+                      >
+                        {q.enunciado}
+                      </span>
+                    </div>
+
+                    {/* Botões de Ação e Ícone Abrir */}
+                    <div
+                      className="flex items-center gap-1.5 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {souAutor ? (
+                        <>
                           <Button
-                            variant="secondary"
+                            variant="ghost"
                             size="sm"
-                            leftIcon={<Copy className="w-3.5 h-3.5" />}
-                            onClick={() => handleDuplicar(q)}
+                            leftIcon={<Edit2 className="w-3.5 h-3.5" />}
+                            onClick={() => handleAbrirEditarQuestao(q)}
                           >
-                            Duplicar para editar
+                            Editar
                           </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Enunciado */}
-                    <div className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">
-                      {q.enunciado}
-                    </div>
-
-                    {/* Alternativas */}
-                    {q.alternativas && q.alternativas.length > 0 && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                        {q.alternativas.map((alt) => (
-                          <div
-                            key={alt.id}
-                            className={`p-3 rounded-xl border text-xs leading-snug space-y-1 ${
-                              alt.correta
-                                ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-medium'
-                                : 'bg-slate-50 border-slate-200 text-slate-700'
-                            }`}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            leftIcon={<Archive className="w-3.5 h-3.5" />}
+                            onClick={() => setQuestaoParaArquivar(q)}
                           >
-                            <div className="flex items-start gap-2">
-                              <span
-                                className={`font-mono font-bold shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[11px] ${
+                            Arquivar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          leftIcon={<Copy className="w-3.5 h-3.5" />}
+                          onClick={() => handleDuplicar(q)}
+                        >
+                          Duplicar para editar
+                        </Button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => toggleExpandirQuestao(q.id)}
+                        className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                        title={isExpanded ? 'Recolher detalhes' : 'Abrir pergunta completa'}
+                      >
+                        <ChevronDown
+                          className={`w-4 h-4 transition-transform duration-200 ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Conteúdo Completo Expandido ao Clicar */}
+                  {isExpanded && (
+                    <CardContent className="p-5 sm:p-6 space-y-4 bg-white">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span>Autor: {souAutor ? 'Você' : q.autor_nome}</span>
+                        <span>Tipo: {q.tipo === 'discursiva' ? 'Subjetiva / Discursiva' : 'Objetiva'}</span>
+                      </div>
+
+                      {/* Enunciado Completo */}
+                      <div className="text-sm font-medium text-slate-800 leading-relaxed whitespace-pre-wrap">
+                        <MathText text={q.enunciado} />
+                      </div>
+
+                      {/* Alternativas ou Resposta Esperada */}
+                      {q.tipo === 'discursiva' ? (
+                        <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200 text-xs text-purple-950 space-y-1">
+                          <span className="font-bold block">Resposta Esperada (Gabarito):</span>
+                          <p className="whitespace-pre-wrap">
+                            {q.resposta_esperada || 'Critérios abertos de correção pelo professor.'}
+                          </p>
+                        </div>
+                      ) : (
+                        q.alternativas &&
+                        q.alternativas.length > 0 && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {q.alternativas.map((alt) => (
+                              <div
+                                key={alt.id}
+                                className={`p-3 rounded-xl border text-xs leading-snug space-y-1 ${
                                   alt.correta
-                                    ? 'bg-emerald-600 text-white'
-                                    : 'bg-slate-200 text-slate-700'
+                                    ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950 font-medium'
+                                    : 'bg-slate-50 border-slate-200 text-slate-700'
                                 }`}
                               >
-                                {alt.letra}
-                              </span>
-                              <span className="flex-1">{alt.texto}</span>
-                              {alt.correta && (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                              )}
-                            </div>
-                            {!alt.correta && alt.por_que_errou && (
-                              <p className="text-[11px] text-slate-500 pl-7 italic">
-                                Por que errou: {alt.por_que_errou}
-                              </p>
-                            )}
+                                <div className="flex items-start gap-2">
+                                  <span
+                                    className={`font-mono font-bold shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-[11px] ${
+                                      alt.correta
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-slate-200 text-slate-700'
+                                    }`}
+                                  >
+                                    {alt.letra}
+                                  </span>
+                                  <span className="flex-1">
+                                    <MathText text={alt.texto} />
+                                  </span>
+                                  {alt.correta && (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                  )}
+                                </div>
+                                {!alt.correta && alt.por_que_errou && (
+                                  <p className="text-[11px] text-slate-500 pl-7 italic">
+                                    Por que errou: <MathText text={alt.por_que_errou} />
+                                  </p>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        )
+                      )}
 
-                    {/* Dica e Explicação */}
-                    {(q.dica || q.explicacao) && (
-                      <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                        {q.dica && (
-                          <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-900">
-                            <span className="font-bold">Dica pedagógica: </span>
-                            {q.dica}
-                          </div>
-                        )}
-                        {q.explicacao && (
-                          <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-indigo-900">
-                            <span className="font-bold">Explicação da resposta: </span>
-                            {q.explicacao}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
+                      {/* Dica e Explicação */}
+                      {(q.dica || q.explicacao) && (
+                        <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          {q.dica && (
+                            <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-900">
+                              <span className="font-bold">Dica pedagógica: </span>
+                              <MathText text={q.dica} />
+                            </div>
+                          )}
+                          {q.explicacao && (
+                            <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200/80 text-indigo-900">
+                              <span className="font-bold">Explicação da resposta: </span>
+                              <MathText text={q.explicacao} />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  )}
                 </Card>
               );
             })}
@@ -874,6 +1013,25 @@ export const ProfessorBancoPage: React.FC = () => {
           cancelText="Cancelar"
           variant="danger"
           isLoading={arquivando}
+        />
+
+        {/* Modal Gerador de Questões por IA */}
+        <ModalGeradorIA
+          aberto={modalIAAberto}
+          onFechar={() => setModalIAAberto(false)}
+          disciplinaIdInicial={combAtual?.disciplina_id || ''}
+          serieInicial={combAtual?.serie || ''}
+          assuntoIdInicial={filtroAssunto !== 'todos' ? filtroAssunto : undefined}
+          combinacoes={combinacoes}
+          assuntos={assuntos}
+          onCriarAssunto={async (nome) => {
+            const a = await bancoService.criarAssunto(combAtual!.disciplina_id, nome);
+            setAssuntos((prev) => [...prev, a]);
+            return a;
+          }}
+          onSucesso={async () => {
+            await carregarQuestoes();
+          }}
         />
       </div>
     </AppShell>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardContent, Button } from '@/components/ui';
-import { professorService, OfertaDetalhada } from '@/services';
+import { professorService, OfertaDetalhada, assinarMudancas } from '@/services';
 import {
   GraduationCap,
   Users,
@@ -30,8 +30,39 @@ export const ProfessorDashboardPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [ofertas, setOfertas] = useState<OfertaComContagem[]>([]);
+  const [serieSelecionada, setSerieSelecionada] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+
+  // Extrai todas as séries únicas das ofertas atribuídas ao professor
+  const seriesDisponiveis = React.useMemo(() => {
+    const setSeries = new Set<string>();
+    ofertas.forEach((o) => {
+      if (o.turma_serie) {
+        setSeries.add(o.turma_serie);
+      } else {
+        setSeries.add('Outras turmas');
+      }
+    });
+    return Array.from(setSeries).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [ofertas]);
+
+  // Mantém a primeira série selecionada por padrão ou ajusta se a lista mudar
+  useEffect(() => {
+    if (seriesDisponiveis.length > 0) {
+      if (!serieSelecionada || !seriesDisponiveis.includes(serieSelecionada)) {
+        setSerieSelecionada(seriesDisponiveis[0]);
+      }
+    } else {
+      setSerieSelecionada(null);
+    }
+  }, [seriesDisponiveis, serieSelecionada]);
+
+  // Filtra as ofertas de acordo com a série ativa
+  const ofertasFiltradas = React.useMemo(() => {
+    if (!serieSelecionada) return ofertas;
+    return ofertas.filter((o) => (o.turma_serie || 'Outras turmas') === serieSelecionada);
+  }, [ofertas, serieSelecionada]);
 
   useEffect(() => {
     let montado = true;
@@ -88,8 +119,15 @@ export const ProfessorDashboardPage: React.FC = () => {
 
     carregarDados();
 
+    const desassinar = assinarMudancas(() => {
+      if (montado) {
+        carregarDados();
+      }
+    });
+
     return () => {
       montado = false;
+      desassinar();
     };
   }, []);
 
@@ -141,6 +179,55 @@ export const ProfessorDashboardPage: React.FC = () => {
           </div>
         )}
 
+        {/* Seletor de Séries em que o Professor leciona */}
+        {!carregando && !erro && seriesDisponiveis.length > 0 && (
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                Séries em que leciona:
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                {seriesDisponiveis.length} {seriesDisponiveis.length === 1 ? 'série' : 'séries'} vinculada{seriesDisponiveis.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1" role="tablist" aria-label="Séries">
+              {seriesDisponiveis.map((serie) => {
+                const ativa = serie === serieSelecionada;
+                const qtdMaterias = ofertas.filter(
+                  (o) => (o.turma_serie || 'Outras turmas') === serie
+                ).length;
+
+                return (
+                  <button
+                    key={serie}
+                    type="button"
+                    role="tab"
+                    aria-selected={ativa}
+                    onClick={() => setSerieSelecionada(serie)}
+                    data-testid={`aba-serie-${serie}`}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+                      ativa
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 ring-2 ring-indigo-600/30'
+                        : 'bg-slate-50 border border-slate-200 text-slate-700 hover:border-indigo-300 hover:bg-white hover:text-indigo-600'
+                    }`}
+                  >
+                    <span>{serie}</span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                        ativa
+                          ? 'bg-indigo-700/80 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {qtdMaterias} {qtdMaterias === 1 ? 'matéria' : 'matérias'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Lista de Turmas / Ofertas */}
         {!carregando && !erro && ofertas.length === 0 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-3">
@@ -155,9 +242,22 @@ export const ProfessorDashboardPage: React.FC = () => {
           </div>
         )}
 
-        {!carregando && !erro && ofertas.length > 0 && (
+        {/* Nenhuma matéria na série selecionada */}
+        {!carregando && !erro && ofertas.length > 0 && ofertasFiltradas.length === 0 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center space-y-2">
+            <BookOpen className="w-10 h-10 text-slate-300 mx-auto" />
+            <h3 className="font-heading font-bold text-base text-slate-700">
+              Nenhuma matéria encontrada nesta série
+            </h3>
+            <p className="text-sm text-slate-500">
+              Selecione outra série acima para visualizar suas turmas e disciplinas.
+            </p>
+          </div>
+        )}
+
+        {!carregando && !erro && ofertasFiltradas.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {ofertas.map((oferta) => (
+            {ofertasFiltradas.map((oferta) => (
               <Card
                 key={oferta.id}
                 hover

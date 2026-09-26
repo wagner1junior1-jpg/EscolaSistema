@@ -231,6 +231,45 @@ export interface BancoAlternativa {
   por_que_errou: string | null;
 }
 
+// 18. Tipos do Gerador de Questões por IA (Fase H4 - docs/ESPECIFICACAO.md 9.6, 9.7)
+export interface GerarQuestoesIAParams {
+  disciplina_id: string;
+  assunto_id: string;
+  serie: string;
+  qtd_total?: number;
+  qtd_objetivas: number;
+  qtd_discursivas: number; // subjetivas
+  dificuldade?: DificuldadeQuestao | 'misturada';
+  fotos?: string[];
+  texto_base?: string;
+  anexar_foto?: boolean;
+}
+
+export interface QuestaoSugeridaAlternativa {
+  letra: LetraAlternativa;
+  texto: string;
+  correta: boolean;
+  por_que_errou?: string | null;
+}
+
+export interface QuestaoSugeridaIA {
+  id_temp: string;
+  tipo: TipoQuestao;
+  dificuldade: DificuldadeQuestao;
+  enunciado: string;
+  dica?: string | null;
+  explicacao?: string | null;
+  resposta_esperada?: string | null; // gabarito para discursivas
+  imagem_url?: string | null;
+  alternativas?: QuestaoSugeridaAlternativa[];
+}
+
+export interface RespostaGeracaoIA {
+  questoes: QuestaoSugeridaIA[];
+  texto_transcrito?: string;
+}
+
+
 /* =========================================================================
  * Tipos Auxiliares e Views Projetadas (Segurança do Aluno e Visualização)
  * ========================================================================= */

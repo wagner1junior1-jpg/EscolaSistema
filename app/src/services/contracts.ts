@@ -37,7 +37,14 @@ import {
   Assunto,
   BancoQuestao,
   DificuldadeQuestao,
+  TipoQuestao,
+  OrigemQuestao,
+  GerarQuestoesIAParams,
+  QuestaoSugeridaIA,
+  RespostaGeracaoIA,
 } from '@/lib/types';
+
+export type { GerarQuestoesIAParams, QuestaoSugeridaIA, RespostaGeracaoIA };
 
 // Entrada para criação/edição de questão e suas alternativas
 export interface NovaQuestaoPayload {
@@ -50,6 +57,9 @@ export interface NovaQuestaoPayload {
   assunto_id?: string | null;
   salvar_no_banco?: boolean;
   dificuldade?: DificuldadeQuestao;
+  tipo?: TipoQuestao;
+  resposta_esperada?: string | null;
+  imagem_url?: string | null;
   alternativas: Array<{
     id?: string;
     letra?: 'A' | 'B' | 'C' | 'D' | 'E';
@@ -69,7 +79,11 @@ export interface SalvarBancoQuestaoPayload {
   dica?: string | null;
   explicacao?: string | null;
   versao?: number;
-  alternativas: Array<{
+  tipo?: TipoQuestao;
+  origem?: OrigemQuestao;
+  resposta_esperada?: string | null;
+  imagem_url?: string | null;
+  alternativas?: Array<{
     id?: string;
     letra?: 'A' | 'B' | 'C' | 'D' | 'E';
     texto: string;
@@ -199,4 +213,14 @@ export interface ServicoBanco {
 }
 
 export type BancoService = ServicoBanco;
+
+// 7. ServicoIA / IAService (docs/ESPECIFICACAO.md 9.6, 9.7)
+export interface ServicoIA {
+  gerarQuestoes(params: GerarQuestoesIAParams): Promise<RespostaGeracaoIA>;
+  transcreverImagem(fotos: string[]): Promise<string>;
+  consultarCota(): Promise<{ uso_mes: number; limite_mes: number }>;
+}
+
+export type IAService = ServicoIA;
+
 

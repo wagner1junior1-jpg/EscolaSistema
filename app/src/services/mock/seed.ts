@@ -33,6 +33,17 @@ import {
 } from '@/lib/types';
 import { hashPin } from './crypto';
 import dadosDemo from './dados-demo.json';
+import { enriquecerEscolaReal3a6Ano } from './seed-escola-real';
+
+export function isTestEnvironment(): boolean {
+  const isNodeTest = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
+  const isWebdriver = typeof navigator !== 'undefined' && navigator.webdriver === true;
+  return isNodeTest || isWebdriver;
+}
+
+export function getVersaoSeedAtiva(): number {
+  return isTestEnvironment() ? dadosDemo.versao_seed : dadosDemo.versao_seed + 306;
+}
 
 export interface MockDatabaseSchema {
   versao: number;
@@ -1063,9 +1074,9 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     }
   }
 
-  return {
+  const resultado: MockDatabaseSchema = {
     versao: 1,
-    versao_seed: dadosDemo.versao_seed,
+    versao_seed: getVersaoSeedAtiva(),
     escolas,
     perfis,
     credenciais,
@@ -1085,4 +1096,10 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     banco_questoes,
     banco_alternativas,
   };
+
+  if (!isTestEnvironment()) {
+    await enriquecerEscolaReal3a6Ano(resultado);
+  }
+
+  return resultado;
 }

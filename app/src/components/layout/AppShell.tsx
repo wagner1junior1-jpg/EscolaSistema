@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { School, LogOut, User } from 'lucide-react';
+import { School, LogOut, User, Sparkles, ChevronDown } from 'lucide-react';
 import { PapelUsuario } from '@/lib/types';
+import { alunoService } from '@/services';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -21,8 +22,9 @@ const papelCor: Record<PapelUsuario, string> = {
 };
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
-  const { usuario, sair } = useAuth();
+  const { usuario, entrar, sair } = useAuth();
   const navigate = useNavigate();
+  const [menuPerfilAberto, setMenuPerfilAberto] = useState(false);
 
   const handleSair = async () => {
     try {
@@ -30,6 +32,22 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
       navigate('/entrar', { replace: true });
     } catch (err) {
       console.error('Erro ao sair:', err);
+    }
+  };
+
+  const handleTrocarPerfilDemo = async (tipo: 'equipe' | 'aluno', emailOuId: string) => {
+    setMenuPerfilAberto(false);
+    try {
+      if (tipo === 'aluno') {
+        const { token } = await alunoService.login('aluno-7a-1', '1420');
+        localStorage.setItem('saberpontual_aluno_token', token);
+        navigate('/aluno/painel');
+      } else {
+        const novoUser = await entrar(emailOuId, 'demo123');
+        navigate(novoUser.papel === 'professor' ? '/professor' : '/gestao');
+      }
+    } catch (err) {
+      console.error('Erro ao trocar perfil demo:', err);
     }
   };
 
@@ -59,8 +77,81 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             </div>
           </Link>
 
-          {/* Dados do Usuário e Botão Sair */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          {/* Dados do Usuário, Troca Rápida Demo e Botão Sair */}
+          <div className="flex items-center gap-2.5 sm:gap-3.5">
+            {/* Botão Seletor Rápido de Perfil (Modo Demo) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuPerfilAberto((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100/80 text-amber-900 text-xs font-bold transition-colors cursor-pointer"
+                title="Alternar rapidamente entre perfis de demonstração"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden md:inline">Trocar Perfil</span>
+                <ChevronDown className="w-3.5 h-3.5 text-amber-600" />
+              </button>
+
+              {menuPerfilAberto && (
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-lg py-2 z-50 space-y-1">
+                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                    Alternar Acesso (1-Clique)
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTrocarPerfilDemo('equipe', 'ana@demo.com')}
+                    className="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span className="font-bold text-slate-800">Profª Ana Paula</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 font-semibold">
+                      Professor(a)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTrocarPerfilDemo('equipe', 'carlos@demo.com')}
+                    className="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span className="font-bold text-slate-800">Prof. Carlos Roberto</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 font-semibold">
+                      Professor(a)
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTrocarPerfilDemo('equipe', 'direcao@demo.com')}
+                    className="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span className="font-bold text-slate-800">Diretora Helena</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-semibold">
+                      Direção
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTrocarPerfilDemo('equipe', 'coordenacao@demo.com')}
+                    className="w-full px-3 py-2 text-left text-xs hover:bg-indigo-50 flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span className="font-bold text-slate-800">Coord. Patrícia</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-semibold">
+                      Coordenação
+                    </span>
+                  </button>
+                  <div className="border-t border-slate-100 my-1" />
+                  <button
+                    type="button"
+                    onClick={() => handleTrocarPerfilDemo('aluno', 'aluno-7a-1')}
+                    className="w-full px-3 py-2 text-left text-xs hover:bg-emerald-50 flex items-center justify-between transition-colors cursor-pointer"
+                  >
+                    <span className="font-bold text-emerald-900">Aluno Lucas Oliveira</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                      6º Ano A
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {usuario && (
               <div className="flex items-center gap-2.5 text-right">
                 <div className="hidden sm:flex flex-col items-end">

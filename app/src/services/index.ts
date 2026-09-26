@@ -12,6 +12,7 @@ import {
   AlunoService,
   RelatorioService,
   BancoService,
+  ServicoIA,
 } from './contracts';
 
 import {
@@ -21,6 +22,7 @@ import {
   MockAlunoService,
   MockRelatorioService,
   MockBancoService,
+  MockIAService,
 } from './mock';
 
 import {
@@ -30,6 +32,7 @@ import {
   SupabaseAlunoServiceStub,
   SupabaseRelatorioServiceStub,
   SupabaseBancoServiceStub,
+  SupabaseIAServiceStub,
 } from './supabase/stub';
 
 export * from './contracts';
@@ -56,16 +59,21 @@ export const relatorioService: RelatorioService =
 export const bancoService: BancoService =
   dataSource === 'supabase' ? new SupabaseBancoServiceStub() : new MockBancoService();
 
+export const iaService: ServicoIA =
+  dataSource === 'supabase' ? new SupabaseIAServiceStub() : new MockIAService();
+
 if (typeof window !== 'undefined') {
-  (window as unknown as { bancoService?: BancoService }).bancoService = bancoService;
+  (window as unknown as { bancoService?: BancoService; iaService?: ServicoIA }).bancoService =
+    bancoService;
+  (window as unknown as { bancoService?: BancoService; iaService?: ServicoIA }).iaService =
+    iaService;
 }
 
 export async function restaurarDadosDemo(): Promise<void> {
-  if (dataSource === 'mock') {
-    const { resetDatabase } = await import('./mock/db');
-    await resetDatabase();
-  } else {
-    throw new Error('Disponível só no modo de demonstração.');
-  }
+  const { resetDatabase } = await import('./mock/db');
+  await resetDatabase();
 }
+
+export { assinarMudancas } from './mock/db';
+
 

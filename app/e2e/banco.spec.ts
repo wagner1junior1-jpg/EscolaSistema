@@ -377,4 +377,64 @@ test.describe.serial('Fase H1 — Banco de Questões (B1 a B8)', () => {
     // Captura evidência B8
     await page.screenshot({ path: 'e2e/evidencias/B8.png' });
   });
+
+  test('B9: Professora Ana gera 20 questões por IA (com subjetivas), revisa e salva no Banco', async () => {
+    // Login Ana
+    await page.goto('/entrar');
+    await page.getByPlaceholder('exemplo@demo.com').fill('ana@demo.com');
+    await page.getByPlaceholder('••••••••').fill('demo123');
+    await page.getByRole('button', { name: 'Entrar' }).click();
+    await expect(page).toHaveURL(/\/professor/);
+
+    await page.goto('/professor/banco');
+
+    // Clica no botão "Cadastrar por IA"
+    const btnCadastrarIA = page.getByRole('button', { name: 'Cadastrar por IA' });
+    await expect(btnCadastrarIA).toBeVisible();
+    await btnCadastrarIA.click();
+
+    // Modal aberto com título "Cadastrar Questões por IA"
+    await expect(page.getByRole('heading', { name: 'Cadastrar Questões por IA' })).toBeVisible();
+
+    // Confere cabeçalho de limite e aviso de privacidade
+    await expect(page.getByText('Quantidade de Questões (Limite de 20 por vez)')).toBeVisible();
+    await expect(page.getByText(/Não envie fotos com nomes/i)).toBeVisible();
+
+    // Clica em "Gerar 20 questões com IA"
+    const btnGerar = page.getByRole('button', { name: 'Gerar 20 questões com IA' });
+    await expect(btnGerar).toBeVisible();
+    await btnGerar.click();
+
+    // Aguarda transição para a Tela de Revisão
+    await expect(page.getByRole('heading', { name: /Revisão das Questões Geradas/i })).toBeVisible();
+    await expect(page.getByText('20 Questões Geradas')).toBeVisible();
+
+    // Confere que inicialmente as questões aparecem em formato de 1 linha e expande ao clicar
+    await expect(page.getByText('Subjetiva (Discursiva)').first()).toBeVisible();
+    await expect(page.getByText('Objetiva').first()).toBeVisible();
+    await expect(page.getByText(/\(Matemática - 7º Ano\)/).first()).toBeVisible();
+
+    // Clica para abrir os detalhes das questões geradas
+    await page.getByRole('dialog').getByRole('button', { name: 'Expandir todas' }).click();
+    await expect(page.getByText('Resposta Esperada (Gabarito do professor):').first()).toBeVisible();
+    await expect(page.getByText('Correta').first()).toBeVisible();
+    await expect(page.getByText(/Questão 1:/i)).toHaveCount(0);
+
+    await page.screenshot({ path: 'e2e/evidencias/B9-revisao-ia.png' });
+
+    // Clica em "Aprovar" na primeira questão (com exact: true para não casar com "Aprovar todas")
+    const btnAprovarPrimeira = page.getByRole('button', { name: 'Aprovar', exact: true }).first();
+    await btnAprovarPrimeira.click();
+    await expect(page.getByText('Salva no Banco').first()).toBeVisible();
+
+    // Clica em "Aprovar todas para o Banco" (botão superior do resumo)
+    await page.getByRole('button', { name: 'Aprovar todas para o Banco' }).first().click();
+
+    // Modal fecha e volta para a listagem do banco
+    await expect(page.getByRole('heading', { name: 'Banco de Questões' })).toBeVisible();
+
+    // Captura evidência B9
+    await page.screenshot({ path: 'e2e/evidencias/B9.png' });
+  });
 });
+

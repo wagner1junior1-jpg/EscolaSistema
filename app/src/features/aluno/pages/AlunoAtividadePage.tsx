@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande, ChipInfo } from '@/components/aluno';
 import { alunoService } from '@/services';
-import { useToast } from '@/components/ui';
+import { useToast, MathText } from '@/components/ui';
 import {
   ArrowLeft,
   Volume2,
@@ -397,14 +397,14 @@ export const AlunoAtividadePage: React.FC = () => {
     const aproveitamento = isProva && resultadoProvaFinal ? resultadoProvaFinal.aproveitamento : placarExercicio.aproveitamento;
 
     return (
-      <AlunoLayout containerClassName="p-4 sm:p-6 lg:p-8">
-        <main className="max-w-3xl mx-auto w-full space-y-6 pb-16">
+      <AlunoLayout containerClassName="p-3 sm:p-6 lg:p-8">
+        <main className="max-w-3xl mx-auto w-full space-y-4 sm:space-y-6 pb-16 safe-bottom">
           {/* Header Superior */}
           <div className="flex items-center justify-between">
             <button
               type="button"
               onClick={() => navigate('/aluno/painel')}
-              className="inline-flex items-center gap-2 p-2.5 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border border-slate-200 shadow-sm text-xs font-heading font-bold cursor-pointer transition-all"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border border-slate-200 shadow-sm text-xs font-heading font-bold cursor-pointer transition-all min-h-[40px]"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Voltar ao painel</span>
@@ -414,68 +414,68 @@ export const AlunoAtividadePage: React.FC = () => {
               type="button"
               onClick={handleToggleSom}
               aria-label={somAtivo ? 'Desativar som' : 'Ativar som'}
-              className="p-2.5 rounded-2xl bg-white/80 border border-slate-200 text-slate-600 shadow-sm cursor-pointer"
+              className="p-2.5 rounded-2xl bg-white/80 border border-slate-200 text-slate-600 shadow-sm cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
             >
               {somAtivo ? <Volume2 className="w-4 h-4 text-indigo-600" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
             </button>
           </div>
 
-          {/* Card Principal de Conclusão / Placar */}
-          <CartaoVidro className="p-6 sm:p-10 text-center space-y-6">
-            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-amber-400 to-yellow-300 text-amber-900 flex items-center justify-center shadow-lg shadow-amber-200/60">
-              <Trophy className="w-10 h-10" />
+          {/* Card Principal de Conclusão / Placar (Mobile-First) */}
+          <CartaoVidro className="p-4 sm:p-10 text-center space-y-5 sm:space-y-6">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-3xl bg-gradient-to-tr from-amber-400 to-yellow-300 text-amber-900 flex items-center justify-center shadow-lg shadow-amber-200/60">
+              <Trophy className="w-8 h-8 sm:w-10 sm:h-10" />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <div className="inline-flex items-center gap-2">
-                <ChipInfo color={isProva ? 'pink' : 'emerald'}>
+                <ChipInfo color={isProva ? 'pink' : 'emerald'} className="text-xs">
                   {isProva ? 'Prova Concluída' : 'Exercício Concluído'}
                 </ChipInfo>
               </div>
-              <h1 className="font-heading font-black text-2xl sm:text-3xl text-slate-900 tracking-tight">
+              <h1 className="font-heading font-black text-xl sm:text-3xl text-slate-900 tracking-tight leading-snug">
                 {atividade.titulo}
               </h1>
-              <p className="text-sm text-slate-600 font-sans">
+              <p className="text-xs sm:text-sm text-slate-600 font-sans">
                 {aproveitamento >= 70
                   ? 'Excelente resultado! Você foi muito bem.'
                   : 'Atividade finalizada! Revise as questões para continuar aprendendo.'}
               </p>
             </div>
 
-            {/* Placar em Destaque */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <div className="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex flex-col items-center">
-                <span className="text-[11px] font-heading font-bold uppercase text-indigo-700 tracking-wider">
+            {/* Placar em Destaque (Grid 2x2 equilibrado em telas pequenas) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 pt-1">
+              <div className="p-3 sm:p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex flex-col items-center">
+                <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-indigo-700 tracking-wider">
                   Aproveitamento
                 </span>
-                <span className="font-heading font-black text-2xl sm:text-3xl text-indigo-900 mt-1">
+                <span className="font-heading font-black text-2xl sm:text-3xl text-indigo-900 mt-0.5 sm:mt-1">
                   {aproveitamento}%
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex flex-col items-center">
-                <span className="text-[11px] font-heading font-bold uppercase text-emerald-700 tracking-wider">
-                  Acertos (1ª resp)
+              <div className="p-3 sm:p-4 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex flex-col items-center">
+                <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-emerald-700 tracking-wider">
+                  Acertos (1ª)
                 </span>
-                <span className="font-heading font-black text-2xl sm:text-3xl text-emerald-900 mt-1">
+                <span className="font-heading font-black text-2xl sm:text-3xl text-emerald-900 mt-0.5 sm:mt-1">
                   {acertos}
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-rose-50/80 border border-rose-100 flex flex-col items-center">
-                <span className="text-[11px] font-heading font-bold uppercase text-rose-700 tracking-wider">
+              <div className="p-3 sm:p-4 rounded-2xl bg-rose-50/80 border border-rose-100 flex flex-col items-center">
+                <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-rose-700 tracking-wider">
                   Erros
                 </span>
-                <span className="font-heading font-black text-2xl sm:text-3xl text-rose-900 mt-1">
+                <span className="font-heading font-black text-2xl sm:text-3xl text-rose-900 mt-0.5 sm:mt-1">
                   {erros}
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col items-center">
-                <span className="text-[11px] font-heading font-bold uppercase text-slate-600 tracking-wider">
-                  Total Questões
+              <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col items-center">
+                <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-slate-600 tracking-wider">
+                  Total
                 </span>
-                <span className="font-heading font-black text-2xl sm:text-3xl text-slate-800 mt-1">
+                <span className="font-heading font-black text-2xl sm:text-3xl text-slate-800 mt-0.5 sm:mt-1">
                   {totalQ}
                 </span>
               </div>
@@ -485,7 +485,7 @@ export const AlunoAtividadePage: React.FC = () => {
               variant="primary"
               onClick={() => navigate('/aluno/painel')}
               leftIcon={<ArrowLeft className="w-5 h-5" />}
-              className="w-full sm:w-auto px-8"
+              className="w-full sm:w-auto px-8 min-h-[48px]"
             >
               Voltar ao painel
             </BotaoGrande>
@@ -691,21 +691,21 @@ export const AlunoAtividadePage: React.FC = () => {
   const altCorretaId = questaoJaRespondida && !isProva ? respAtual?.alternativa_correta_id : undefined;
 
   return (
-    <AlunoLayout containerClassName="p-4 sm:p-6 lg:p-8">
-      <main className="max-w-3xl mx-auto w-full space-y-5 pb-16">
-        {/* Barra Superior de Navegação e Configuração */}
-        <div className="flex items-center justify-between gap-3">
+    <AlunoLayout containerClassName="p-3 sm:p-6 lg:p-8">
+      <main className="max-w-3xl mx-auto w-full space-y-4 sm:space-y-5 pb-16 safe-bottom">
+        {/* Barra Superior de Navegação e Configuração (Mobile-First) */}
+        <div className="flex items-center justify-between gap-2 sm:gap-3 bg-white/70 backdrop-blur-md p-2 sm:p-2.5 rounded-2xl border border-white/80 shadow-sm">
           <button
             type="button"
             onClick={() => navigate('/aluno/painel')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border border-slate-200 shadow-sm text-xs font-heading font-bold cursor-pointer transition-all"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-xs text-xs font-heading font-bold cursor-pointer transition-all shrink-0 min-h-[38px]"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Painel</span>
+            <span className="hidden xs:inline sm:inline">Painel</span>
           </button>
 
-          {/* Navegador rápido de questões (pills) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-1 scrollbar-none max-w-[200px] sm:max-w-none">
+          {/* Navegador rápido de questões (pills com rolagem fluida no mobile) */}
+          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto py-0.5 px-1 no-scrollbar justify-start sm:justify-center">
             {atividade.questoes.map((q, idx) => {
               const respondida = !!respostasMap[q.id];
               const isAtual = idx === indiceAtual;
@@ -714,12 +714,12 @@ export const AlunoAtividadePage: React.FC = () => {
                   key={q.id}
                   type="button"
                   onClick={() => setIndiceAtual(idx)}
-                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl text-xs font-heading font-bold flex items-center justify-center transition-all cursor-pointer ${
+                  className={`w-8 h-8 sm:w-9 sm:h-9 min-w-[32px] sm:min-w-[36px] rounded-xl text-xs font-heading font-black flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                     isAtual
-                      ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300'
+                      ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300 scale-105'
                       : respondida
                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-white/80 text-slate-600 border border-slate-200'
+                      : 'bg-white/90 text-slate-600 border border-slate-200 hover:border-indigo-300'
                   }`}
                   title={`Questão ${idx + 1}`}
                 >
@@ -733,14 +733,14 @@ export const AlunoAtividadePage: React.FC = () => {
             type="button"
             onClick={handleToggleSom}
             aria-label={somAtivo ? 'Desativar som' : 'Ativar som'}
-            className="p-2.5 rounded-2xl bg-white/80 border border-slate-200 text-slate-600 shadow-sm cursor-pointer"
+            className="p-2 sm:p-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 shadow-xs cursor-pointer shrink-0 min-h-[38px] min-w-[38px] flex items-center justify-center"
           >
             {somAtivo ? <Volume2 className="w-4 h-4 text-indigo-600" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
           </button>
         </div>
 
         {/* Card Principal da Questão */}
-        <CartaoVidro className="relative overflow-hidden p-6 sm:p-8 space-y-6">
+        <CartaoVidro className="relative overflow-hidden p-4 sm:p-8 space-y-4 sm:space-y-6">
           {/* Barra de Progresso Fina no Topo do Card */}
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-100">
             <div
@@ -750,41 +750,41 @@ export const AlunoAtividadePage: React.FC = () => {
           </div>
 
           {/* Chips do Topo: Disciplina, Modo e Questão N de T */}
-          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <ChipInfo color="indigo">
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <ChipInfo color="indigo" className="text-[11px] sm:text-xs">
                 {atividade.disciplina_nome}
               </ChipInfo>
 
               {isProva ? (
-                <ChipInfo color="pink" icon={<FileText className="w-3 h-3" />}>
+                <ChipInfo color="pink" icon={<FileText className="w-3 h-3" />} className="text-[11px] sm:text-xs">
                   Modo Prova
                 </ChipInfo>
               ) : (
-                <ChipInfo color="emerald" icon={<Sparkles className="w-3 h-3" />}>
+                <ChipInfo color="emerald" icon={<Sparkles className="w-3 h-3" />} className="text-[11px] sm:text-xs">
                   Modo Exercício
                 </ChipInfo>
               )}
             </div>
 
-            <span className="text-xs font-heading font-black text-slate-500 uppercase tracking-wider">
-              Questão {indiceAtual + 1} de {totalQuestoes}
+            <span className="text-[11px] sm:text-xs font-heading font-black text-slate-500 uppercase tracking-wider">
+              {indiceAtual + 1} de {totalQuestoes}
             </span>
           </div>
 
           {/* Enunciado e Ações (Dica e Som) */}
-          <div className="space-y-4">
-            <h2 className="font-heading font-black text-xl sm:text-2xl text-slate-900 leading-snug tracking-tight">
-              {questaoAtual?.enunciado}
+          <div className="space-y-3.5 sm:space-y-4">
+            <h2 className="font-heading font-black text-lg sm:text-2xl text-slate-900 leading-snug tracking-tight break-words">
+              <MathText text={questaoAtual?.enunciado} />
             </h2>
 
-            <div className="flex items-center gap-3 flex-wrap pt-1">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap pt-0.5">
               {/* Botão de Dica (apenas se existir dica) */}
               {questaoAtual?.dica && !questaoJaRespondida && (
                 <button
                   type="button"
                   onClick={() => setDicaAberta(!dicaAberta)}
-                  className="text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-heading font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  className="text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 rounded-xl px-3 py-2 text-xs sm:text-sm font-heading font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-xs min-h-[40px]"
                 >
                   <HelpCircle className="w-4 h-4 text-amber-600" />
                   <span>💡 Precisa de uma dica?</span>
@@ -796,7 +796,7 @@ export const AlunoAtividadePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleFalar}
-                  className={`rounded-xl px-3.5 py-2 text-xs sm:text-sm font-heading font-bold inline-flex items-center gap-1.5 border transition-all cursor-pointer shadow-sm ${
+                  className={`rounded-xl px-3 py-2 text-xs sm:text-sm font-heading font-bold inline-flex items-center gap-1.5 border transition-all cursor-pointer shadow-xs min-h-[40px] ${
                     falando
                       ? 'bg-indigo-600 text-white border-indigo-600 animate-pulse'
                       : 'bg-white hover:bg-indigo-50 text-indigo-700 border-indigo-200'
@@ -811,18 +811,20 @@ export const AlunoAtividadePage: React.FC = () => {
 
             {/* Caixa da Dica Aberta */}
             {dicaAberta && questaoAtual?.dica && !questaoJaRespondida && (
-              <div className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-200 text-amber-950 text-sm leading-relaxed flex items-start gap-2.5 animate-slideDownFade motion-reduce:animate-none">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-200 text-amber-950 text-xs sm:text-sm leading-relaxed flex items-start gap-2.5 animate-slideDownFade motion-reduce:animate-none">
                 <span className="text-lg">💡</span>
                 <div>
                   <span className="font-heading font-bold block text-amber-900 mb-0.5">Dica da questão:</span>
-                  <p>{questaoAtual.dica}</p>
+                  <p>
+                    <MathText text={questaoAtual.dica} />
+                  </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Lista de Alternativas (Cards grandes) */}
-          <div className="space-y-3 pt-2" role="radiogroup" aria-label="Alternativas">
+          {/* Lista de Alternativas (Cards grandes e touch-friendly) */}
+          <div className="space-y-2.5 sm:space-y-3 pt-1" role="radiogroup" aria-label="Alternativas">
             {questaoAtual?.alternativas.map((alt) => {
               const isEscolhida = altEscolhidaId === alt.id;
               const isCorreta = altCorretaId === alt.id;
@@ -869,17 +871,19 @@ export const AlunoAtividadePage: React.FC = () => {
                   type="button"
                   disabled={questaoJaRespondida || isEncerrada}
                   onClick={() => setSelecionadaId(alt.id)}
-                  className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 flex items-center justify-between gap-3 sm:gap-4 select-none ${
+                  className={`w-full text-left p-3.5 sm:p-5 rounded-2xl border-2 transition-all duration-200 flex items-center justify-between gap-3 sm:gap-4 select-none min-h-[54px] active:scale-[0.99] ${
                     !questaoJaRespondida && !isEncerrada ? 'cursor-pointer' : 'cursor-default'
                   } ${estiloAlternativa}`}
                 >
-                  <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                     <span
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-black text-base shrink-0 border transition-all ${estiloLetra}`}
+                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-black text-sm sm:text-base shrink-0 border transition-all ${estiloLetra}`}
                     >
                       {alt.letra}
                     </span>
-                    <span className="text-sm sm:text-base leading-snug">{alt.texto}</span>
+                    <span className="text-sm sm:text-base leading-snug break-words flex-1">
+                      <MathText text={alt.texto} />
+                    </span>
                   </div>
 
                   {iconeStatus}
@@ -890,39 +894,43 @@ export const AlunoAtividadePage: React.FC = () => {
 
           {/* Feedback do Modo Exercício (após responder) */}
           {questaoJaRespondida && !isProva && respAtual && (
-            <div className="space-y-4 pt-2 animate-slideDownFade motion-reduce:animate-none">
+            <div className="space-y-3 pt-2 animate-slideDownFade motion-reduce:animate-none">
               {/* Faixa de Resultado (Verde ou Degradê Vermelho->Laranja) */}
               {respAtual.acertou || respAtual.acertou_final ? (
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-heading font-black text-lg sm:text-xl flex items-center gap-3 shadow-md shadow-emerald-200">
-                  <CheckCircle2 className="w-7 h-7 shrink-0" />
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-heading font-black text-base sm:text-xl flex items-center gap-2.5 sm:gap-3 shadow-md shadow-emerald-200">
+                  <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
                   <span>Mandou bem! 🎉</span>
                 </div>
               ) : (
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white font-heading font-bold text-base sm:text-lg flex items-center gap-3 shadow-md shadow-rose-200">
-                  <span className="text-2xl shrink-0">💪</span>
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white font-heading font-bold text-sm sm:text-lg flex items-center gap-2.5 sm:gap-3 shadow-md shadow-rose-200">
+                  <span className="text-xl sm:text-2xl shrink-0">💪</span>
                   <span>Não foi dessa vez, mas faz parte aprender!</span>
                 </div>
               )}
 
               {/* Cartão Rosa: Onde prestar atenção (por_que_errou) */}
               {!respAtual.acertou && respAtual.por_que_errou && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-rose-50/90 border-2 border-rose-200 text-rose-950 text-sm sm:text-base leading-relaxed space-y-1.5">
-                  <div className="flex items-center gap-2 font-heading font-bold text-rose-800 text-xs sm:text-sm uppercase tracking-wider">
-                    <AlertCircle className="w-4 h-4 text-rose-600" />
+                <div className="p-3.5 sm:p-5 rounded-2xl bg-rose-50/90 border-2 border-rose-200 text-rose-950 text-xs sm:text-base leading-relaxed space-y-1">
+                  <div className="flex items-center gap-1.5 font-heading font-bold text-rose-800 text-xs sm:text-sm uppercase tracking-wider">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>Onde prestar atenção</span>
                   </div>
-                  <p>{respAtual.por_que_errou}</p>
+                  <p>
+                    <MathText text={respAtual.por_que_errou} />
+                  </p>
                 </div>
               )}
 
               {/* Cartão Verde: Entenda a resposta correta (explicacao) */}
               {respAtual.explicacao && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-200 text-emerald-950 text-sm sm:text-base leading-relaxed space-y-1.5">
-                  <div className="flex items-center gap-2 font-heading font-bold text-emerald-800 text-xs sm:text-sm uppercase tracking-wider">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <div className="p-3.5 sm:p-5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-200 text-emerald-950 text-xs sm:text-base leading-relaxed space-y-1">
+                  <div className="flex items-center gap-1.5 font-heading font-bold text-emerald-800 text-xs sm:text-sm uppercase tracking-wider">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span>Entenda a resposta correta</span>
                   </div>
-                  <p>{respAtual.explicacao}</p>
+                  <p>
+                    <MathText text={respAtual.explicacao} />
+                  </p>
                 </div>
               )}
             </div>
@@ -930,45 +938,45 @@ export const AlunoAtividadePage: React.FC = () => {
 
           {/* Feedback do Modo Prova (Discreto: Resposta registrada ✓) */}
           {questaoJaRespondida && isProva && (
-            <div className="p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-200 text-indigo-900 font-heading font-bold text-base flex items-center gap-2.5 animate-slideDownFade motion-reduce:animate-none">
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-200 text-indigo-900 font-heading font-bold text-sm sm:text-base flex items-center gap-2.5 animate-slideDownFade motion-reduce:animate-none">
               <CheckCircle2 className="w-5 h-5 text-indigo-600" />
               <span>Resposta registrada ✓</span>
             </div>
           )}
 
-          {/* Ações Inferiores (Confirmar / Tentar Novamente / Próxima) */}
-          <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* Ações Inferiores (Mobile-First: botões confortáveis em tela cheia) */}
+          <div className="pt-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
             {!questaoJaRespondida && !isEncerrada ? (
               <BotaoGrande
                 variant="primary"
                 disabled={!selecionadaId || confirmando}
                 isLoading={confirmando}
                 onClick={handleConfirmar}
-                className="w-full sm:w-auto px-8"
+                className="w-full sm:w-auto px-8 min-h-[50px] text-base"
               >
                 Confirmar resposta
               </BotaoGrande>
             ) : (
-              <div className="flex items-center justify-between w-full gap-3 flex-wrap">
+              <div className="flex items-center justify-between w-full gap-2.5 flex-col sm:flex-row">
                 {/* Botão Tentar Novamente (só em exercício quando acertou_final for false) */}
                 {!isProva && respAtual?.acertou_final === false && !isEncerrada && (
                   <BotaoGrande
                     variant="yellow"
                     onClick={handleIniciarTentarNovamente}
                     leftIcon={<RotateCcw className="w-4 h-4" />}
-                    className="w-full sm:w-auto text-sm sm:text-base"
+                    className="w-full sm:w-auto text-sm sm:text-base min-h-[48px]"
                   >
                     Tentar novamente
                   </BotaoGrande>
                 )}
 
-                <div className="flex items-center gap-2 ml-auto w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
                   <BotaoGrande
                     variant="primary"
                     onClick={handleAvancar}
                     isLoading={carregandoResultadoProva}
                     rightIcon={<ArrowRight className="w-5 h-5" />}
-                    className="w-full sm:w-auto px-8 text-sm sm:text-base"
+                    className="w-full sm:w-auto px-8 text-sm sm:text-base min-h-[50px]"
                   >
                     {indiceAtual === totalQuestoes - 1
                       ? isProva

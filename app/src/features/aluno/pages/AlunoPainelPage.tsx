@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande, ChipInfo } from '@/components/aluno';
-import { alunoService } from '@/services';
+import { alunoService, assinarMudancas } from '@/services';
+import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/ui';
 import {
   LogOut,
@@ -37,6 +38,7 @@ function formatarDataBr(dataStr: string | null): string {
 export const AlunoPainelPage: React.FC = () => {
   const navigate = useNavigate();
   const toast = useToast();
+  const { entrar } = useAuth();
 
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -98,6 +100,12 @@ export const AlunoPainelPage: React.FC = () => {
 
   useEffect(() => {
     carregarDados();
+    const desassinar = assinarMudancas(() => {
+      carregarDados();
+    });
+    return () => {
+      desassinar();
+    };
   }, [carregarDados]);
 
   const handleToggleSom = () => {
@@ -204,45 +212,65 @@ export const AlunoPainelPage: React.FC = () => {
   const turmaNome = dadosAluno?.turma.nome || '';
 
   return (
-    <AlunoLayout containerClassName="p-4 sm:p-6 lg:p-8">
-      <div className="max-w-5xl mx-auto w-full space-y-6 sm:space-y-8 pb-12">
-        {/* 1. TOPO: Identificação do Aluno, Turma, Controle de Som e Sair */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-4 sm:p-6 rounded-3xl border-2 border-white/80 shadow-playful">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center shadow-md shadow-indigo-300/50 shrink-0">
-              <GraduationCap className="w-7 h-7 sm:w-8 sm:h-8" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-heading font-black text-xl sm:text-2xl text-slate-900 tracking-tight">
+    <AlunoLayout containerClassName="p-3 sm:p-6 lg:p-8">
+      <div className="max-w-5xl mx-auto w-full space-y-5 sm:space-y-8 pb-12">
+        {/* 1. TOPO: Identificação do Aluno, Turma, Controle de Som e Sair (Mobile-First) */}
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 bg-white/85 backdrop-blur-md p-3.5 sm:p-6 rounded-3xl border-2 border-white/80 shadow-playful">
+          <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center shadow-md shadow-indigo-300/50 shrink-0">
+                <GraduationCap className="w-6 h-6 sm:w-8 sm:h-8" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="font-heading font-black text-lg sm:text-2xl text-slate-900 tracking-tight truncate">
                   Olá, {alunoNome}!
                 </h1>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                {turmaNome && (
-                  <ChipInfo color="indigo">
-                    Turma {turmaNome}
-                  </ChipInfo>
-                )}
-                <span className="text-xs text-slate-500 font-medium">Bons estudos!</span>
+                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                  {turmaNome && (
+                    <ChipInfo color="indigo" className="py-0.5 px-2 text-[11px]">
+                      {turmaNome}
+                    </ChipInfo>
+                  )}
+                  <span className="text-[11px] sm:text-xs text-slate-500 font-medium">Bons estudos!</span>
+                </div>
               </div>
             </div>
+
+            {/* Em telas muito pequenas, o botão sair pode ficar ao lado ou na barra de ações */}
           </div>
 
-          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          <div className="flex items-center justify-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 sm:border-none">
+            {/* Atalho Rápido para voltar ao Professor */}
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await entrar('ana@demo.com', 'demo123');
+                  navigate('/professor');
+                } catch {
+                  navigate('/entrar');
+                }
+              }}
+              className="px-2.5 py-2 sm:p-3 rounded-2xl border border-amber-200 bg-amber-50/80 hover:bg-amber-100 text-amber-900 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-heading font-bold shadow-sm min-h-[42px]"
+              title="Alternar para visão da Professora Ana Paula"
+            >
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="hidden xs:inline sm:inline">Modo Prof</span>
+            </button>
+
             {/* Botão de Som */}
             <button
               type="button"
               onClick={handleToggleSom}
               aria-label={somAtivo ? 'Desativar som' : 'Ativar som'}
               title={somAtivo ? 'Som ligado (clique para mutar)' : 'Som desligado (clique para ativar)'}
-              className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-2 text-xs font-heading font-bold ${
+              className={`p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer flex items-center gap-1.5 text-xs font-heading font-bold min-h-[42px] ${
                 somAtivo
                   ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 shadow-sm'
                   : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
               }`}
             >
-              {somAtivo ? <Volume2 className="w-5 h-5 text-indigo-600" /> : <VolumeX className="w-5 h-5 text-slate-400" />}
+              {somAtivo ? <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" /> : <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />}
               <span className="hidden sm:inline">{somAtivo ? 'Som ligado' : 'Mudo'}</span>
             </button>
 
@@ -250,10 +278,10 @@ export const AlunoPainelPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSair}
-              className="p-3 rounded-2xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 transition-all cursor-pointer flex items-center gap-2 text-xs font-heading font-bold shadow-sm"
+              className="p-2.5 sm:p-3 rounded-2xl border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-slate-600 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-heading font-bold shadow-sm min-h-[42px]"
               title="Sair do portal"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>Sair</span>
             </button>
           </div>
@@ -335,12 +363,12 @@ export const AlunoPainelPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Alternador de Abas */}
-            <div className="inline-flex p-1 rounded-2xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-sm self-start sm:self-auto">
+            {/* Alternador de Abas (Mobile-First: largura total e toque confortável) */}
+            <div className="w-full sm:w-auto flex p-1 rounded-2xl bg-white/85 backdrop-blur-md border border-slate-200/80 shadow-sm">
               <button
                 type="button"
                 onClick={() => setAbaAtiva('para_fazer')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[44px] ${
                   abaAtiva === 'para_fazer'
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
@@ -348,7 +376,7 @@ export const AlunoPainelPage: React.FC = () => {
               >
                 <span>Para fazer</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                     abaAtiva === 'para_fazer' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
                   }`}
                 >
@@ -359,7 +387,7 @@ export const AlunoPainelPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setAbaAtiva('concluidas')}
-                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl text-xs sm:text-sm font-heading font-bold transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[44px] ${
                   abaAtiva === 'concluidas'
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
@@ -367,7 +395,7 @@ export const AlunoPainelPage: React.FC = () => {
               >
                 <span>Concluídas</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                     abaAtiva === 'concluidas' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
                   }`}
                 >
@@ -423,7 +451,7 @@ export const AlunoPainelPage: React.FC = () => {
                     <CartaoVidro
                       key={ativ.id}
                       hover
-                      className="p-5 sm:p-6 flex flex-col justify-between"
+                      className="p-4 sm:p-6 flex flex-col justify-between"
                     >
                       <div className="space-y-3">
                         {/* Chips superiores */}
@@ -453,7 +481,7 @@ export const AlunoPainelPage: React.FC = () => {
 
                         {/* Título e Descrição */}
                         <div>
-                          <h4 className="font-heading font-black text-lg sm:text-xl text-slate-900 leading-snug">
+                          <h4 className="font-heading font-black text-base sm:text-xl text-slate-900 leading-snug">
                             {ativ.titulo}
                           </h4>
                           {ativ.descricao && (
@@ -498,15 +526,15 @@ export const AlunoPainelPage: React.FC = () => {
                           )}
                       </div>
 
-                      {/* Botão de Ação */}
-                      <div className="pt-4 mt-2">
+                      {/* Botão de Ação (Mobile-First: min-h 48px e largura total) */}
+                      <div className="pt-3.5 mt-2">
                         {abaAtiva === 'para_fazer' ? (
                           ativ.questoes_respondidas === 0 ? (
                             <BotaoGrande
                               variant="primary"
                               onClick={() => navigate(`/aluno/atividade/${ativ.id}`)}
                               leftIcon={<Play className="w-4 h-4 fill-white" />}
-                              className="w-full text-sm sm:text-base"
+                              className="w-full text-sm sm:text-base min-h-[48px]"
                             >
                               Começar
                             </BotaoGrande>
@@ -515,7 +543,7 @@ export const AlunoPainelPage: React.FC = () => {
                               variant="primary"
                               onClick={() => navigate(`/aluno/atividade/${ativ.id}`)}
                               leftIcon={<ArrowRight className="w-4 h-4" />}
-                              className="w-full text-sm sm:text-base"
+                              className="w-full text-sm sm:text-base min-h-[48px]"
                             >
                               Continuar
                             </BotaoGrande>
@@ -525,7 +553,7 @@ export const AlunoPainelPage: React.FC = () => {
                             variant="outline"
                             onClick={() => navigate(`/aluno/atividade/${ativ.id}`)}
                             leftIcon={<CheckCircle2 className="w-4 h-4 text-indigo-600" />}
-                            className="w-full text-sm sm:text-base"
+                            className="w-full text-sm sm:text-base min-h-[48px]"
                           >
                             Ver resultado
                           </BotaoGrande>

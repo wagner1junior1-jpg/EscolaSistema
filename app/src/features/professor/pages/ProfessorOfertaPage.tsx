@@ -18,6 +18,8 @@ import {
 import {
   professorService,
   gestaoService,
+  bancoService,
+  assinarMudancas,
   Atividade,
   OfertaDetalhada,
   Periodo,
@@ -25,6 +27,9 @@ import {
   RelatorioDesempenhoOferta,
   Aviso,
   PrioridadeAviso,
+  BancoQuestao,
+  Assunto,
+  CombinacaoProfessor,
 } from '@/services';
 import {
   ArrowLeft,
@@ -47,7 +52,12 @@ import {
   MessageSquare,
   ClipboardList,
   Filter,
+  Database,
+  Search,
+  Sparkles,
+  Check,
 } from 'lucide-react';
+import { ModalGeradorIA } from '../components/ModalGeradorIA';
 
 interface AtividadeComQtd extends Atividade {
   total_questoes: number;
@@ -95,6 +105,27 @@ export const ProfessorOfertaPage: React.FC = () => {
   const [novoPeriodoId, setNovoPeriodoId] = useState('');
   const [novoPrazo, setNovoPrazo] = useState('');
   const [erroValidacaoNova, setErroValidacaoNova] = useState<string | null>(null);
+
+  // Modal Criar Atividade a partir do Banco
+  const [modalBancoAtividadeAberto, setModalBancoAtividadeAberto] = useState(false);
+  const [questoesBanco, setQuestoesBanco] = useState<BancoQuestao[]>([]);
+  const [assuntosOferta, setAssuntosOferta] = useState<Assunto[]>([]);
+  const [combinacoesProfessor, setCombinacoesProfessor] = useState<CombinacaoProfessor[]>([]);
+  const [carregandoQuestoesBanco, setCarregandoQuestoesBanco] = useState(false);
+  const [bancoSelecionadas, setBancoSelecionadas] = useState<string[]>([]);
+  const [buscaQuestoesBanco, setBuscaQuestoesBanco] = useState('');
+  const [filtroDificuldadeBanco, setFiltroDificuldadeBanco] = useState<string>('todos');
+  const [filtroAssuntoBanco, setFiltroAssuntoBanco] = useState<string>('todos');
+  const [filtroTipoBanco, setFiltroTipoBanco] = useState<string>('todos');
+  const [questoesPrevisualizadas, setQuestoesPrevisualizadas] = useState<Set<string>>(new Set());
+  const [modalGeradorIAAberto, setModalGeradorIAAberto] = useState(false);
+  const [salvandoAtividadeBanco, setSalvandoAtividadeBanco] = useState(false);
+  const [novoBancoTitulo, setNovoBancoTitulo] = useState('');
+  const [novoBancoDescricao, setNovoBancoDescricao] = useState('');
+  const [novoBancoModo, setNovoBancoModo] = useState<ModoAtividade>('exercicio');
+  const [novoBancoPeriodoId, setNovoBancoPeriodoId] = useState('');
+  const [novoBancoPrazo, setNovoBancoPrazo] = useState('');
+  const [erroValidacaoBanco, setErroValidacaoBanco] = useState<string | null>(null);
 
   const [atividadePublicar, setAtividadePublicar] = useState<AtividadeComQtd | null>(null);
   const [processandoPublicar, setProcessandoPublicar] = useState(false);
@@ -162,6 +193,12 @@ export const ProfessorOfertaPage: React.FC = () => {
 
   useEffect(() => {
     carregarDadosBase();
+    const desassinar = assinarMudancas(() => {
+      carregarDadosBase();
+    });
+    return () => {
+      desassinar();
+    };
   }, [carregarDadosBase]);
 
   // Carregamento de Desempenho
@@ -295,6 +332,145 @@ export const ProfessorOfertaPage: React.FC = () => {
       toast.error(msg);
     } finally {
       setSalvandoNova(false);
+    }
+  };
+
+  const carregarDadosBancoDaOferta = useCallback(async () => {
+    if (!oferta) return;
+    setCarregandoQuestoesBanco(true);
+    try {
+      const [lista, listaAssuntos, listaCombs] = await Promise.all([
+        bancoService.listarBanco({
+          disciplina_id: oferta.disciplina_id,
+          serie: oferta.turma_serie || '',
+        }),
+        bancoService.listarAssuntos(oferta.disciplina_id),
+        bancoService.listarCombinacoesDoProfessor(),
+      ]);
+      setQuestoesBanco(lista.filter((q) => !q.arquivada));
+      setAssuntosOferta(listaAssuntos);
+      setCombinacoesProfessor(listaCombs);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao listar questões do banco.');
+    } finally {
+      setCarregandoQuestoesBanco(false);
+    }
+  }, [oferta, toast]);
+
+  const handleAbrirModalBancoAtividade = async () => {
+    if (!oferta) return;
+    setNovoBancoTitulo(`Lista de Exercícios — ${oferta.disciplina_nome}`);
+    setNovoBancoDescricao(`Atividade com questões selecionadas do Banco de Questões de ${oferta.disciplina_nome}.`);
+    setNovoBancoModo('exercicio');
+    setNovoBancoPeriodoId(periodoSelecionadoId || periodos[0]?.id || '');
+    setNovoBancoPrazo('');
+    setBancoSelecionadas([]);
+    setBuscaQuestoesBanco('');
+    setFiltroDificuldadeBanco('todos');
+    setFiltroAssuntoBanco('todos');
+    setFiltroTipoBanco('todos');
+    setQuestoesPrevisualizadas(new Set());
+    setErroValidacaoBanco(null);
+    setModalBancoAtividadeAberto(true);
+    await carregarDadosBancoDaOferta();
+  };
+
+  const handleAbrirGeradorIAOferta = async () => {
+    if (!oferta) return;
+    await carregarDadosBancoDaOferta();
+    setModalGeradorIAAberto(true);
+  };
+
+  const togglePrevisualizarQuestao = (qId: string) => {
+    setQuestoesPrevisualizadas((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(qId)) novo.delete(qId);
+      else novo.add(qId);
+      return novo;
+    });
+  };
+
+  const handleCriarAtividadeDoBanco = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ofertaId) return;
+
+    if (!novoBancoTitulo.trim()) {
+      setErroValidacaoBanco('O título da atividade é obrigatório.');
+      return;
+    }
+    if (!novoBancoDescricao.trim()) {
+      setErroValidacaoBanco('A descrição é obrigatória.');
+      return;
+    }
+    if (!novoBancoPeriodoId) {
+      setErroValidacaoBanco('Selecione o bimestre/período.');
+      return;
+    }
+    if (bancoSelecionadas.length === 0) {
+      setErroValidacaoBanco('Selecione ao menos 1 questão do banco de questões.');
+      return;
+    }
+
+    setSalvandoAtividadeBanco(true);
+    setErroValidacaoBanco(null);
+
+    try {
+      const nova = await professorService.criarAtividade(ofertaId, {
+        titulo: novoBancoTitulo.trim(),
+        descricao: novoBancoDescricao.trim(),
+        modo: novoBancoModo,
+        periodo_id: novoBancoPeriodoId,
+        prazo: novoBancoPrazo ? novoBancoPrazo : null,
+      });
+
+      await bancoService.adicionarDoBanco(nova.id, bancoSelecionadas);
+
+      toast.success(`Atividade criada com ${bancoSelecionadas.length} questão(ões) do banco!`);
+      setModalBancoAtividadeAberto(false);
+      navigate(`/professor/atividade/${nova.id}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao criar atividade do banco.';
+      setErroValidacaoBanco(msg);
+      toast.error(msg);
+    } finally {
+      setSalvandoAtividadeBanco(false);
+    }
+  };
+
+  const questoesBancoFiltradas = questoesBanco.filter((q) => {
+    if (filtroAssuntoBanco !== 'todos' && q.assunto_id !== filtroAssuntoBanco) {
+      return false;
+    }
+    if (filtroTipoBanco !== 'todos' && q.tipo !== filtroTipoBanco) {
+      return false;
+    }
+    if (filtroDificuldadeBanco !== 'todos' && q.dificuldade !== filtroDificuldadeBanco) {
+      return false;
+    }
+    if (buscaQuestoesBanco.trim()) {
+      const termo = buscaQuestoesBanco.toLowerCase();
+      const matchEnunciado = q.enunciado.toLowerCase().includes(termo);
+      const matchAlternativas = (q.alternativas || []).some((a) =>
+        a.texto.toLowerCase().includes(termo)
+      );
+      if (!matchEnunciado && !matchAlternativas) return false;
+    }
+    return true;
+  });
+
+  const toggleSelecionarQuestaoBanco = (qId: string) => {
+    setBancoSelecionadas((prev) =>
+      prev.includes(qId) ? prev.filter((id) => id !== qId) : [...prev, qId]
+    );
+  };
+
+  const toggleSelecionarTodasVisiveisBanco = () => {
+    const idsVisiveis = questoesBancoFiltradas.map((q) => q.id);
+    const todosJaSelecionados = idsVisiveis.length > 0 && idsVisiveis.every((id) => bancoSelecionadas.includes(id));
+    if (todosJaSelecionados) {
+      setBancoSelecionadas((prev) => prev.filter((id) => !idsVisiveis.includes(id)));
+    } else {
+      setBancoSelecionadas((prev) => Array.from(new Set([...prev, ...idsVisiveis])));
     }
   };
 
@@ -443,21 +619,39 @@ export const ProfessorOfertaPage: React.FC = () => {
               </div>
 
               {abaPrincipal === 'atividades' && (
-                <Button
-                  variant="primary"
-                  leftIcon={<Plus className="w-4 h-4" />}
-                  onClick={() => {
-                    setNovoTitulo('');
-                    setNovaDescricao('');
-                    setNovoModo('exercicio');
-                    setNovoPrazo('');
-                    setErroValidacaoNova(null);
-                    setModalNovoAberto(true);
-                  }}
-                  className="w-full sm:w-auto shrink-0 shadow-sm"
-                >
-                  Nova atividade
-                </Button>
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    leftIcon={<Sparkles className="w-4 h-4 text-amber-600" />}
+                    onClick={handleAbrirGeradorIAOferta}
+                    className="w-full sm:w-auto shrink-0 shadow-sm"
+                  >
+                    Gerar com IA
+                  </Button>
+                  <Button
+                    variant="outline"
+                    leftIcon={<Database className="w-4 h-4 text-indigo-600" />}
+                    onClick={handleAbrirModalBancoAtividade}
+                    className="w-full sm:w-auto shrink-0 shadow-sm"
+                  >
+                    Criar a partir do Banco
+                  </Button>
+                  <Button
+                    variant="primary"
+                    leftIcon={<Plus className="w-4 h-4" />}
+                    onClick={() => {
+                      setNovoTitulo('');
+                      setNovaDescricao('');
+                      setNovoModo('exercicio');
+                      setNovoPrazo('');
+                      setErroValidacaoNova(null);
+                      setModalNovoAberto(true);
+                    }}
+                    className="w-full sm:w-auto shrink-0 shadow-sm"
+                  >
+                    Nova atividade
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -1194,6 +1388,380 @@ export const ProfessorOfertaPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Modal: Criar Atividade a partir do Banco */}
+      <Modal
+        isOpen={modalBancoAtividadeAberto}
+        onClose={() => !salvandoAtividadeBanco && setModalBancoAtividadeAberto(false)}
+        title="Criar a partir do Banco de Questões"
+        description={`Selecione questões do banco de ${oferta?.disciplina_nome || 'disciplina'} (${oferta?.turma_serie || ''}) para criar uma nova atividade.`}
+        maxWidth="2xl"
+      >
+        <form onSubmit={handleCriarAtividadeDoBanco} className="p-5 sm:p-6 space-y-5">
+          {erroValidacaoBanco && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{erroValidacaoBanco}</span>
+            </div>
+          )}
+
+          {/* Dados Gerais da Atividade */}
+          <div className="space-y-4">
+            <Input
+              label="Título da Atividade *"
+              placeholder="Ex: Revisão Bimestral de Geometria"
+              value={novoBancoTitulo}
+              onChange={(e) => setNovoBancoTitulo(e.target.value)}
+              disabled={salvandoAtividadeBanco}
+              required
+            />
+
+            <Textarea
+              label="Descrição / Orientações *"
+              placeholder="Orientações aos alunos sobre a atividade..."
+              value={novoBancoDescricao}
+              onChange={(e) => setNovoBancoDescricao(e.target.value)}
+              disabled={salvandoAtividadeBanco}
+              rows={2}
+              required
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Bimestre / Período Letivo *"
+                value={novoBancoPeriodoId}
+                onChange={(e) => setNovoBancoPeriodoId(e.target.value)}
+                disabled={salvandoAtividadeBanco}
+                options={periodos.map((p) => ({
+                  value: p.id,
+                  label: `${p.nome} (${p.ano_letivo})${p.ativo ? ' — Ativo' : ''}`,
+                }))}
+              />
+
+              <Input
+                label="Prazo de Entrega (Opcional)"
+                type="date"
+                value={novoBancoPrazo}
+                onChange={(e) => setNovoBancoPrazo(e.target.value)}
+                disabled={salvandoAtividadeBanco}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-700 tracking-tight">
+                Modo da Atividade *
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNovoBancoModo('exercicio')}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    novoBancoModo === 'exercicio'
+                      ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-500/20'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="font-heading font-bold text-sm text-slate-900">Exercício</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    Feedback e explicação imediatos.
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNovoBancoModo('prova')}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    novoBancoModo === 'prova'
+                      ? 'border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-500/20'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="font-heading font-bold text-sm text-slate-900">Prova</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    Correção liberada apenas no final.
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Seleção de Questões do Banco */}
+          <div className="pt-3 border-t border-slate-200 space-y-3">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h4 className="font-heading font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-indigo-600" />
+                  <span>Escolha as Questões do Banco</span>
+                </h4>
+                <p className="text-xs text-slate-500">
+                  {questoesBancoFiltradas.length} questão(ões) disponível(is)
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setModalGeradorIAAberto(true)}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Gerar novas com IA</span>
+                </button>
+
+                {questoesBancoFiltradas.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={toggleSelecionarTodasVisiveisBanco}
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    {questoesBancoFiltradas.every((q) => bancoSelecionadas.includes(q.id))
+                      ? 'Desmarcar todas visíveis'
+                      : 'Marcar todas visíveis'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filtros da busca (Busca, Assunto, Tipo, Dificuldade) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <Input
+                placeholder="Buscar por texto no enunciado..."
+                value={buscaQuestoesBanco}
+                onChange={(e) => setBuscaQuestoesBanco(e.target.value)}
+                leftIcon={<Search className="w-4 h-4 text-slate-400" />}
+              />
+              <Select
+                aria-label="Filtrar por assunto no modal"
+                value={filtroAssuntoBanco}
+                onChange={(e) => setFiltroAssuntoBanco(e.target.value)}
+                options={[
+                  { value: 'todos', label: 'Todos os assuntos' },
+                  ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
+                ]}
+              />
+              <Select
+                aria-label="Filtrar por tipo no modal"
+                value={filtroTipoBanco}
+                onChange={(e) => setFiltroTipoBanco(e.target.value)}
+                options={[
+                  { value: 'todos', label: 'Todos os tipos (Obj. e Subj.)' },
+                  { value: 'objetiva', label: 'Apenas Objetivas' },
+                  { value: 'discursiva', label: 'Apenas Subjetivas / Discursivas' },
+                ]}
+              />
+              <Select
+                aria-label="Filtrar por dificuldade no modal"
+                value={filtroDificuldadeBanco}
+                onChange={(e) => setFiltroDificuldadeBanco(e.target.value)}
+                options={[
+                  { value: 'todos', label: 'Todas as dificuldades' },
+                  { value: 'facil', label: 'Fácil' },
+                  { value: 'medio', label: 'Médio' },
+                  { value: 'dificil', label: 'Difícil' },
+                ]}
+              />
+            </div>
+
+            {/* Lista de Questões */}
+            {carregandoQuestoesBanco ? (
+              <div className="py-10 flex flex-col items-center justify-center gap-2 text-slate-400">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                <p className="text-xs font-medium">Carregando questões do banco...</p>
+              </div>
+            ) : questoesBancoFiltradas.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-xs">
+                Nenhuma questão encontrada no banco para esta matéria e filtros.
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto space-y-2 pr-1 border border-slate-100 rounded-xl p-1">
+                {questoesBancoFiltradas.map((bq, idx) => {
+                  const isChecked = bancoSelecionadas.includes(bq.id);
+                  const isPreview = questoesPrevisualizadas.has(bq.id);
+                  const corDificuldade =
+                    bq.dificuldade === 'facil'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : bq.dificuldade === 'medio'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-rose-50 text-rose-800 border-rose-200';
+
+                  return (
+                    <div
+                      key={bq.id}
+                      onClick={() => togglePrevisualizarQuestao(bq.id)}
+                      className={`py-2.5 px-3 rounded-xl border text-left cursor-pointer transition-all space-y-2 ${
+                        isChecked
+                          ? 'bg-indigo-50/60 border-indigo-300 ring-1 ring-indigo-400/20'
+                          : 'bg-white border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {/* Linha única compacta da pergunta — clica na linha para abrir */}
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleSelecionarQuestaoBanco(bq.id)}
+                          aria-label={`Selecionar questão ${idx + 1}`}
+                          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 shrink-0 cursor-pointer"
+                        />
+
+                        <span className="text-[11px] font-bold text-slate-600 shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border shrink-0 ${corDificuldade}`}
+                        >
+                          {bq.dificuldade}
+                        </span>
+                        <span
+                          className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full border shrink-0 ${
+                            bq.tipo === 'discursiva'
+                              ? 'bg-violet-50 text-violet-800 border-violet-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {bq.tipo === 'discursiva' ? 'Subjetiva' : 'Objetiva'}
+                        </span>
+
+                        {/* APENAS 1 LINHA DA PERGUNTA */}
+                        <span
+                          className="text-xs font-medium text-slate-800 truncate flex-1 min-w-0"
+                          title={bq.enunciado}
+                        >
+                          {bq.enunciado}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePrevisualizarQuestao(bq.id);
+                          }}
+                          className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                          title="Abrir pergunta e gabarito"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>{isPreview ? 'Ocultar gabarito' : 'Ver gabarito'}</span>
+                        </button>
+                      </div>
+
+                      {/* Caixa Expandida ao Clicar na Linha: Enunciado Completo + Alternativas / Gabarito */}
+                      {isPreview && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="ml-6 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs cursor-default"
+                        >
+                          <div className="text-xs font-medium text-slate-800 whitespace-pre-wrap pb-1.5 border-b border-slate-200/80">
+                            {bq.enunciado}
+                          </div>
+                          {bq.tipo === 'discursiva' ? (
+                            <div className="space-y-1">
+                              <span className="font-bold text-violet-800 block">
+                                Resposta Esperada (Gabarito):
+                              </span>
+                              <p className="text-slate-700 whitespace-pre-wrap">
+                                {bq.resposta_esperada || 'Critérios abertos de correção pelo professor.'}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <span className="font-bold text-slate-700 block">
+                                Alternativas e Gabarito:
+                              </span>
+                              {(bq.alternativas || []).map((alt) => (
+                                <div
+                                  key={alt.id || alt.letra}
+                                  className={`p-1.5 rounded-lg border flex items-start gap-2 ${
+                                    alt.correta
+                                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900 font-semibold'
+                                      : 'bg-white border-slate-200 text-slate-600'
+                                  }`}
+                                >
+                                  <span className="font-bold shrink-0">{alt.letra})</span>
+                                  <span className="flex-1">{alt.texto}</span>
+                                  {alt.correta && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
+                                      <Check className="w-3 h-3" /> Correta
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {bq.explicacao && (
+                            <div className="pt-1 border-t border-slate-200 text-[11px] text-slate-600">
+                              <strong>Comentário:</strong> {bq.explicacao}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer do Modal */}
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100 flex-wrap">
+            <span className="text-xs font-semibold text-slate-600">
+              <strong className="text-indigo-600 font-bold">{bancoSelecionadas.length}</strong>{' '}
+              questão(ões) selecionada(s)
+            </span>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setModalBancoAtividadeAberto(false)}
+                disabled={salvandoAtividadeBanco}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                isLoading={salvandoAtividadeBanco}
+                disabled={bancoSelecionadas.length === 0}
+              >
+                Criar atividade ({bancoSelecionadas.length})
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Gerador de Questões por IA direto na Matéria */}
+      {oferta && (
+        <ModalGeradorIA
+          aberto={modalGeradorIAAberto}
+          onFechar={() => setModalGeradorIAAberto(false)}
+          disciplinaIdInicial={oferta.disciplina_id}
+          serieInicial={oferta.turma_serie || '7º Ano'}
+          assuntoIdInicial={assuntosOferta[0]?.id}
+          combinacoes={
+            combinacoesProfessor.length > 0
+              ? combinacoesProfessor
+              : [
+                  {
+                    disciplina_id: oferta.disciplina_id,
+                    disciplina_nome: oferta.disciplina_nome,
+                    serie: oferta.turma_serie || '7º Ano',
+                    label: `${oferta.disciplina_nome} — ${oferta.turma_serie || '7º Ano'}`,
+                  },
+                ]
+          }
+          assuntos={assuntosOferta}
+          onCriarAssunto={async (nome) => {
+            const novo = await bancoService.criarAssunto(oferta.disciplina_id, nome);
+            setAssuntosOferta((prev) => [...prev, novo]);
+            return novo;
+          }}
+          onSucesso={async () => {
+            await carregarDadosBancoDaOferta();
+          }}
+        />
+      )}
 
       {/* Confirmação: Publicar Atividade */}
       <ConfirmDialog
