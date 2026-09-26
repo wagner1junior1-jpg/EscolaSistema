@@ -28,6 +28,7 @@ import {
   FichaAluno,
   FichaAlunoAtividadeItem,
   FichaAlunoQuestaoItem,
+  ItemCorrecaoPendente,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { gerarId } from './ids';
@@ -820,5 +821,17 @@ export class MockProfessorService implements ProfessorService {
       media_periodo: mediaPeriodo,
       faixa,
     };
+  }
+
+  async listarCorrecoesPendentes(_atividadeId: string): Promise<ItemCorrecaoPendente[]> {
+    throw new Error('Ainda não implementado');
+  }
+
+  async corrigirResposta(
+    _respostaId: string,
+    _correcao: 'certo' | 'parcial' | 'errado',
+    _comentario?: string
+  ): Promise<void> {
+    throw new Error('Ainda não implementado');
   }
 }

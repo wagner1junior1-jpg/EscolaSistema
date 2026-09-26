@@ -15,16 +15,36 @@ import {
   MockIAService,
 } from '../mock';
 import { SalvarBancoQuestaoPayload } from '../contracts';
-import { BancoQuestao, Assunto } from '@/lib/types';
+import { BancoQuestao, Assunto, ItemCorrecaoPendente } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 
 export class SupabaseAuthServiceStub extends MockAuthService {}
 
 export class SupabaseGestaoServiceStub extends MockGestaoService {}
 
-export class SupabaseProfessorServiceStub extends MockProfessorService {}
+export class SupabaseProfessorServiceStub extends MockProfessorService {
+  override async listarCorrecoesPendentes(_atividadeId: string): Promise<ItemCorrecaoPendente[]> {
+    throw new Error('Ainda não implementado');
+  }
 
-export class SupabaseAlunoServiceStub extends MockAlunoService {}
+  override async corrigirResposta(
+    _respostaId: string,
+    _correcao: 'certo' | 'parcial' | 'errado',
+    _comentario?: string
+  ): Promise<void> {
+    throw new Error('Ainda não implementado');
+  }
+}
+
+export class SupabaseAlunoServiceStub extends MockAlunoService {
+  override async responderDiscursiva(
+    _token: string,
+    _questaoId: string,
+    _texto: string
+  ): Promise<{ registrada: true; explicacao?: string | null }> {
+    throw new Error('Ainda não implementado');
+  }
+}
 
 export class SupabaseRelatorioServiceStub extends MockRelatorioService {}
 

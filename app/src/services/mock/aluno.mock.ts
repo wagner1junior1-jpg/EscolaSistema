@@ -646,4 +646,12 @@ export class MockAlunoService implements AlunoService {
       )
       .sort((a, b) => new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime());
   }
+
+  async responderDiscursiva(
+    _token: string,
+    _questaoId: string,
+    _texto: string
+  ): Promise<{ registrada: true; explicacao?: string | null }> {
+    throw new Error('Ainda não implementado');
+  }
 }

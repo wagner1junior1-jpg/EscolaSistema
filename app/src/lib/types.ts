@@ -137,6 +137,20 @@ export interface Alternativa {
   por_que_errou: string | null;
 }
 
+export type StatusCorrecao = 'pendente' | 'certo' | 'parcial' | 'errado';
+
+export interface ItemCorrecaoPendente {
+  resposta_id: string;
+  questao_id: string;
+  aluno_id: string;
+  aluno_nome: string;
+  questao_ordem: number;
+  questao_enunciado: string;
+  resposta_esperada: string | null;
+  texto_resposta: string | null;
+  respondida_em: string;
+}
+
 // 11. respostas
 export interface Resposta {
   id: string;
@@ -148,6 +162,12 @@ export interface Resposta {
   respondida_em: string;
   tentativas: number; // padrão 1
   acertou_final: boolean;
+  texto_resposta?: string | null;
+  pontuacao?: number | null;
+  correcao?: StatusCorrecao | null;
+  comentario_professor?: string | null;
+  corrigido_por?: string | null;
+  corrigido_em?: string | null;
 }
 
 // 12. avisos

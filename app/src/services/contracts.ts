@@ -42,9 +42,10 @@ import {
   GerarQuestoesIAParams,
   QuestaoSugeridaIA,
   RespostaGeracaoIA,
+  ItemCorrecaoPendente,
 } from '@/lib/types';
 
-export type { GerarQuestoesIAParams, QuestaoSugeridaIA, RespostaGeracaoIA };
+export type { GerarQuestoesIAParams, QuestaoSugeridaIA, RespostaGeracaoIA, ItemCorrecaoPendente };
 
 // Entrada para criação/edição de questão e suas alternativas
 export interface NovaQuestaoPayload {
@@ -172,6 +173,12 @@ export interface ProfessorService {
   mapaDeCalor(atividadeId: string): Promise<MapaDeCalorAtividade>;
   desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta>;
   fichaAluno(ofertaId: string, alunoId: string): Promise<FichaAluno>;
+  listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]>;
+  corrigirResposta(
+    respostaId: string,
+    correcao: 'certo' | 'parcial' | 'errado',
+    comentario?: string
+  ): Promise<void>;
 }
 
 // 4. AlunoService (Portal do Aluno)
@@ -181,6 +188,11 @@ export interface AlunoService {
   atividadesPendentes(token: string): Promise<AtividadeResumoAluno[]>;
   carregarAtividade(token: string, atividadeId: string): Promise<AtividadeParaAluno>;
   responder(token: string, questaoId: string, alternativaId: string): Promise<RespostaAlunoResultado>;
+  responderDiscursiva(
+    token: string,
+    questaoId: string,
+    texto: string
+  ): Promise<{ registrada: true; explicacao?: string | null }>;
   tentarNovamente(token: string, questaoId: string, alternativaId: string): Promise<RespostaExercicio>;
   resultadoProva(token: string, atividadeId: string): Promise<ResultadoProva>;
   meuDesempenho(token: string): Promise<MeuDesempenhoAluno>;

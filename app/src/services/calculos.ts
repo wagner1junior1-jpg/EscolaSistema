@@ -14,6 +14,8 @@ import {
   Resposta,
   Atividade,
   ResultadoMediaAluno,
+  TipoQuestao,
+  StatusCorrecao,
 } from '@/lib/types';
 
 /**
@@ -255,3 +257,31 @@ export function calcularMapaDeCalorQuestao(
     distrator_mais_escolhido: distratorMaisEscolhido,
   };
 }
+
+/**
+ * 6. Pontuação individual da resposta (Fase H - docs/ESPECIFICACAO.md 9.2, 9.3)
+ * - Objetiva: 1 se acertou, 0 se errou
+ * - Discursiva: certo = 1, parcial = 0.5, errado = 0, pendente ou sem correção = null
+ */
+export function pontuacaoDaResposta(
+  questao: { tipo?: TipoQuestao | null } | null | undefined,
+  resposta: {
+    acertou?: boolean | null;
+    correcao?: StatusCorrecao | null;
+    pontuacao?: number | null;
+  } | null | undefined
+): number | null {
+  if (!resposta) return null;
+
+  // Questão discursiva
+  if (questao?.tipo === 'discursiva') {
+    if (resposta.correcao === 'certo') return 1;
+    if (resposta.correcao === 'parcial') return 0.5;
+    if (resposta.correcao === 'errado') return 0;
+    return null; // 'pendente' ou sem correção (null/undefined)
+  }
+
+  // Questão objetiva (padrão)
+  return resposta.acertou ? 1 : 0;
+}
+

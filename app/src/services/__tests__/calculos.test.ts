@@ -6,6 +6,7 @@ import {
   questoesCriticas,
   calcularMapaDeCalorQuestao,
   mediaDoAlunoNasAtividades,
+  pontuacaoDaResposta,
 } from '../calculos';
 import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao, Atividade } from '@/lib/types';
 
@@ -333,6 +334,52 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
       expect(resultado.distrator_mais_escolhido?.letra).toBe('B');
       expect(resultado.distrator_mais_escolhido?.total_escolhas).toBe(4);
       expect(resultado.distrator_mais_escolhido?.por_que_errou).toBe('Pegadinha da letra B');
+    });
+  });
+
+  describe('6. Pontuação individual da resposta (pontuacaoDaResposta - docs/ESPECIFICACAO.md 9.2, 9.3)', () => {
+    // Caso 1: objetiva acertou
+    it('caso 1: objetiva acertou deve retornar 1', () => {
+      const q = { tipo: 'objetiva' as const };
+      const r = { acertou: true };
+      expect(pontuacaoDaResposta(q, r)).toBe(1);
+    });
+
+    // Caso 2: objetiva errou
+    it('caso 2: objetiva errou deve retornar 0', () => {
+      const q = { tipo: 'objetiva' as const };
+      const r = { acertou: false };
+      expect(pontuacaoDaResposta(q, r)).toBe(0);
+    });
+
+    // Caso 3: discursiva certa
+    it('caso 3: discursiva certa deve retornar 1', () => {
+      const q = { tipo: 'discursiva' as const };
+      const r = { correcao: 'certo' as const };
+      expect(pontuacaoDaResposta(q, r)).toBe(1);
+    });
+
+    // Caso 4: discursiva parcial
+    it('caso 4: discursiva parcial deve retornar 0.5', () => {
+      const q = { tipo: 'discursiva' as const };
+      const r = { correcao: 'parcial' as const };
+      expect(pontuacaoDaResposta(q, r)).toBe(0.5);
+    });
+
+    // Caso 5: discursiva errada
+    it('caso 5: discursiva errada deve retornar 0', () => {
+      const q = { tipo: 'discursiva' as const };
+      const r = { correcao: 'errado' as const };
+      expect(pontuacaoDaResposta(q, r)).toBe(0);
+    });
+
+    // Caso 6: discursiva pendente ou sem correção
+    it('caso 6: discursiva pendente ou sem correção deve retornar null', () => {
+      const q = { tipo: 'discursiva' as const };
+      expect(pontuacaoDaResposta(q, { correcao: 'pendente' as const })).toBeNull();
+      expect(pontuacaoDaResposta(q, { correcao: null })).toBeNull();
+      expect(pontuacaoDaResposta(q, {})).toBeNull();
+      expect(pontuacaoDaResposta(q, null)).toBeNull();
     });
   });
 });
