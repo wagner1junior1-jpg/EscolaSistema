@@ -233,7 +233,7 @@ export const AlunoLoginPage: React.FC = () => {
                       autoCapitalize="characters"
                       autoCorrect="off"
                       spellCheck={false}
-                      placeholder="Ex: 5A-MAT"
+                      placeholder="Ex: 7A-MAT"
                       value={codigoTurma}
                       onChange={(e) => {
                         setCodigoTurma(e.target.value.toUpperCase());

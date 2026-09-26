@@ -33,7 +33,7 @@ import {
 } from '@/lib/types';
 import { hashPin } from './crypto';
 import dadosDemo from './dados-demo.json';
-import { enriquecerEscolaReal3a6Ano } from './seed-escola-real';
+import { enriquecerEscolaReal3a6Ano } from './seed-escola-ampliada';
 
 export function isTestEnvironment(): boolean {
   const isNodeTest = typeof process !== 'undefined' && process.env.NODE_ENV === 'test';
