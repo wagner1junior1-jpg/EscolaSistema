@@ -14,7 +14,7 @@ import {
   MockBancoService,
   MockIAService,
 } from '../mock';
-import { SalvarBancoQuestaoPayload } from '../contracts';
+import { SalvarBancoQuestaoPayload, ItemCorrecaoFeita } from '../contracts';
 import { BancoQuestao, Assunto, ItemCorrecaoPendente } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 
@@ -24,6 +24,10 @@ export class SupabaseGestaoServiceStub extends MockGestaoService {}
 
 export class SupabaseProfessorServiceStub extends MockProfessorService {
   override async listarCorrecoesPendentes(_atividadeId: string): Promise<ItemCorrecaoPendente[]> {
+    throw new Error('Ainda não implementado');
+  }
+
+  override async listarCorrecoesFeitas(_atividadeId: string): Promise<ItemCorrecaoFeita[]> {
     throw new Error('Ainda não implementado');
   }
 

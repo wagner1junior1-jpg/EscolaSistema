@@ -101,7 +101,7 @@ export const GestaoDesempenhoSecao: React.FC = () => {
       professor_nome: i.professor_nome,
       total_alunos: i.total_alunos,
       aproveitamento_medio_formatado:
-        i.aproveitamento_medio !== null ? i.aproveitamento_medio : '',
+        i.aproveitamento_medio !== null ? i.aproveitamento_medio : (i.aguardando_correcao ? 'aguardando correção' : ''),
       faixa_otimo: i.faixas.otimo,
       faixa_bom: i.faixas.bom,
       faixa_atencao: i.faixas.atencao,
@@ -234,6 +234,10 @@ export const GestaoDesempenhoSecao: React.FC = () => {
                               }`}
                             >
                               {item.aproveitamento_medio.toString().replace('.', ',')}%
+                            </span>
+                          ) : item.aguardando_correcao ? (
+                            <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+                              aguardando correção
                             </span>
                           ) : (
                             <span className="text-slate-400 text-xs">—</span>

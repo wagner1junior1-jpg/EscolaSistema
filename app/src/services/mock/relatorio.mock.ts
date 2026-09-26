@@ -21,6 +21,7 @@ import {
   faixaDesempenho,
   questoesCriticas,
   mediaDoAlunoNasAtividades,
+  pontuacaoDaResposta,
 } from '../calculos';
 
 export class MockRelatorioService implements RelatorioService {
@@ -39,10 +40,17 @@ export class MockRelatorioService implements RelatorioService {
 
     // Aproveitamento médio geral calculado com a 1ª resposta de todas as respostas
     const totalRespostas = db.respostas.length;
-    const totalAcertos = db.respostas.filter((r) => r.acertou).length;
+    let somaPontos = 0;
+    for (const r of db.respostas) {
+      const q = db.questoes.find((questao) => questao.id === r.questao_id);
+      const p = pontuacaoDaResposta(q, r);
+      if (p !== null) {
+        somaPontos += p;
+      }
+    }
     const aproveitamentoMedio =
       totalRespostas > 0
-        ? Math.round((totalAcertos / totalRespostas) * 1000) / 10
+        ? Math.round((somaPontos / totalRespostas) * 1000) / 10
         : null;
 
     return {
@@ -108,6 +116,21 @@ export class MockRelatorioService implements RelatorioService {
         const aproveitamentoMedio =
           alunosComMedia > 0 ? Math.round((somaMedias / alunosComMedia) * 10) / 10 : null;
 
+        let temDiscursivaPendenteTurma = false;
+        if (aproveitamentoMedio === null && atividadesDaOferta.length > 0) {
+          for (const ativ of atividadesDaOferta) {
+            const qs = db.questoes.filter((q) => q.atividade_id === ativ.id && q.tipo === 'discursiva');
+            for (const q of qs) {
+              const respostas = db.respostas.filter((r) => r.questao_id === q.id && alunos.some((a) => a.id === r.aluno_id));
+              if (respostas.some((r) => r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null)) {
+                temDiscursivaPendenteTurma = true;
+                break;
+              }
+            }
+            if (temDiscursivaPendenteTurma) break;
+          }
+        }
+
         resultado.push({
           turma_id: turma.id,
           turma_nome: turma.nome,
@@ -117,6 +140,7 @@ export class MockRelatorioService implements RelatorioService {
           total_alunos: alunos.length,
           aproveitamento_medio: aproveitamentoMedio,
           faixas: contagemFaixas,
+          aguardando_correcao: temDiscursivaPendenteTurma,
         });
       }
     }

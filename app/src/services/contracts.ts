@@ -47,6 +47,13 @@ import {
 
 export type { GerarQuestoesIAParams, QuestaoSugeridaIA, RespostaGeracaoIA, ItemCorrecaoPendente };
 
+export interface ItemCorrecaoFeita extends ItemCorrecaoPendente {
+  correcao: 'certo' | 'parcial' | 'errado';
+  pontuacao: number | null;
+  comentario_professor: string | null;
+  corrigido_em?: string | null;
+}
+
 // Entrada para criação/edição de questão e suas alternativas
 export interface NovaQuestaoPayload {
   id?: string;
@@ -174,6 +181,7 @@ export interface ProfessorService {
   desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta>;
   fichaAluno(ofertaId: string, alunoId: string): Promise<FichaAluno>;
   listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]>;
+  listarCorrecoesFeitas(atividadeId: string): Promise<ItemCorrecaoFeita[]>;
   corrigirResposta(
     respostaId: string,
     correcao: 'certo' | 'parcial' | 'errado',

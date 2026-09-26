@@ -18,6 +18,25 @@ import {
   StatusCorrecao,
 } from '@/lib/types';
 
+declare module '@/lib/types' {
+  interface DesempenhoOfertaAtividadeAluno {
+    aguardando_correcao?: boolean;
+  }
+  interface AtividadeResumoAluno {
+    aguardando_correcao?: boolean;
+  }
+  interface DesempenhoTurmaDisciplinaItem {
+    aguardando_correcao?: boolean;
+  }
+  interface ItemMapaDeCalorQuestao {
+    distribuicao_discursiva?: {
+      certo: { total: number; porcentagem: number };
+      parcial: { total: number; porcentagem: number };
+      errado: { total: number; porcentagem: number };
+    };
+  }
+}
+
 /**
  * Fonte flexível para consulta de questões de atividades
  */
@@ -109,11 +128,34 @@ export function mediaDoAlunoNasAtividades(
 
     const concluida = respostasDaAtividade.length === totalQ;
 
+    // Se o aluno tem discursiva PENDENTE numa atividade, essa atividade fica "aguardando correção" para ele e NÃO entra na média.
+    let temDiscursivaPendente = false;
+    for (const q of questoes) {
+      if (q.tipo === 'discursiva') {
+        const r = respostasDaAtividade.find((resp) => resp.questao_id === q.id);
+        if (r && (r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null)) {
+          temDiscursivaPendente = true;
+          break;
+        }
+      }
+    }
+
+    if (temDiscursivaPendente) {
+      continue;
+    }
+
     if (concluida || ativ.status === 'encerrada') {
       atividades_avaliadas++;
-      // Usa estritamente a 1ª resposta do aluno
-      const acertos = respostasDaAtividade.filter((r) => r.acertou).length;
-      soma_acertos += acertos;
+      // Usa estritamente a 1ª resposta do aluno e soma os pontos (objetiva: 1 ou 0; discursiva: 1, 0.5 ou 0; sem resposta na encerrada: 0)
+      let pontosAtividade = 0;
+      for (const q of questoes) {
+        const r = respostasDaAtividade.find((resp) => resp.questao_id === q.id);
+        const p = pontuacaoDaResposta(q, r);
+        if (p !== null) {
+          pontosAtividade += p;
+        }
+      }
+      soma_acertos += pontosAtividade;
       soma_questoes += totalQ;
     }
   }
@@ -190,6 +232,57 @@ export function calcularMapaDeCalorQuestao(
   respostasDaQuestao: Resposta[]
 ): ItemMapaDeCalorQuestao {
   const totalRespostas = respostasDaQuestao.length;
+
+  if (questao.tipo === 'discursiva') {
+    let somaPontos = 0;
+    let totalCerto = 0;
+    let totalParcial = 0;
+    let totalErrado = 0;
+
+    for (const r of respostasDaQuestao) {
+      const p = pontuacaoDaResposta(questao, r);
+      if (p !== null) {
+        somaPontos += p;
+      }
+      if (r.correcao === 'certo') totalCerto++;
+      else if (r.correcao === 'parcial') totalParcial++;
+      else if (r.correcao === 'errado') totalErrado++;
+    }
+
+    // % = média dos pontos
+    const porcentagemAcerto =
+      totalRespostas > 0 ? Math.round((somaPontos / totalRespostas) * 1000) / 10 : 0;
+
+    const pctCerto = totalRespostas > 0 ? Math.round((totalCerto / totalRespostas) * 1000) / 10 : 0;
+    const pctParcial = totalRespostas > 0 ? Math.round((totalParcial / totalRespostas) * 1000) / 10 : 0;
+    const pctErrado = totalRespostas > 0 ? Math.round((totalErrado / totalRespostas) * 1000) / 10 : 0;
+
+    const letras: LetraAlternativa[] = ['A', 'B', 'C', 'D', 'E'];
+    const distribuicao = {} as Record<
+      LetraAlternativa,
+      { total: number; porcentagem: number; alternativa_id: string }
+    >;
+    for (const l of letras) {
+      distribuicao[l] = { total: 0, porcentagem: 0, alternativa_id: '' };
+    }
+
+    return {
+      questao_id: questao.id,
+      ordem: questao.ordem,
+      enunciado: questao.enunciado,
+      total_respostas: totalRespostas,
+      total_acertos: somaPontos,
+      porcentagem_acerto: porcentagemAcerto,
+      distribuicao,
+      distrator_mais_escolhido: null, // sem distrator
+      distribuicao_discursiva: {
+        certo: { total: totalCerto, porcentagem: pctCerto },
+        parcial: { total: totalParcial, porcentagem: pctParcial },
+        errado: { total: totalErrado, porcentagem: pctErrado },
+      },
+    };
+  }
+
   // Sempre considera a primeira tentativa (campo 'acertou')
   const acertos = respostasDaQuestao.filter((r) => r.acertou).length;
   const porcentagemAcerto =

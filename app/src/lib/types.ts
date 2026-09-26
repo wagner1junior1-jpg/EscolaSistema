@@ -319,6 +319,12 @@ export interface QuestaoParaAluno {
   alternativas: AlternativaParaAluno[];
   respondida: boolean;
   alternativa_respondida_id?: string;
+  tipo?: TipoQuestao;
+  imagem_url?: string | null;
+  texto_respondido?: string | null;
+  correcao?: StatusCorrecao | null;
+  comentario_professor?: string | null;
+  resposta_esperada?: string | null;
   // Feedback pedagógico (no modo prova só é exposto após concluir todas as questões)
   acertou?: boolean;
   alternativa_correta_id?: string;
@@ -377,6 +383,12 @@ export interface ResultadoProvaQuestao {
   acertou: boolean;
   por_que_errou: string | null;
   explicacao: string | null;
+  tipo?: TipoQuestao;
+  imagem_url?: string | null;
+  texto_respondido?: string | null;
+  correcao?: StatusCorrecao | null;
+  comentario_professor?: string | null;
+  resposta_esperada?: string | null;
 }
 
 // Resultado consolidado de média de aluno em atividades (seção 6)

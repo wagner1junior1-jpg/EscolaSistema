@@ -24,6 +24,8 @@ import {
   QuestaoParaAluno,
   ResultadoProva,
   RespostaExercicio,
+  TipoQuestao,
+  StatusCorrecao,
 } from '@/lib/types';
 import { isSomHabilitado, setSomHabilitado, tocarSomAcerto, tocarSomErro, tocarSomFim } from '../utils/audio';
 import { dispararConfeteAcerto, dispararConfeteFim } from '../utils/confetti';
@@ -39,6 +41,11 @@ interface RespostaLocalState {
   registradaProva?: boolean;
   tentativas?: number;
   acertou_final?: boolean;
+  tipo?: TipoQuestao;
+  texto_respondido?: string | null;
+  correcao?: StatusCorrecao | null;
+  comentario_professor?: string | null;
+  resposta_esperada?: string | null;
 }
 
 export const AlunoAtividadePage: React.FC = () => {
@@ -54,6 +61,7 @@ export const AlunoAtividadePage: React.FC = () => {
 
   // Seleção e interação na questão atual
   const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
+  const [textoDiscursiva, setTextoDiscursiva] = useState<string>('');
   const [confirmando, setConfirmando] = useState(false);
   const [dicaAberta, setDicaAberta] = useState(false);
   const [falando, setFalando] = useState(false);
@@ -105,6 +113,11 @@ export const AlunoAtividadePage: React.FC = () => {
             registradaProva: ativ.modo === 'prova',
             tentativas: q.tentativas ?? 1,
             acertou_final: q.acertou_final ?? q.acertou,
+            tipo: q.tipo,
+            texto_respondido: q.texto_respondido,
+            correcao: q.correcao,
+            comentario_professor: q.comentario_professor,
+            resposta_esperada: q.resposta_esperada,
           };
         }
       }
@@ -170,6 +183,7 @@ export const AlunoAtividadePage: React.FC = () => {
 
   const questaoAtual: QuestaoParaAluno | undefined = atividade?.questoes[indiceAtual];
   const respAtual: RespostaLocalState | undefined = questaoAtual ? respostasMap[questaoAtual.id] : undefined;
+  const isDiscursiva = questaoAtual?.tipo === 'discursiva';
 
   // Questão já foi respondida e confirmada?
   const questaoJaRespondida = !!respAtual && !modoTentarNovamente;
@@ -186,7 +200,7 @@ export const AlunoAtividadePage: React.FC = () => {
     setFalando(true);
     falarQuestao(
       questaoAtual.enunciado,
-      questaoAtual.alternativas.map((a) => ({ letra: a.letra, texto: a.texto })),
+      questaoAtual.alternativas?.map((a) => ({ letra: a.letra, texto: a.texto })) || [],
       () => setFalando(true),
       () => setFalando(false)
     );
@@ -199,9 +213,10 @@ export const AlunoAtividadePage: React.FC = () => {
     setDicaAberta(false);
     setModoTentarNovamente(false);
     setSelecionadaId(null);
+    setTextoDiscursiva('');
   }, [indiceAtual]);
 
-  // Confirmar Resposta
+  // Confirmar Resposta Objetiva
   const handleConfirmar = async () => {
     if (!questaoAtual || !selecionadaId || !atividade) return;
     const token = localStorage.getItem('saberpontual_aluno_token');
@@ -251,6 +266,7 @@ export const AlunoAtividadePage: React.FC = () => {
           setRespostasMap((prev) => ({
             ...prev,
             [questaoAtual.id]: {
+              tipo: 'objetiva',
               acertou: resEx.acertou,
               alternativa_correta_id: resEx.alternativa_correta_id,
               por_que_errou: resEx.por_que_errou,
@@ -272,6 +288,7 @@ export const AlunoAtividadePage: React.FC = () => {
           setRespostasMap((prev) => ({
             ...prev,
             [questaoAtual.id]: {
+              tipo: 'objetiva',
               registradaProva: true,
               alternativa_escolhida_id: selecionadaId,
               tentativas: 1,
@@ -282,6 +299,42 @@ export const AlunoAtividadePage: React.FC = () => {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(msg, 'Erro ao salvar resposta');
+    } finally {
+      setConfirmando(false);
+    }
+  };
+
+  // Enviar Resposta Discursiva
+  const handleEnviarDiscursiva = async () => {
+    if (!questaoAtual || !textoDiscursiva.trim() || !atividade) return;
+    const token = localStorage.getItem('saberpontual_aluno_token');
+    if (!token) {
+      navigate('/aluno');
+      return;
+    }
+
+    setConfirmando(true);
+    try {
+      const resultado = await alunoService.responderDiscursiva(
+        token,
+        questaoAtual.id,
+        textoDiscursiva.trim()
+      );
+
+      setRespostasMap((prev) => ({
+        ...prev,
+        [questaoAtual.id]: {
+          tipo: 'discursiva',
+          texto_respondido: textoDiscursiva.trim(),
+          correcao: 'pendente',
+          registradaProva: atividade.modo === 'prova',
+          explicacao: resultado.explicacao || questaoAtual.explicacao || null,
+          tentativas: 1,
+        },
+      }));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(msg, 'Erro ao enviar resposta');
     } finally {
       setConfirmando(false);
     }
@@ -500,8 +553,131 @@ export const AlunoAtividadePage: React.FC = () => {
 
               <div className="space-y-4">
                 {resultadoProvaFinal.questoes.map((q) => {
-                  const semResposta = q.alternativa_escolhida_id === null;
                   const questaoBase = atividade.questoes.find((item) => item.id === q.questao_id);
+                  const isDisc = q.tipo === 'discursiva' || questaoBase?.tipo === 'discursiva';
+
+                  if (isDisc) {
+                    const textoResp = q.texto_respondido ?? questaoBase?.texto_respondido ?? null;
+                    const semResposta = !textoResp;
+                    const correcao = q.correcao ?? questaoBase?.correcao ?? (semResposta ? null : 'pendente');
+                    const isPendente = !semResposta && (!correcao || correcao === 'pendente');
+                    const comentarioProf = q.comentario_professor ?? questaoBase?.comentario_professor ?? null;
+                    const respEsperada = q.resposta_esperada ?? questaoBase?.resposta_esperada ?? null;
+                    const imagemUrl = q.imagem_url || questaoBase?.imagem_url;
+
+                    return (
+                      <CartaoVidro key={q.questao_id} className="p-5 sm:p-6 space-y-4">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-heading font-black text-indigo-600 uppercase tracking-wider">
+                            Questão {q.ordem}
+                          </span>
+
+                          {semResposta ? (
+                            <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5" />}>
+                              Sem resposta (em branco)
+                            </ChipInfo>
+                          ) : isPendente ? (
+                            <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5 text-amber-600" />}>
+                              Aguardando correção
+                            </ChipInfo>
+                          ) : correcao === 'certo' ? (
+                            <ChipInfo color="emerald" icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}>
+                              Certo
+                            </ChipInfo>
+                          ) : correcao === 'parcial' ? (
+                            <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5 text-amber-600" />}>
+                              Parcial
+                            </ChipInfo>
+                          ) : (
+                            <ChipInfo color="pink" icon={<XCircle className="w-3.5 h-3.5 text-rose-600" />}>
+                              Errado
+                            </ChipInfo>
+                          )}
+                        </div>
+
+                        <p className="font-heading font-bold text-base sm:text-lg text-slate-900 leading-snug">
+                          <MathText text={q.enunciado} />
+                        </p>
+
+                        {imagemUrl && (
+                          <div className="max-w-md w-full rounded-2xl overflow-hidden border border-slate-200 shadow-xs my-2">
+                            <img
+                              src={imagemUrl}
+                              alt="Apoio da questão"
+                              className="w-full h-auto max-h-72 object-contain bg-slate-50"
+                            />
+                          </div>
+                        )}
+
+                        {/* Resposta do Aluno */}
+                        <div className="space-y-2 pt-1">
+                          {semResposta ? (
+                            <div className="p-3.5 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-600 text-sm flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-heading font-bold text-xs uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                                  Sua resposta
+                                </span>
+                                <span className="italic font-medium text-slate-500">Em branco</span>
+                              </div>
+                              <span className="text-xs font-heading font-bold text-slate-400">Não respondida</span>
+                            </div>
+                          ) : (
+                            <div className="p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-800 text-sm leading-relaxed space-y-1">
+                              <span className="font-heading font-bold text-xs uppercase tracking-wider text-slate-500 block">
+                                Sua resposta:
+                              </span>
+                              <p className="whitespace-pre-wrap font-sans">{textoResp}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Aguardando correção */}
+                        {isPendente && (
+                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Aguardando correção</span>
+                          </div>
+                        )}
+
+                        {/* Quando corrigida */}
+                        {!isPendente && !semResposta && (
+                          <>
+                            {comentarioProf && (
+                              <div className="p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-200 text-indigo-950 text-sm leading-relaxed space-y-1">
+                                <div className="flex items-center gap-1.5 font-heading font-bold text-indigo-800 text-xs uppercase tracking-wider">
+                                  <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                                  <span>Comentário do professor</span>
+                                </div>
+                                <p className="whitespace-pre-wrap">{comentarioProf}</p>
+                              </div>
+                            )}
+
+                            {respEsperada && (
+                              <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 text-emerald-950 text-sm leading-relaxed space-y-1">
+                                <div className="flex items-center gap-1.5 font-heading font-bold text-emerald-800 text-xs uppercase tracking-wider">
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  <span>Resposta esperada</span>
+                                </div>
+                                <p className="whitespace-pre-wrap">{respEsperada}</p>
+                              </div>
+                            )}
+
+                            {q.explicacao && (
+                              <div className="p-4 rounded-2xl bg-slate-50 border-2 border-slate-200 text-slate-800 text-sm leading-relaxed space-y-1">
+                                <div className="flex items-center gap-1.5 font-heading font-bold text-slate-700 text-xs uppercase tracking-wider">
+                                  <HelpCircle className="w-4 h-4 text-slate-500" />
+                                  <span>Explicação pedagógica</span>
+                                </div>
+                                <p className="whitespace-pre-wrap">{q.explicacao}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </CartaoVidro>
+                    );
+                  }
+
+                  const semResposta = q.alternativa_escolhida_id === null;
                   const altEscolhida = questaoBase?.alternativas.find(
                     (a) => a.id === q.alternativa_escolhida_id
                   );
@@ -532,8 +708,18 @@ export const AlunoAtividadePage: React.FC = () => {
                       </div>
 
                       <p className="font-heading font-bold text-base sm:text-lg text-slate-900 leading-snug">
-                        {q.enunciado}
+                        <MathText text={q.enunciado} />
                       </p>
+
+                      {questaoBase?.imagem_url && (
+                        <div className="max-w-md w-full rounded-2xl overflow-hidden border border-slate-200 shadow-xs my-2">
+                          <img
+                            src={questaoBase.imagem_url}
+                            alt="Apoio da questão"
+                            className="w-full h-auto max-h-72 object-contain bg-slate-50"
+                          />
+                        </div>
+                      )}
 
                       {/* Alternativa Escolhida e Alternativa Correta */}
                       <div className="space-y-2 pt-1">
@@ -631,6 +817,114 @@ export const AlunoAtividadePage: React.FC = () => {
               <div className="space-y-4">
                 {atividade.questoes.map((q) => {
                   const resp = respostasMap[q.id];
+                  const isDisc = q.tipo === 'discursiva';
+
+                  if (isDisc) {
+                    const textoResp = resp?.texto_respondido ?? q.texto_respondido ?? null;
+                    const semResposta = !textoResp;
+                    const correcao = resp?.correcao ?? q.correcao ?? (semResposta ? null : 'pendente');
+                    const isPendente = !semResposta && (!correcao || correcao === 'pendente');
+                    const comentarioProf = resp?.comentario_professor ?? q.comentario_professor ?? null;
+                    const respEsperada = resp?.resposta_esperada ?? q.resposta_esperada ?? null;
+                    const imagemUrl = q.imagem_url;
+
+                    return (
+                      <CartaoVidro key={q.id} className="p-5 sm:p-6 space-y-4">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs font-heading font-black text-indigo-600 uppercase tracking-wider">
+                            Questão {q.ordem}
+                          </span>
+
+                          {semResposta ? (
+                            <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5" />}>
+                              Sem resposta
+                            </ChipInfo>
+                          ) : isPendente ? (
+                            <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5 text-amber-600" />}>
+                              Aguardando correção
+                            </ChipInfo>
+                          ) : correcao === 'certo' ? (
+                            <ChipInfo color="emerald" icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}>
+                              Certo
+                            </ChipInfo>
+                          ) : correcao === 'parcial' ? (
+                            <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5 text-amber-600" />}>
+                              Parcial
+                            </ChipInfo>
+                          ) : (
+                            <ChipInfo color="pink" icon={<XCircle className="w-3.5 h-3.5 text-rose-600" />}>
+                              Errado
+                            </ChipInfo>
+                          )}
+                        </div>
+
+                        <p className="font-heading font-bold text-base sm:text-lg text-slate-900 leading-snug">
+                          <MathText text={q.enunciado} />
+                        </p>
+
+                        {imagemUrl && (
+                          <div className="max-w-md w-full rounded-2xl overflow-hidden border border-slate-200 shadow-xs my-2">
+                            <img
+                              src={imagemUrl}
+                              alt="Apoio da questão"
+                              className="w-full h-auto max-h-72 object-contain bg-slate-50"
+                            />
+                          </div>
+                        )}
+
+                        {/* Resposta do Aluno */}
+                        <div className="space-y-2 pt-1">
+                          {semResposta ? (
+                            <div className="p-3.5 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-600 text-sm flex items-center justify-between gap-3">
+                              <span className="italic font-medium text-slate-500">Sem resposta</span>
+                            </div>
+                          ) : (
+                            <div className="p-3.5 sm:p-4 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-800 text-sm leading-relaxed space-y-1">
+                              <span className="font-heading font-bold text-xs uppercase tracking-wider text-slate-500 block">
+                                Sua resposta:
+                              </span>
+                              <p className="whitespace-pre-wrap font-sans">{textoResp}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Aguardando correção */}
+                        {isPendente && (
+                          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Aguardando correção</span>
+                          </div>
+                        )}
+
+                        {/* Quando corrigida */}
+                        {!isPendente && !semResposta && (
+                          <>
+                            {comentarioProf && (
+                              <div className="p-3.5 sm:p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 text-xs sm:text-sm space-y-1">
+                                <span className="font-bold text-indigo-800 block">Comentário do professor:</span>
+                                <p className="whitespace-pre-wrap">{comentarioProf}</p>
+                              </div>
+                            )}
+
+                            {respEsperada && (
+                              <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-1">
+                                <span className="font-bold text-emerald-800 block">Resposta esperada:</span>
+                                <p className="whitespace-pre-wrap">{respEsperada}</p>
+                              </div>
+                            )}
+
+                            {(resp?.explicacao || q.explicacao) && (
+                              <div className="p-3.5 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs sm:text-sm space-y-1">
+                                <span className="font-bold text-slate-600 block">Explicação pedagógica:</span>
+                                <p className="whitespace-pre-wrap">{resp?.explicacao || q.explicacao}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </CartaoVidro>
+                    );
+                  }
+
                   const acertou = resp?.acertou;
 
                   return (
@@ -651,8 +945,18 @@ export const AlunoAtividadePage: React.FC = () => {
                       </div>
 
                       <p className="font-heading font-bold text-base sm:text-lg text-slate-900 leading-snug">
-                        {q.enunciado}
+                        <MathText text={q.enunciado} />
                       </p>
+
+                      {q.imagem_url && (
+                        <div className="max-w-md w-full rounded-2xl overflow-hidden border border-slate-200 shadow-xs my-2">
+                          <img
+                            src={q.imagem_url}
+                            alt="Apoio da questão"
+                            className="w-full h-auto max-h-72 object-contain bg-slate-50"
+                          />
+                        </div>
+                      )}
 
                       {resp?.por_que_errou && (
                         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs sm:text-sm">
@@ -778,6 +1082,16 @@ export const AlunoAtividadePage: React.FC = () => {
               <MathText text={questaoAtual?.enunciado} />
             </h2>
 
+            {questaoAtual?.imagem_url && (
+              <div className="max-w-md w-full rounded-2xl overflow-hidden border border-slate-200 shadow-xs my-2">
+                <img
+                  src={questaoAtual.imagem_url}
+                  alt="Apoio da questão"
+                  className="w-full h-auto max-h-72 object-contain bg-slate-50"
+                />
+              </div>
+            )}
+
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap pt-0.5">
               {/* Botão de Dica (apenas se existir dica) */}
               {questaoAtual?.dica && !questaoJaRespondida && (
@@ -823,115 +1137,175 @@ export const AlunoAtividadePage: React.FC = () => {
             )}
           </div>
 
-          {/* Lista de Alternativas (Cards grandes e touch-friendly) */}
-          <div className="space-y-2.5 sm:space-y-3 pt-1" role="radiogroup" aria-label="Alternativas">
-            {questaoAtual?.alternativas.map((alt) => {
-              const isEscolhida = altEscolhidaId === alt.id;
-              const isCorreta = altCorretaId === alt.id;
+          {/* Corpo da Questão: Campo Discursivo ou Alternativas Objetivas */}
+          {isDiscursiva ? (
+            <div className="space-y-3 pt-1">
+              {!questaoJaRespondida ? (
+                <div className="space-y-2">
+                  <label
+                    htmlFor="campo-resposta-discursiva"
+                    className="block text-xs font-heading font-bold text-slate-700 uppercase tracking-wider"
+                  >
+                    Sua resposta:
+                  </label>
+                  <textarea
+                    id="campo-resposta-discursiva"
+                    rows={6}
+                    maxLength={2000}
+                    value={textoDiscursiva}
+                    onChange={(e) => setTextoDiscursiva(e.target.value)}
+                    disabled={confirmando || isEncerrada}
+                    placeholder="Escreva sua resposta detalhada aqui..."
+                    className="w-full p-4 rounded-2xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all font-sans text-sm sm:text-base text-slate-900 placeholder:text-slate-400 resize-y min-h-[140px] outline-none"
+                  />
+                  <div className="flex items-center justify-end text-xs font-medium text-slate-500">
+                    <span>{textoDiscursiva.length}/2000</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <span className="block text-xs font-heading font-bold text-slate-500 uppercase tracking-wider">
+                    Sua resposta:
+                  </span>
+                  <div className="p-4 rounded-2xl border-2 border-slate-200 bg-slate-50 text-slate-800 text-sm sm:text-base leading-relaxed whitespace-pre-wrap font-sans">
+                    {respAtual?.texto_respondido || textoDiscursiva}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2.5 sm:space-y-3 pt-1" role="radiogroup" aria-label="Alternativas">
+              {questaoAtual?.alternativas.map((alt) => {
+                const isEscolhida = altEscolhidaId === alt.id;
+                const isCorreta = altCorretaId === alt.id;
 
-              // Em modo prova, nunca expõe cores de certo/errado
-              let estiloAlternativa = 'border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800';
-              let estiloLetra = 'bg-slate-100 text-slate-700 border-slate-200';
-              let iconeStatus: React.ReactNode = null;
+                // Em modo prova, nunca expõe cores de certo/errado
+                let estiloAlternativa = 'border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/40 text-slate-800';
+                let estiloLetra = 'bg-slate-100 text-slate-700 border-slate-200';
+                let iconeStatus: React.ReactNode = null;
 
-              if (questaoJaRespondida) {
-                if (isProva) {
-                  // Prova travada: apenas mostra a selecionada de forma neutra
-                  if (isEscolhida) {
-                    estiloAlternativa = 'border-indigo-500 bg-indigo-50/60 text-indigo-950 font-bold';
-                    estiloLetra = 'bg-indigo-600 text-white border-indigo-600';
+                if (questaoJaRespondida) {
+                  if (isProva) {
+                    // Prova travada: apenas mostra a selecionada de forma neutra
+                    if (isEscolhida) {
+                      estiloAlternativa = 'border-indigo-500 bg-indigo-50/60 text-indigo-950 font-bold';
+                      estiloLetra = 'bg-indigo-600 text-white border-indigo-600';
+                    } else {
+                      estiloAlternativa = 'border-slate-100 bg-slate-50/60 text-slate-400 opacity-70';
+                    }
                   } else {
-                    estiloAlternativa = 'border-slate-100 bg-slate-50/60 text-slate-400 opacity-70';
+                    // Modo Exercício: destaque de correta e incorreta
+                    if (isCorreta) {
+                      estiloAlternativa = 'border-emerald-500 bg-gradient-to-r from-emerald-50 to-emerald-100/90 text-emerald-950 font-bold shadow-sm ring-2 ring-emerald-400/30';
+                      estiloLetra = 'bg-emerald-600 text-white border-emerald-600';
+                      iconeStatus = <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />;
+                    } else if (isEscolhida && !respAtual?.acertou) {
+                      estiloAlternativa = 'border-rose-500 bg-gradient-to-r from-rose-50 to-rose-100/90 text-rose-950 font-bold shadow-sm ring-2 ring-rose-400/30';
+                      estiloLetra = 'bg-rose-600 text-white border-rose-600';
+                      iconeStatus = <XCircle className="w-5 h-5 text-rose-600 shrink-0" />;
+                    } else {
+                      estiloAlternativa = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
+                    }
                   }
                 } else {
-                  // Modo Exercício: destaque de correta e incorreta
-                  if (isCorreta) {
-                    estiloAlternativa = 'border-emerald-500 bg-gradient-to-r from-emerald-50 to-emerald-100/90 text-emerald-950 font-bold shadow-sm ring-2 ring-emerald-400/30';
-                    estiloLetra = 'bg-emerald-600 text-white border-emerald-600';
-                    iconeStatus = <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />;
-                  } else if (isEscolhida && !respAtual?.acertou) {
-                    estiloAlternativa = 'border-rose-500 bg-gradient-to-r from-rose-50 to-rose-100/90 text-rose-950 font-bold shadow-sm ring-2 ring-rose-400/30';
-                    estiloLetra = 'bg-rose-600 text-white border-rose-600';
-                    iconeStatus = <XCircle className="w-5 h-5 text-rose-600 shrink-0" />;
-                  } else {
-                    estiloAlternativa = 'border-slate-100 bg-slate-50/50 text-slate-400 opacity-60';
+                  // Estado ativo de escolha antes de confirmar
+                  if (selecionadaId === alt.id) {
+                    estiloAlternativa = 'border-indigo-600 bg-indigo-50/80 text-indigo-950 font-bold shadow-sm ring-2 ring-indigo-500/20';
+                    estiloLetra = 'bg-indigo-600 text-white border-indigo-600';
                   }
                 }
-              } else {
-                // Estado ativo de escolha antes de confirmar
-                if (selecionadaId === alt.id) {
-                  estiloAlternativa = 'border-indigo-600 bg-indigo-50/80 text-indigo-950 font-bold shadow-sm ring-2 ring-indigo-500/20';
-                  estiloLetra = 'bg-indigo-600 text-white border-indigo-600';
-                }
-              }
 
-              return (
-                <button
-                  key={alt.id}
-                  type="button"
-                  disabled={questaoJaRespondida || isEncerrada}
-                  onClick={() => setSelecionadaId(alt.id)}
-                  className={`w-full text-left p-3.5 sm:p-5 rounded-2xl border-2 transition-all duration-200 flex items-center justify-between gap-3 sm:gap-4 select-none min-h-[54px] active:scale-[0.99] ${
-                    !questaoJaRespondida && !isEncerrada ? 'cursor-pointer' : 'cursor-default'
-                  } ${estiloAlternativa}`}
-                >
-                  <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                    <span
-                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-black text-sm sm:text-base shrink-0 border transition-all ${estiloLetra}`}
-                    >
-                      {alt.letra}
-                    </span>
-                    <span className="text-sm sm:text-base leading-snug break-words flex-1">
-                      <MathText text={alt.texto} />
-                    </span>
-                  </div>
+                return (
+                  <button
+                    key={alt.id}
+                    type="button"
+                    disabled={questaoJaRespondida || isEncerrada}
+                    onClick={() => setSelecionadaId(alt.id)}
+                    className={`w-full text-left p-3.5 sm:p-5 rounded-2xl border-2 transition-all duration-200 flex items-center justify-between gap-3 sm:gap-4 select-none min-h-[54px] active:scale-[0.99] ${
+                      !questaoJaRespondida && !isEncerrada ? 'cursor-pointer' : 'cursor-default'
+                    } ${estiloAlternativa}`}
+                  >
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                      <span
+                        className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-heading font-black text-sm sm:text-base shrink-0 border transition-all ${estiloLetra}`}
+                      >
+                        {alt.letra}
+                      </span>
+                      <span className="text-sm sm:text-base leading-snug break-words flex-1">
+                        <MathText text={alt.texto} />
+                      </span>
+                    </div>
 
-                  {iconeStatus}
-                </button>
-              );
-            })}
-          </div>
+                    {iconeStatus}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Feedback do Modo Exercício (após responder) */}
           {questaoJaRespondida && !isProva && respAtual && (
             <div className="space-y-3 pt-2 animate-slideDownFade motion-reduce:animate-none">
-              {/* Faixa de Resultado (Verde ou Degradê Vermelho->Laranja) */}
-              {respAtual.acertou || respAtual.acertou_final ? (
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-heading font-black text-base sm:text-xl flex items-center gap-2.5 sm:gap-3 shadow-md shadow-emerald-200">
-                  <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
-                  <span>Mandou bem! 🎉</span>
-                </div>
+              {isDiscursiva ? (
+                <>
+                  <div className="p-3.5 sm:p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-200 text-indigo-900 font-heading font-bold text-sm sm:text-base flex items-center gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0" />
+                    <span>Resposta enviada ✓. Seu professor vai corrigir.</span>
+                  </div>
+
+                  {(respAtual.explicacao || questaoAtual?.explicacao) && (
+                    <div className="p-3.5 sm:p-5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-200 text-emerald-950 text-xs sm:text-base leading-relaxed space-y-1">
+                      <div className="flex items-center gap-1.5 font-heading font-bold text-emerald-800 text-xs sm:text-sm uppercase tracking-wider">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Entenda a resposta correta</span>
+                      </div>
+                      <p>
+                        <MathText text={respAtual.explicacao || questaoAtual?.explicacao} />
+                      </p>
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white font-heading font-bold text-sm sm:text-lg flex items-center gap-2.5 sm:gap-3 shadow-md shadow-rose-200">
-                  <span className="text-xl sm:text-2xl shrink-0">💪</span>
-                  <span>Não foi dessa vez, mas faz parte aprender!</span>
-                </div>
-              )}
+                <>
+                  {/* Faixa de Resultado (Verde ou Degradê Vermelho->Laranja) */}
+                  {respAtual.acertou || respAtual.acertou_final ? (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-heading font-black text-base sm:text-xl flex items-center gap-2.5 sm:gap-3 shadow-md shadow-emerald-200">
+                      <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 shrink-0" />
+                      <span>Mandou bem! 🎉</span>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-white font-heading font-bold text-sm sm:text-lg flex items-center gap-2.5 sm:gap-3 shadow-md shadow-rose-200">
+                      <span className="text-xl sm:text-2xl shrink-0">💪</span>
+                      <span>Não foi dessa vez, mas faz parte aprender!</span>
+                    </div>
+                  )}
 
-              {/* Cartão Rosa: Onde prestar atenção (por_que_errou) */}
-              {!respAtual.acertou && respAtual.por_que_errou && (
-                <div className="p-3.5 sm:p-5 rounded-2xl bg-rose-50/90 border-2 border-rose-200 text-rose-950 text-xs sm:text-base leading-relaxed space-y-1">
-                  <div className="flex items-center gap-1.5 font-heading font-bold text-rose-800 text-xs sm:text-sm uppercase tracking-wider">
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>Onde prestar atenção</span>
-                  </div>
-                  <p>
-                    <MathText text={respAtual.por_que_errou} />
-                  </p>
-                </div>
-              )}
+                  {/* Cartão Rosa: Onde prestar atenção (por_que_errou) */}
+                  {!respAtual.acertou && respAtual.por_que_errou && (
+                    <div className="p-3.5 sm:p-5 rounded-2xl bg-rose-50/90 border-2 border-rose-200 text-rose-950 text-xs sm:text-base leading-relaxed space-y-1">
+                      <div className="flex items-center gap-1.5 font-heading font-bold text-rose-800 text-xs sm:text-sm uppercase tracking-wider">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>Onde prestar atenção</span>
+                      </div>
+                      <p>
+                        <MathText text={respAtual.por_que_errou} />
+                      </p>
+                    </div>
+                  )}
 
-              {/* Cartão Verde: Entenda a resposta correta (explicacao) */}
-              {respAtual.explicacao && (
-                <div className="p-3.5 sm:p-5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-200 text-emerald-950 text-xs sm:text-base leading-relaxed space-y-1">
-                  <div className="flex items-center gap-1.5 font-heading font-bold text-emerald-800 text-xs sm:text-sm uppercase tracking-wider">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Entenda a resposta correta</span>
-                  </div>
-                  <p>
-                    <MathText text={respAtual.explicacao} />
-                  </p>
-                </div>
+                  {/* Cartão Verde: Entenda a resposta correta (explicacao) */}
+                  {respAtual.explicacao && (
+                    <div className="p-3.5 sm:p-5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-200 text-emerald-950 text-xs sm:text-base leading-relaxed space-y-1">
+                      <div className="flex items-center gap-1.5 font-heading font-bold text-emerald-800 text-xs sm:text-sm uppercase tracking-wider">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Entenda a resposta correta</span>
+                      </div>
+                      <p>
+                        <MathText text={respAtual.explicacao} />
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -949,17 +1323,17 @@ export const AlunoAtividadePage: React.FC = () => {
             {!questaoJaRespondida && !isEncerrada ? (
               <BotaoGrande
                 variant="primary"
-                disabled={!selecionadaId || confirmando}
+                disabled={isDiscursiva ? !textoDiscursiva.trim() || confirmando : !selecionadaId || confirmando}
                 isLoading={confirmando}
-                onClick={handleConfirmar}
+                onClick={isDiscursiva ? handleEnviarDiscursiva : handleConfirmar}
                 className="w-full sm:w-auto px-8 min-h-[50px] text-base"
               >
-                Confirmar resposta
+                {isDiscursiva ? 'Enviar resposta' : 'Confirmar resposta'}
               </BotaoGrande>
             ) : (
               <div className="flex items-center justify-between w-full gap-2.5 flex-col sm:flex-row">
-                {/* Botão Tentar Novamente (só em exercício quando acertou_final for false) */}
-                {!isProva && respAtual?.acertou_final === false && !isEncerrada && (
+                {/* Botão Tentar Novamente (só em exercício quando acertou_final for false e NÃO for discursiva) */}
+                {!isProva && !isDiscursiva && respAtual?.acertou_final === false && !isEncerrada && (
                   <BotaoGrande
                     variant="yellow"
                     onClick={handleIniciarTentarNovamente}

@@ -61,6 +61,7 @@ import { ModalGeradorIA } from '../components/ModalGeradorIA';
 
 interface AtividadeComQtd extends Atividade {
   total_questoes: number;
+  pendentes_correcao?: number;
 }
 
 export const ProfessorOfertaPage: React.FC = () => {
@@ -168,18 +169,29 @@ export const ProfessorOfertaPage: React.FC = () => {
       const listaAtividades = await professorService.listarAtividades(ofertaId);
       const atividadesComQtd: AtividadeComQtd[] = await Promise.all(
         listaAtividades.map(async (ativ) => {
+          let totalQuestoes = 0;
+          let pendentesCorrecao = 0;
           try {
             const completa = await professorService.obterAtividade(ativ.id);
-            return {
-              ...ativ,
-              total_questoes: completa?.questoes.length ?? 0,
-            };
+            totalQuestoes = completa?.questoes.length ?? 0;
           } catch {
-            return {
-              ...ativ,
-              total_questoes: 0,
-            };
+            totalQuestoes = 0;
           }
+
+          if (ativ.status !== 'rascunho') {
+            try {
+              const pendentes = await professorService.listarCorrecoesPendentes(ativ.id);
+              pendentesCorrecao = pendentes.length;
+            } catch {
+              pendentesCorrecao = 0;
+            }
+          }
+
+          return {
+            ...ativ,
+            total_questoes: totalQuestoes,
+            pendentes_correcao: pendentesCorrecao,
+          };
         })
       );
 
@@ -778,15 +790,23 @@ export const ProfessorOfertaPage: React.FC = () => {
                       {/* Topo do Cartão: Chips de Modo e Bimestre */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          {ativ.modo === 'prova' ? (
-                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-800 border border-violet-200">
-                              Prova
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-200">
-                              Exercício
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {ativ.modo === 'prova' ? (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-800 border border-violet-200">
+                                Prova
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-800 border border-teal-200">
+                                Exercício
+                              </span>
+                            )}
+
+                            {ativ.pendentes_correcao !== undefined && ativ.pendentes_correcao > 0 && (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                {ativ.pendentes_correcao} para corrigir
+                              </span>
+                            )}
+                          </div>
 
                           <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
                             <Calendar className="w-3 h-3 text-slate-400" />
@@ -1091,7 +1111,11 @@ export const ProfessorOfertaPage: React.FC = () => {
                                   key={colAtiv.id}
                                   className="py-3 px-3 text-center whitespace-nowrap text-xs"
                                 >
-                                  {!dadoAtiv || dadoAtiv.aproveitamento === null ? (
+                                  {dadoAtiv?.aguardando_correcao ? (
+                                    <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+                                      aguardando correção
+                                    </span>
+                                  ) : !dadoAtiv || dadoAtiv.aproveitamento === null ? (
                                     <span className="text-slate-300 font-mono">—</span>
                                   ) : !dadoAtiv.concluida ? (
                                     isAtivEncerrada ? (

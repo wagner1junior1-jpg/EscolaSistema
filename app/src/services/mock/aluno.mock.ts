@@ -35,6 +35,7 @@ import {
   calcularAproveitamentoAtividade,
   faixaDesempenho,
   mediaDoAlunoNasAtividades,
+  pontuacaoDaResposta,
 } from '../calculos';
 
 function toAlunoPublico(aluno: Aluno): AlunoPublico {
@@ -206,10 +207,27 @@ export class MockAlunoService implements AlunoService {
       const concluida = totalQuestoes > 0 && respondidas === totalQuestoes;
 
       let aproveitamento: number | undefined = undefined;
-      if (concluida) {
-        // Aproveitamento calculado sempre a partir da 1ª resposta
-        const acertos = respostasDoAluno.filter((r) => r.acertou).length;
-        aproveitamento = calcularAproveitamentoAtividade(acertos, totalQuestoes);
+      let aguardandoCorrecao = false;
+
+      // Se o aluno tem discursiva PENDENTE numa atividade, essa atividade fica "aguardando correção" para ele e NÃO entra na média.
+      const temDiscursivaPendente = questoesDaAtiv.some((q) => {
+        if (q.tipo !== 'discursiva') return false;
+        const r = respostasDoAluno.find((resp) => resp.questao_id === q.id);
+        return r && (r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null);
+      });
+
+      if (temDiscursivaPendente) {
+        aguardandoCorrecao = true;
+      } else if (concluida || ativ.status === 'encerrada') {
+        let somaPontos = 0;
+        for (const q of questoesDaAtiv) {
+          const r = respostasDoAluno.find((resp) => resp.questao_id === q.id);
+          const p = pontuacaoDaResposta(q, r);
+          if (p !== null) {
+            somaPontos += p;
+          }
+        }
+        aproveitamento = calcularAproveitamentoAtividade(somaPontos, totalQuestoes);
       }
 
       return {
@@ -225,6 +243,7 @@ export class MockAlunoService implements AlunoService {
         questoes_respondidas: respondidas,
         concluida,
         aproveitamento,
+        aguardando_correcao: aguardandoCorrecao,
       };
     });
   }
@@ -283,6 +302,10 @@ export class MockAlunoService implements AlunoService {
       const altCorreta = todasAlts.find((a) => a.correta);
 
       if (respostaRegistrada) {
+        const foiCorrigida = Boolean(
+          respostaRegistrada.correcao && respostaRegistrada.correcao !== 'pendente'
+        );
+
         // Se for prova publicada e ainda não tiver concluído todas as questões: NÃO expõe o feedback pedagógico
         if (atividade.modo === 'prova' && atividade.status === 'publicada' && !provaCompleta) {
           return {
@@ -293,6 +316,12 @@ export class MockAlunoService implements AlunoService {
             alternativas: alternativasBase,
             respondida: true,
             alternativa_respondida_id: respostaRegistrada.alternativa_id || undefined,
+            tipo: q.tipo || 'objetiva',
+            imagem_url: q.imagem_url || null,
+            texto_respondido: respostaRegistrada.texto_resposta ?? undefined,
+            correcao: respostaRegistrada.correcao ?? undefined,
+            comentario_professor: respostaRegistrada.comentario_professor ?? undefined,
+            ...(foiCorrigida && q.resposta_esperada ? { resposta_esperada: q.resposta_esperada } : {}),
           };
         }
 
@@ -307,6 +336,12 @@ export class MockAlunoService implements AlunoService {
           alternativas: alternativasBase,
           respondida: true,
           alternativa_respondida_id: respostaRegistrada.alternativa_id || undefined,
+          tipo: q.tipo || 'objetiva',
+          imagem_url: q.imagem_url || null,
+          texto_respondido: respostaRegistrada.texto_resposta ?? undefined,
+          correcao: respostaRegistrada.correcao ?? undefined,
+          comentario_professor: respostaRegistrada.comentario_professor ?? undefined,
+          ...(foiCorrigida && q.resposta_esperada ? { resposta_esperada: q.resposta_esperada } : {}),
           acertou: respostaRegistrada.acertou ?? undefined,
           alternativa_correta_id: altCorreta?.id,
           por_que_errou: respostaRegistrada.acertou ? null : altEscolhida?.por_que_errou || null,
@@ -325,6 +360,8 @@ export class MockAlunoService implements AlunoService {
           dica: q.dica,
           alternativas: alternativasBase,
           respondida: false,
+          tipo: q.tipo || 'objetiva',
+          imagem_url: q.imagem_url || null,
           acertou: false,
           alternativa_correta_id: altCorreta?.id,
           explicacao: q.explicacao,
@@ -341,6 +378,8 @@ export class MockAlunoService implements AlunoService {
         dica: q.dica,
         alternativas: alternativasBase,
         respondida: false,
+        tipo: q.tipo || 'objetiva',
+        imagem_url: q.imagem_url || null,
       };
     });
 
@@ -538,7 +577,7 @@ export class MockAlunoService implements AlunoService {
       }
     }
 
-    let acertos = 0;
+    let totalPontos = 0;
     const questoesResultado: ResultadoProvaQuestao[] = questoes.map((q) => {
       const r = respostas.find((resp) => resp.questao_id === q.id);
       const alts = db.alternativas.filter((a) => a.questao_id === q.id);
@@ -554,11 +593,42 @@ export class MockAlunoService implements AlunoService {
           acertou: false,
           por_que_errou: null,
           explicacao: q.explicacao,
+          tipo: q.tipo || 'objetiva',
+          imagem_url: q.imagem_url || null,
+        };
+      }
+
+      if (q.tipo === 'discursiva') {
+        const p = pontuacaoDaResposta(q, r);
+        if (p !== null) {
+          totalPontos += p;
+        }
+        const acertouDiscursiva = r.correcao === 'certo';
+        const foiCorrigida = Boolean(r.correcao && r.correcao !== 'pendente');
+
+        return {
+          questao_id: q.id,
+          ordem: q.ordem,
+          enunciado: q.enunciado,
+          alternativa_escolhida_id: null,
+          alternativa_correta_id: '',
+          acertou: acertouDiscursiva,
+          por_que_errou: null,
+          explicacao: q.explicacao,
+          tipo: 'discursiva',
+          imagem_url: q.imagem_url || null,
+          texto_respondido: r.texto_resposta ?? undefined,
+          correcao: r.correcao ?? undefined,
+          comentario_professor: r.comentario_professor ?? undefined,
+          ...(foiCorrigida && q.resposta_esperada ? { resposta_esperada: q.resposta_esperada } : {}),
         };
       }
 
       const escolhidaAlt = alts.find((a) => a.id === r.alternativa_id);
-      if (r.acertou) acertos++;
+      const p = pontuacaoDaResposta(q, r);
+      if (p !== null) {
+        totalPontos += p;
+      }
 
       return {
         questao_id: q.id,
@@ -569,18 +639,20 @@ export class MockAlunoService implements AlunoService {
         acertou: r.acertou ?? false,
         por_que_errou: r.acertou ? null : escolhidaAlt?.por_que_errou || null,
         explicacao: q.explicacao,
+        tipo: 'objetiva',
+        imagem_url: q.imagem_url || null,
       };
     });
 
     const total = questoes.length;
-    const erros = total - acertos;
-    const aproveitamento = calcularAproveitamentoAtividade(acertos, total);
+    const erros = total - Math.floor(totalPontos);
+    const aproveitamento = calcularAproveitamentoAtividade(totalPontos, total);
 
     return {
       atividade_id: atividadeId,
       titulo: atividade.titulo,
       total_questoes: total,
-      acertos,
+      acertos: totalPontos,
       erros,
       aproveitamento,
       questoes: questoesResultado,

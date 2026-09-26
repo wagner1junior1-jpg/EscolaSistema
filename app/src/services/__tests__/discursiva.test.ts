@@ -3,7 +3,8 @@ import { MockAuthService } from '../mock/auth.mock';
 import { MockProfessorService } from '../mock/professor.mock';
 import { MockAlunoService } from '../mock/aluno.mock';
 import { resetDatabase, getDatabase, saveDatabase } from '../mock/db';
-import { Questao, Atividade } from '@/lib/types';
+import { Questao, Atividade, Resposta } from '@/lib/types';
+import { mediaDoAlunoNasAtividades } from '../calculos';
 
 describe('Discursivas — Gravação, Validações e Correção no Mock (docs/ESPECIFICACAO.md 9.2, 9.3)', () => {
   const authService = new MockAuthService();
@@ -290,5 +291,172 @@ describe('Discursivas — Gravação, Validações e Correção no Mock (docs/ES
     await expect(
       alunoService.responder(tokenAluno7A, questaoDiscursivaExercicioId, 'alt-qualquer')
     ).rejects.toThrow('Esta questão é discursiva e não aceita alternativas');
+  });
+
+  // 9) listarCorrecoesFeitas retorna respostas corrigidas e omite pendentes
+  it('listarCorrecoesFeitas retorna respostas corrigidas com detalhes e omite pendentes', async () => {
+    // Aluno responde questão discursiva
+    await alunoService.responderDiscursiva(
+      tokenAluno7A,
+      questaoDiscursivaExercicioId,
+      'Resposta para validação de corrigidas'
+    );
+
+    // Login da Profª Ana
+    await authService.login('ana@demo.com', 'demo123');
+
+    // Inicialmente, feitas está vazio
+    const feitasAntes = await professorService.listarCorrecoesFeitas('ativ-mat-01');
+    expect(feitasAntes).toHaveLength(0);
+
+    // Obtém pendente e corrige como 'parcial' com comentário
+    const pendentes = await professorService.listarCorrecoesPendentes('ativ-mat-01');
+    expect(pendentes).toHaveLength(1);
+    await professorService.corrigirResposta(
+      pendentes[0].resposta_id,
+      'parcial',
+      'Boa tentativa, mas incompleto.'
+    );
+
+    // Agora feitas tem 1 item com os dados corretos
+    const feitasDepois = await professorService.listarCorrecoesFeitas('ativ-mat-01');
+    expect(feitasDepois).toHaveLength(1);
+    expect(feitasDepois[0].aluno_nome).toBe('Lucas Oliveira');
+    expect(feitasDepois[0].correcao).toBe('parcial');
+    expect(feitasDepois[0].pontuacao).toBe(0.5);
+    expect(feitasDepois[0].comentario_professor).toBe('Boa tentativa, mas incompleto.');
+    expect(feitasDepois[0].texto_resposta).toBe('Resposta para validação de corrigidas');
+    expect(feitasDepois[0].resposta_esperada).toBe(
+      'Uma igualdade entre duas expressões algébricas onde a incógnita tem expoente 1.'
+    );
+  });
+
+  // 10) listarCorrecoesFeitas recusa acesso para professor que não é dono da oferta
+  it('listarCorrecoesFeitas recusa acesso para professor que não é dono da oferta', async () => {
+    // Carlos faz login (ele não é professor de ativ-mat-01)
+    await authService.login('carlos@demo.com', 'demo123');
+
+    await expect(
+      professorService.listarCorrecoesFeitas('ativ-mat-01')
+    ).rejects.toThrow('Você não tem permissão para esta ação');
+  });
+});
+
+describe('Discursivas — Cálculo de Média e Aproveitamento', () => {
+  const criarResp = (
+    id: string,
+    questaoId: string,
+    acertou: boolean | null,
+    correcao?: 'certo' | 'parcial' | 'errado' | 'pendente',
+    pontuacao?: number | null
+  ): Resposta => ({
+    id,
+    aluno_id: 'aluno-1',
+    questao_id: questaoId,
+    acertou,
+    acertou_final: acertou,
+    alternativa_id: acertou !== null ? 'alt-1' : null,
+    respondida_em: '',
+    tentativas: 1,
+    created_at: '',
+    correcao: correcao || null,
+    pontuacao: pontuacao !== undefined ? pontuacao : null,
+  });
+
+  const criarQuestoes = (): Questao[] => [
+    {
+      id: 'q1',
+      atividade_id: 'ativ-1',
+      ordem: 1,
+      enunciado: 'Questão 1',
+      tipo: 'objetiva',
+      dica: null,
+      explicacao: null,
+      created_at: '',
+    },
+    {
+      id: 'q2',
+      atividade_id: 'ativ-1',
+      ordem: 2,
+      enunciado: 'Questão 2',
+      tipo: 'objetiva',
+      dica: null,
+      explicacao: null,
+      created_at: '',
+    },
+    {
+      id: 'q3',
+      atividade_id: 'ativ-1',
+      ordem: 3,
+      enunciado: 'Questão 3',
+      tipo: 'discursiva',
+      dica: null,
+      explicacao: null,
+      created_at: '',
+    },
+  ];
+
+  it('2 objetivas certas + 1 discursiva parcial = 2,5/3 = 83,3%', () => {
+    const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'ativ-1', status: 'publicada' }];
+    const questoes = criarQuestoes();
+
+    const respostas: Resposta[] = [
+      criarResp('r1', 'q1', true),
+      criarResp('r2', 'q2', true),
+      criarResp('r3', 'q3', null, 'parcial', 0.5),
+    ];
+
+    const res = mediaDoAlunoNasAtividades(ativs, questoes, respostas);
+    expect(res.atividades_avaliadas).toBe(1);
+    expect(res.soma_acertos).toBe(2.5);
+    expect(res.soma_questoes).toBe(3);
+    expect(res.media).toBe(83.3);
+  });
+
+  it('com a discursiva pendente, a atividade fica fora da média', () => {
+    const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'ativ-1', status: 'publicada' }];
+    const questoes = criarQuestoes();
+
+    const respostasComPendente: Resposta[] = [
+      criarResp('r1', 'q1', true),
+      criarResp('r2', 'q2', true),
+      criarResp('r3', 'q3', null, 'pendente', null),
+    ];
+
+    const res = mediaDoAlunoNasAtividades(ativs, questoes, respostasComPendente);
+    // Atividade fica fora da média
+    expect(res.atividades_avaliadas).toBe(0);
+    expect(res.soma_acertos).toBe(0);
+    expect(res.soma_questoes).toBe(0);
+    expect(res.media).toBeNull();
+  });
+
+  it('depois de corrigida, entra na média', () => {
+    const ativs: Pick<Atividade, 'id' | 'status'>[] = [{ id: 'ativ-1', status: 'publicada' }];
+    const questoes = criarQuestoes();
+
+    const respostasPendente: Resposta[] = [
+      criarResp('r1', 'q1', true),
+      criarResp('r2', 'q2', true),
+      criarResp('r3', 'q3', null, 'pendente', null),
+    ];
+
+    // Antes da correção: fora da média
+    const resAntes = mediaDoAlunoNasAtividades(ativs, questoes, respostasPendente);
+    expect(resAntes.atividades_avaliadas).toBe(0);
+    expect(resAntes.media).toBeNull();
+
+    // Depois da correção: entra na média
+    const respostasCorrigidas: Resposta[] = [
+      criarResp('r1', 'q1', true),
+      criarResp('r2', 'q2', true),
+      criarResp('r3', 'q3', null, 'parcial', 0.5),
+    ];
+
+    const resDepois = mediaDoAlunoNasAtividades(ativs, questoes, respostasCorrigidas);
+    expect(resDepois.atividades_avaliadas).toBe(1);
+    expect(resDepois.soma_acertos).toBe(2.5);
+    expect(resDepois.soma_questoes).toBe(3);
+    expect(resDepois.media).toBe(83.3);
   });
 });

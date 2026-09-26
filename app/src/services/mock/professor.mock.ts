@@ -10,7 +10,7 @@
  * - Relatórios de desempenho e ficha do aluno: leitura pelo professor da oferta, coordenação e direção.
  */
 
-import { ProfessorService, NovaQuestaoPayload } from '../contracts';
+import { ProfessorService, NovaQuestaoPayload, ItemCorrecaoFeita } from '../contracts';
 import {
   OfertaDetalhada,
   Atividade,
@@ -677,13 +677,31 @@ export class MockProfessorService implements ProfessorService {
           (r) => r.aluno_id === aluno.id && questoes.some((q) => q.id === r.questao_id)
         );
 
-        // Sempre a primeira tentativa para notas e médias (campo r.acertou)
-        const acertos = respostas.filter((r) => r.acertou).length;
         const concluida = totalQ > 0 && respostas.length === totalQ;
 
+        // Se o aluno tem discursiva PENDENTE numa atividade, essa atividade fica "aguardando correção" para ele e NÃO entra na média.
+        let temDiscursivaPendente = false;
+        for (const q of questoes) {
+          if (q.tipo === 'discursiva') {
+            const r = respostas.find((resp) => resp.questao_id === q.id);
+            if (r && (r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null)) {
+              temDiscursivaPendente = true;
+              break;
+            }
+          }
+        }
+
         let aproveitamento: number | null = null;
-        if (concluida || ativ.status === 'encerrada') {
-          aproveitamento = calcularAproveitamentoAtividade(acertos, totalQ);
+        if (!temDiscursivaPendente && (concluida || ativ.status === 'encerrada')) {
+          let somaPontos = 0;
+          for (const q of questoes) {
+            const r = respostas.find((resp) => resp.questao_id === q.id);
+            const p = pontuacaoDaResposta(q, r);
+            if (p !== null) {
+              somaPontos += p;
+            }
+          }
+          aproveitamento = calcularAproveitamentoAtividade(somaPontos, totalQ);
         }
 
         ativsAluno.push({
@@ -692,6 +710,7 @@ export class MockProfessorService implements ProfessorService {
           modo: ativ.modo,
           concluida,
           aproveitamento,
+          aguardando_correcao: temDiscursivaPendente,
         });
       }
 
@@ -753,8 +772,9 @@ export class MockProfessorService implements ProfessorService {
         .sort((a, b) => a.ordem - b.ordem);
 
       const questoesFicha: FichaAlunoQuestaoItem[] = [];
-      let totalAcertos = 0;
+      let totalPontos = 0;
       let totalRespondidas = 0;
+      let temDiscursivaPendente = false;
 
       for (const q of questoes) {
         const r = db.respostas.find(
@@ -764,7 +784,12 @@ export class MockProfessorService implements ProfessorService {
 
         if (r) {
           totalRespondidas++;
-          if (r.acertou) totalAcertos++;
+          const p = pontuacaoDaResposta(q, r);
+          if (p !== null) {
+            totalPontos += p;
+          } else if (q.tipo === 'discursiva') {
+            temDiscursivaPendente = true;
+          }
         }
 
         questoesFicha.push({
@@ -783,20 +808,18 @@ export class MockProfessorService implements ProfessorService {
       const concluida = totalQ > 0 && totalRespondidas === totalQ;
 
       let statusAluno: 'concluida' | 'em_andamento' | 'pendente' = 'pendente';
-      if (concluida) {
+      if (temDiscursivaPendente) {
+        statusAluno = 'em_andamento';
+      } else if (concluida) {
         statusAluno = 'concluida';
       } else if (totalRespondidas > 0) {
         statusAluno = 'em_andamento';
       }
 
       let aproveitamento: number | null = null;
-      if (concluida) {
-        aproveitamento = calcularAproveitamentoAtividade(totalAcertos, totalQ);
-        somaAcertosMedia += totalAcertos;
-        somaQuestoesMedia += totalQ;
-      } else if (ativ.status === 'encerrada') {
-        aproveitamento = calcularAproveitamentoAtividade(totalAcertos, totalQ);
-        somaAcertosMedia += totalAcertos;
+      if (!temDiscursivaPendente && (concluida || ativ.status === 'encerrada')) {
+        aproveitamento = calcularAproveitamentoAtividade(totalPontos, totalQ);
+        somaAcertosMedia += totalPontos;
         somaQuestoesMedia += totalQ;
       }
 
@@ -864,6 +887,53 @@ export class MockProfessorService implements ProfessorService {
         resposta_esperada: questao.resposta_esperada ?? null,
         texto_resposta: r.texto_resposta ?? null,
         respondida_em: r.respondida_em,
+      };
+    });
+  }
+
+  async listarCorrecoesFeitas(atividadeId: string): Promise<ItemCorrecaoFeita[]> {
+    const { oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    const usuario = await exigirUsuario(['professor']);
+
+    if (oferta.professor_id !== usuario.id) {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    const db = await getDatabase();
+    const questoesDiscursivas = db.questoes.filter(
+      (q) => q.atividade_id === atividadeId && q.tipo === 'discursiva'
+    );
+    const questoesMap = new Map(questoesDiscursivas.map((q) => [q.id, q]));
+
+    const respostasFeitas = db.respostas.filter(
+      (r) => questoesMap.has(r.questao_id) && r.correcao && r.correcao !== 'pendente'
+    );
+
+    respostasFeitas.sort(
+      (a, b) => new Date(b.corrigido_em || b.respondida_em).getTime() - new Date(a.corrigido_em || a.respondida_em).getTime()
+    );
+
+    return respostasFeitas.map((r) => {
+      const questao = questoesMap.get(r.questao_id)!;
+      const aluno = db.alunos.find((a) => a.id === r.aluno_id);
+      const nomeAluno = aluno ? aluno.nome_completo : 'Aluno';
+
+      return {
+        resposta_id: r.id,
+        questao_id: questao.id,
+        aluno_id: r.aluno_id,
+        aluno_nome: nomeAluno,
+        nome_aluno: nomeAluno,
+        questao_ordem: questao.ordem,
+        questao_enunciado: questao.enunciado,
+        enunciado: questao.enunciado,
+        resposta_esperada: questao.resposta_esperada ?? null,
+        texto_resposta: r.texto_resposta ?? null,
+        respondida_em: r.respondida_em,
+        correcao: r.correcao as 'certo' | 'parcial' | 'errado',
+        pontuacao: r.pontuacao ?? null,
+        comentario_professor: r.comentario_professor ?? null,
+        corrigido_em: r.corrigido_em ?? null,
       };
     });
   }
