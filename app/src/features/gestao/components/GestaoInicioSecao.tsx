@@ -12,6 +12,7 @@ import {
   FileText,
   Loader2,
   AlertCircle,
+  ClipboardList,
 } from 'lucide-react';
 import { relatorioService, assinarMudancas } from '@/services';
 import { VisaoGeralEscola } from '@/lib/types';
@@ -66,6 +67,13 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
   }, []);
 
   const atalhos = [
+    {
+      id: 'conselho',
+      titulo: 'Conselho de Professores & Pautas',
+      descricao: 'Pautas estruturadas, diagnósticos por turma e roteiro pedagógico para reuniões.',
+      icon: <ClipboardList className="w-5 h-5 text-indigo-600" />,
+      cor: 'bg-indigo-50 border-indigo-100',
+    },
     {
       id: 'turmas',
       titulo: 'Turmas & Ofertas',

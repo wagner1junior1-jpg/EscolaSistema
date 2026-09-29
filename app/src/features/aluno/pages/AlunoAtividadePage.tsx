@@ -508,7 +508,7 @@ export const AlunoAtividadePage: React.FC = () => {
 
               <div className="p-3 sm:p-4 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex flex-col items-center">
                 <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-emerald-700 tracking-wider">
-                  Acertos (1ª)
+                  Acertos (1ª resp)
                 </span>
                 <span className="font-heading font-black text-2xl sm:text-3xl text-emerald-900 mt-0.5 sm:mt-1">
                   {acertos}
@@ -1072,7 +1072,7 @@ export const AlunoAtividadePage: React.FC = () => {
             </div>
 
             <span className="text-[11px] sm:text-xs font-heading font-black text-slate-500 uppercase tracking-wider">
-              {indiceAtual + 1} de {totalQuestoes}
+              Questão {indiceAtual + 1} de {totalQuestoes}
             </span>
           </div>
 

@@ -76,7 +76,6 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
   // Fotos e texto
   const [fotos, setFotos] = useState<string[]>([]);
   const [textoBase, setTextoBase] = useState<string>('');
-  const [anexarFoto, setAnexarFoto] = useState<boolean>(false);
 
   // Estados de carregamento
   const [carregandoIA, setCarregandoIA] = useState<boolean>(false);
@@ -203,10 +202,10 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
     }
   };
 
-  // Criação rápida de assunto
+  // Criação rápida de submatéria
   const handleSalvarNovoAssunto = async () => {
     if (!novoAssuntoNome.trim()) {
-      toast.warning('Informe o nome do assunto.');
+      toast.warning('Informe o nome da submatéria.');
       return;
     }
     setCriandoAssunto(true);
@@ -215,9 +214,9 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
       setAssuntoId(novo.id);
       setNovoAssuntoNome('');
       setMostrarNovoAssunto(false);
-      toast.success(`Assunto "${novo.nome}" cadastrado!`);
+      toast.success(`Submatéria "${novo.nome}" cadastrada!`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar assunto.');
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar submatéria.');
     } finally {
       setCriandoAssunto(false);
     }
@@ -232,7 +231,7 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
       return;
     }
     if (!assuntoId) {
-      setErro('Selecione ou crie um assunto para as questões.');
+      setErro('Selecione ou crie uma submatéria para as questões.');
       return;
     }
     if (qtdTotal <= 0 || qtdTotal > 20) {
@@ -252,7 +251,7 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
         dificuldade,
         fotos: fotos.length > 0 ? fotos : undefined,
         texto_base: textoBase.trim() || undefined,
-        anexar_foto: anexarFoto,
+        anexar_foto: false,
       });
 
       setQuestoesSugeridas(resposta.questoes);
@@ -393,11 +392,10 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                             : 'bg-amber-100 text-amber-800 border border-amber-200'
                         }`}
                       >
-                        {temChaveAtiva ? 'Google Gemini Conectado' : 'Modo Matemático Local'}
+                        {temChaveAtiva ? 'Google Gemini Conectado' : 'Modo demonstração'}
                       </span>
                     </div>
-                    Informe a matéria, série e fotos do conteúdo didático. A IA gerará até 20 questões
-                    com cálculos reais, fórmulas e gabarito comentado no padrão (Matéria - Série).
+                    Informe a matéria, a série, a submatéria e, se desejar, fotos ou o texto do conteúdo didático. A IA gerará até 20 questões com gabarito comentado para você revisar antes de salvar.
                   </div>
                 </div>
                 <button
@@ -481,11 +479,11 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                 </Select>
               </div>
 
-              {/* 3. Assunto */}
+              {/* 3. Submatéria */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
-                    3. Assunto *
+                    3. Submatéria *
                   </label>
                   <button
                     type="button"
@@ -493,14 +491,14 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                     className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                   >
                     <FolderPlus className="w-3.5 h-3.5" />
-                    <span>{mostrarNovoAssunto ? 'Cancelar' : '+ Novo'}</span>
+                    <span>{mostrarNovoAssunto ? 'Cancelar' : '+ Nova submatéria'}</span>
                   </button>
                 </div>
 
                 {mostrarNovoAssunto ? (
                   <div className="flex gap-2">
                     <Input
-                      placeholder="Ex: Frações"
+                      placeholder="Ex: Porcentagem, Adição..."
                       value={novoAssuntoNome}
                       onChange={(e) => setNovoAssuntoNome(e.target.value)}
                       className="text-sm"
@@ -521,7 +519,7 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                     className="w-full"
                   >
                     {assuntos.length === 0 ? (
-                      <option value="">Nenhum assunto cadastrado</option>
+                      <option value="">Nenhuma submatéria cadastrada</option>
                     ) : (
                       assuntos.map((a) => (
                         <option key={a.id} value={a.id}>
@@ -740,18 +738,6 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                 </div>
               )}
 
-              {/* Opção de anexar foto às questões */}
-              {fotos.length > 0 && (
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer pt-1">
-                  <input
-                    type="checkbox"
-                    checked={anexarFoto}
-                    onChange={(e) => setAnexarFoto(e.target.checked)}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span>Anexar a foto diretamente às questões geradas como imagem de apoio</span>
-                </label>
-              )}
 
               {/* Texto Base / Anotações */}
               <div>
@@ -895,6 +881,15 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                         <span className="text-[11px] font-semibold text-slate-500 capitalize bg-slate-100 px-2 py-0.5 rounded-lg shrink-0">
                           {q.dificuldade}
                         </span>
+                        {q.avisos && q.avisos.length > 0 && (
+                          <span
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 shrink-0 flex items-center gap-1"
+                            title={q.avisos.join('; ')}
+                          >
+                            <AlertCircle className="w-3 h-3 text-amber-700" />
+                            {q.avisos.length} {q.avisos.length === 1 ? 'aviso' : 'avisos'}
+                          </span>
+                        )}
 
                         {/* APENAS 1 LINHA DA PERGUNTA */}
                         <span
@@ -1005,6 +1000,23 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                           </div>
                         ) : (
                           <>
+                            {/* Avisos pedagógicos diagnosticados pela IA */}
+                            {q.avisos && q.avisos.length > 0 && (
+                              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="space-y-1 flex-1">
+                                  <p className="font-bold text-[11px] uppercase tracking-wider text-amber-800">
+                                    Avisos para Revisão Docente:
+                                  </p>
+                                  {q.avisos.map((aviso, aIdx) => (
+                                    <p key={aIdx} className="leading-relaxed">
+                                      • {aviso}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
                             {/* Enunciado Completo */}
                             <div className="text-sm font-medium text-slate-800 leading-relaxed">
                               <MathText text={q.enunciado} />

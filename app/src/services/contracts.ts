@@ -34,6 +34,7 @@ import {
   DesempenhoTurmaDisciplinaItem,
   AlunoEmAtencaoItem,
   QuestaoCriticaEscolaItem,
+  DesempenhoTurmaHierarquico,
   Assunto,
   BancoQuestao,
   DificuldadeQuestao,
@@ -106,6 +107,8 @@ export interface FiltrosBanco {
   assunto_id?: string;
   dificuldade?: DificuldadeQuestao;
   escopo?: 'minhas' | 'escola';
+  tipo?: TipoQuestao;
+  origem?: OrigemQuestao;
 }
 
 export interface CombinacaoProfessor {
@@ -143,10 +146,12 @@ export interface GestaoService {
   convidarProfessor(email: string, nome: string): Promise<Perfil>;
   desativarProfessor(id: string): Promise<void>;
   listarAlunos(turmaId?: string): Promise<AlunoPublico[]>;
-  cadastrarAluno(dados: Omit<Aluno, 'id' | 'created_at' | 'pin_hash'>): Promise<{ aluno: AlunoPublico; pin_puro: string }>;
+  cadastrarAluno(
+    dados: Omit<Aluno, 'id' | 'created_at' | 'pin_hash'> & { pin?: string }
+  ): Promise<{ aluno: AlunoPublico; pin_puro: string }>;
   cadastrarAlunosEmLote(turmaId: string, nomes: string[]): Promise<Array<{ aluno: AlunoPublico; pin_puro: string }>>;
   atualizarAluno(id: string, dados: { nome_completo?: string; numero_chamada?: number; ativo?: boolean }): Promise<AlunoPublico>;
-  gerarOuResetarPin(alunoId: string): Promise<{ pin_puro: string }>;
+  gerarOuResetarPin(alunoId: string, novoPin?: string): Promise<{ pin_puro: string }>;
   listarAvisosEscola(): Promise<Aviso[]>;
   criarAvisoEscola(dados: { titulo: string; mensagem: string; prioridade: PrioridadeAviso }): Promise<Aviso>;
   excluirAvisoEscola(id: string): Promise<void>;
@@ -211,6 +216,7 @@ export interface AlunoService {
 export interface RelatorioService {
   visaoGeralEscola(): Promise<VisaoGeralEscola>;
   desempenhoTurmas(periodoId: string): Promise<DesempenhoTurmaDisciplinaItem[]>;
+  desempenhoHierarquicoTurmas(periodoId: string): Promise<DesempenhoTurmaHierarquico[]>;
   alunosEmAtencao(periodoId: string): Promise<AlunoEmAtencaoItem[]>;
   questoesCriticasEscola(periodoId: string): Promise<QuestaoCriticaEscolaItem[]>;
 }
@@ -219,6 +225,9 @@ export interface RelatorioService {
 export interface ServicoBanco {
   listarAssuntos(disciplinaId: string): Promise<Assunto[]>;
   criarAssunto(disciplinaId: string, nome: string): Promise<Assunto>;
+  renomearAssunto(assuntoId: string, novoNome: string): Promise<Assunto>;
+  excluirAssunto(assuntoId: string): Promise<void>;
+  contarQuestoesPorAssunto(disciplinaId: string): Promise<Record<string, number>>;
   listarCombinacoesDoProfessor(): Promise<CombinacaoProfessor[]>;
   listarBanco(filtros: FiltrosBanco): Promise<BancoQuestao[]>;
   salvarQuestaoBanco(dados: SalvarBancoQuestaoPayload): Promise<BancoQuestao>;

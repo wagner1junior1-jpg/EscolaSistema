@@ -233,23 +233,31 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
 
                     <CardContent className="p-5 sm:p-6 space-y-4">
                       {ativ.questoes.map((q) => {
+                        const isDiscursiva = q.tipo === 'discursiva';
                         const letraEscolhida = obterLetra(ativ.atividade_id, q.alternativa_escolhida_id);
                         const letraCorreta = obterLetra(ativ.atividade_id, q.alternativa_correta_id);
-                        const semResposta = !q.alternativa_escolhida_id;
+                        const semResposta = isDiscursiva ? !q.texto_resposta : !q.alternativa_escolhida_id;
 
                         // Condição do selo de retentativa
-                        const temRetentativa = q.tentativas > 1 && q.acertou_final;
+                        const temRetentativa = !isDiscursiva && q.tentativas > 1 && q.acertou_final;
+
+                        let borderBg = 'border-slate-200 bg-slate-50/50';
+                        if (isDiscursiva) {
+                          if (q.correcao === 'certo') borderBg = 'border-emerald-200 bg-emerald-50/20';
+                          else if (q.correcao === 'parcial') borderBg = 'border-amber-200 bg-amber-50/20';
+                          else if (q.correcao === 'errado') borderBg = 'border-rose-200 bg-rose-50/20';
+                          else if (semResposta) borderBg = 'border-slate-200 bg-slate-50/50';
+                          else borderBg = 'border-indigo-100 bg-indigo-50/20';
+                        } else {
+                          if (q.acertou || q.acertou_final) borderBg = 'border-emerald-200 bg-emerald-50/20';
+                          else if (semResposta) borderBg = 'border-slate-200 bg-slate-50/50';
+                          else borderBg = 'border-rose-200 bg-rose-50/20';
+                        }
 
                         return (
                           <div
                             key={q.questao_id}
-                            className={`p-4 rounded-2xl border transition-all ${
-                              q.acertou || q.acertou_final
-                                ? 'border-emerald-200 bg-emerald-50/20'
-                                : semResposta
-                                ? 'border-slate-200 bg-slate-50/50'
-                                : 'border-rose-200 bg-rose-50/20'
-                            }`}
+                            className={`p-4 rounded-2xl border transition-all ${borderBg}`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="space-y-1.5 flex-1 min-w-0">
@@ -258,25 +266,58 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                                     Q{q.ordem}
                                   </span>
 
-                                  {/* Ícone de acerto/erro */}
-                                  {q.acertou || q.acertou_final ? (
-                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
-                                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                      <span>Acertou</span>
-                                    </span>
+                                  {isDiscursiva ? (
+                                    <>
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">
+                                        Discursiva
+                                      </span>
+                                      {q.correcao === 'certo' && (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                          <span>Certo (100%)</span>
+                                        </span>
+                                      )}
+                                      {q.correcao === 'parcial' && (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800">
+                                          <AlertCircle className="w-4 h-4 text-amber-600" />
+                                          <span>Parcial (50%)</span>
+                                        </span>
+                                      )}
+                                      {q.correcao === 'errado' && (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
+                                          <XCircle className="w-4 h-4 text-rose-600" />
+                                          <span>Errado (0%)</span>
+                                        </span>
+                                      )}
+                                      {q.correcao === null && (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                          <span>Aguardando correção</span>
+                                        </span>
+                                      )}
+                                    </>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
-                                      <XCircle className="w-4 h-4 text-rose-600" />
-                                      <span>Errou</span>
-                                    </span>
-                                  )}
+                                    <>
+                                      {/* Ícone de acerto/erro objetiva */}
+                                      {q.acertou || q.acertou_final ? (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                          <span>Acertou</span>
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
+                                          <XCircle className="w-4 h-4 text-rose-600" />
+                                          <span>Errou</span>
+                                        </span>
+                                      )}
 
-                                  {/* Selo: acertou na Nª tentativa */}
-                                  {temRetentativa && (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
-                                      <Sparkles className="w-3 h-3 text-amber-600" />
-                                      <span>acertou na {q.tentativas}ª tentativa</span>
-                                    </span>
+                                      {/* Selo: acertou na Nª tentativa */}
+                                      {temRetentativa && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                                          <Sparkles className="w-3 h-3 text-amber-600" />
+                                          <span>acertou na {q.tentativas}ª tentativa</span>
+                                        </span>
+                                      )}
+                                    </>
                                   )}
                                 </div>
 
@@ -286,34 +327,56 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Respostas marcada e correta */}
-                            <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center gap-4 text-xs flex-wrap">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-slate-500">Resposta do aluno:</span>
-                                {semResposta ? (
-                                  <span className="italic text-slate-400">Em branco</span>
-                                ) : (
-                                  <span
-                                    className={`font-heading font-black px-2 py-0.5 rounded-md ${
-                                      q.acertou || q.acertou_final
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'bg-rose-600 text-white'
-                                    }`}
-                                  >
-                                    Letra {letraEscolhida || '?'}
-                                  </span>
+                            {/* Respostas discursivas ou objetivas */}
+                            {isDiscursiva ? (
+                              <div className="mt-3 pt-3 border-t border-slate-200/60 space-y-2">
+                                <div className="text-xs">
+                                  <span className="font-semibold text-slate-600 block mb-1">Resposta do aluno:</span>
+                                  <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-slate-800 whitespace-pre-wrap">
+                                    {q.texto_resposta ? (
+                                      q.texto_resposta
+                                    ) : (
+                                      <span className="italic text-slate-400">Em branco</span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {q.comentario_professor && (
+                                  <div className="text-xs p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900">
+                                    <span className="font-bold">Comentário do professor: </span>
+                                    <span>{q.comentario_professor}</span>
+                                  </div>
                                 )}
                               </div>
-
-                              {(!q.acertou || semResposta) && (
+                            ) : (
+                              <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center gap-4 text-xs flex-wrap">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-slate-500">Resposta correta:</span>
-                                  <span className="font-heading font-black px-2 py-0.5 rounded-md bg-emerald-600 text-white">
-                                    Letra {letraCorreta || '?'}
-                                  </span>
+                                  <span className="font-semibold text-slate-500">Resposta do aluno:</span>
+                                  {semResposta ? (
+                                    <span className="italic text-slate-400">Em branco</span>
+                                  ) : (
+                                    <span
+                                      className={`font-heading font-black px-2 py-0.5 rounded-md ${
+                                        q.acertou || q.acertou_final
+                                          ? 'bg-emerald-600 text-white'
+                                          : 'bg-rose-600 text-white'
+                                      }`}
+                                    >
+                                      Letra {letraEscolhida || '?'}
+                                    </span>
+                                  )}
                                 </div>
-                              )}
-                            </div>
+
+                                {(!q.acertou || semResposta) && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold text-slate-500">Resposta correta:</span>
+                                    <span className="font-heading font-black px-2 py-0.5 rounded-md bg-emerald-600 text-white">
+                                      Letra {letraCorreta || '?'}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

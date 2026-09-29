@@ -21,7 +21,9 @@ import {
   CombinacaoProfessor,
   DificuldadeQuestao,
 } from '@/services';
+import { TipoQuestao, OrigemQuestao } from '@/lib/types';
 import { ModalGeradorIA } from '../components/ModalGeradorIA';
+import { ModalGerenciarSubmaterias } from '../components/ModalGerenciarSubmaterias';
 import {
   Plus,
   ArrowLeft,
@@ -31,10 +33,10 @@ import {
   Edit2,
   Archive,
   CheckCircle2,
-  FolderPlus,
   HelpCircle,
   Sparkles,
   ChevronDown,
+  Layers,
 } from 'lucide-react';
 
 const DIFICULDADE_ROTULO: Record<DificuldadeQuestao, string> = {
@@ -70,6 +72,8 @@ export const ProfessorBancoPage: React.FC = () => {
   // Filtros
   const [filtroAssunto, setFiltroAssunto] = useState<string>('todos');
   const [filtroDificuldade, setFiltroDificuldade] = useState<string>('todas');
+  const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+  const [filtroOrigem, setFiltroOrigem] = useState<string>('todos');
   const [filtroEscopo, setFiltroEscopo] = useState<'escola' | 'minhas'>('escola');
 
   const [carregandoCombinacoes, setCarregandoCombinacoes] = useState(true);
@@ -82,6 +86,8 @@ export const ProfessorBancoPage: React.FC = () => {
   const [editandoVersao, setEditandoVersao] = useState<number | undefined>(undefined);
   const [formAssuntoId, setFormAssuntoId] = useState('');
   const [formDificuldade, setFormDificuldade] = useState<DificuldadeQuestao>('facil');
+  const [formTipo, setFormTipo] = useState<TipoQuestao>('objetiva');
+  const [formRespostaEsperada, setFormRespostaEsperada] = useState('');
   const [formEnunciado, setFormEnunciado] = useState('');
   const [formDica, setFormDica] = useState('');
   const [formExplicacao, setFormExplicacao] = useState('');
@@ -93,10 +99,8 @@ export const ProfessorBancoPage: React.FC = () => {
   ]);
   const [salvandoQuestao, setSalvandoQuestao] = useState(false);
 
-  // Modal de Novo Assunto
-  const [modalAssuntoAberto, setModalAssuntoAberto] = useState(false);
-  const [novoAssuntoNome, setNovoAssuntoNome] = useState('');
-  const [salvandoAssunto, setSalvandoAssunto] = useState(false);
+  // Modal de Gerenciamento de Submatérias
+  const [modalSubmateriasAberto, setModalSubmateriasAberto] = useState(false);
 
   // Modal do Gerador de IA
   const [modalIAAberto, setModalIAAberto] = useState(false);
@@ -190,6 +194,8 @@ export const ProfessorBancoPage: React.FC = () => {
           filtroDificuldade !== 'todas'
             ? (filtroDificuldade as DificuldadeQuestao)
             : undefined,
+        tipo: filtroTipo !== 'todos' ? (filtroTipo as TipoQuestao) : undefined,
+        origem: filtroOrigem !== 'todos' ? (filtroOrigem as OrigemQuestao) : undefined,
         escopo: filtroEscopo,
       });
       setQuestoes(lista);
@@ -198,7 +204,7 @@ export const ProfessorBancoPage: React.FC = () => {
     } finally {
       setCarregandoQuestoes(false);
     }
-  }, [combAtual, filtroAssunto, filtroDificuldade, filtroEscopo]);
+  }, [combAtual, filtroAssunto, filtroDificuldade, filtroTipo, filtroOrigem, filtroEscopo]);
 
   useEffect(() => {
     carregarQuestoes();
@@ -210,6 +216,8 @@ export const ProfessorBancoPage: React.FC = () => {
     setEditandoVersao(undefined);
     setFormAssuntoId(assuntos[0]?.id || '');
     setFormDificuldade('facil');
+    setFormTipo('objetiva');
+    setFormRespostaEsperada('');
     setFormEnunciado('');
     setFormDica('');
     setFormExplicacao('');
@@ -228,6 +236,8 @@ export const ProfessorBancoPage: React.FC = () => {
     setEditandoVersao(q.versao);
     setFormAssuntoId(q.assunto_id);
     setFormDificuldade(q.dificuldade);
+    setFormTipo(q.tipo || 'objetiva');
+    setFormRespostaEsperada(q.resposta_esperada || '');
     setFormEnunciado(q.enunciado);
     setFormDica(q.dica || '');
     setFormExplicacao(q.explicacao || '');
@@ -262,17 +272,24 @@ export const ProfessorBancoPage: React.FC = () => {
       return;
     }
 
-    // Valida textos das alternativas
-    for (const alt of formAlternativas) {
-      if (!alt.texto.trim()) {
-        toast.warning(`Preencha o texto da alternativa ${alt.letra}.`);
+    if (formTipo === 'discursiva') {
+      if (!formRespostaEsperada.trim()) {
+        toast.warning('Preencha a resposta esperada da questão discursiva.');
         return;
       }
-      if (!alt.correta && !alt.por_que_errou.trim()) {
-        toast.warning(
-          `Preencha o "Por que errou" da alternativa ${alt.letra} (incorreta).`
-        );
-        return;
+    } else {
+      // Valida textos das alternativas
+      for (const alt of formAlternativas) {
+        if (!alt.texto.trim()) {
+          toast.warning(`Preencha o texto da alternativa ${alt.letra}.`);
+          return;
+        }
+        if (!alt.correta && !alt.por_que_errou.trim()) {
+          toast.warning(
+            `Preencha o "Por que errou" da alternativa ${alt.letra} (incorreta).`
+          );
+          return;
+        }
       }
     }
 
@@ -289,11 +306,13 @@ export const ProfessorBancoPage: React.FC = () => {
         serie: combAtual.serie,
         assunto_id: formAssuntoId,
         dificuldade: formDificuldade,
+        tipo: formTipo,
+        resposta_esperada: formTipo === 'discursiva' ? formRespostaEsperada.trim() : null,
         enunciado: formEnunciado.trim(),
         dica: formDica.trim() || null,
         explicacao: formExplicacao.trim() || null,
         versao: editandoVersao,
-        alternativas: formAlternativas.map((a) => ({
+        alternativas: formTipo === 'discursiva' ? [] : formAlternativas.map((a) => ({
           letra: a.letra,
           texto: a.texto.trim(),
           correta: a.correta,
@@ -348,30 +367,6 @@ export const ProfessorBancoPage: React.FC = () => {
     }
   };
 
-  // Criar Assunto
-  const handleCriarAssunto = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!combAtual || !novoAssuntoNome.trim()) return;
-
-    setSalvandoAssunto(true);
-    try {
-      const criado = await bancoService.criarAssunto(
-        combAtual.disciplina_id,
-        novoAssuntoNome.trim()
-      );
-      toast.success('Assunto cadastrado com sucesso!');
-      setAssuntos((prev) => [...prev, criado].sort((a, b) => a.nome.localeCompare(b.nome)));
-      setFormAssuntoId(criado.id);
-      setModalAssuntoAberto(false);
-      setNovoAssuntoNome('');
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : 'Falha ao criar assunto.'
-      );
-    } finally {
-      setSalvandoAssunto(false);
-    }
-  };
 
   return (
     <AppShell>
@@ -408,11 +403,12 @@ export const ProfessorBancoPage: React.FC = () => {
               </Button>
               <Button
                 variant="outline"
-                leftIcon={<FolderPlus className="w-4 h-4" />}
-                onClick={() => setModalAssuntoAberto(true)}
+                leftIcon={<Layers className="w-4 h-4 text-indigo-600" />}
+                onClick={() => setModalSubmateriasAberto(true)}
                 disabled={!combAtual}
+                className="font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
               >
-                Novo assunto
+                Submatérias ({assuntos.length})
               </Button>
               <Button
                 variant="primary"
@@ -426,9 +422,9 @@ export const ProfessorBancoPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Barra de Filtros em Cascata: 1º Série -> 2º Matéria -> 3º Assunto -> 4º Dificuldade -> 5º Escopo */}
+        {/* Barra de Filtros em Cascata: 1º Série -> 2º Matéria -> 3º Assunto -> 4º Dificuldade -> 5º Tipo -> 6º Origem -> 7º Escopo */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
             {/* 1º Seletor: Série */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
@@ -480,19 +476,29 @@ export const ProfessorBancoPage: React.FC = () => {
               </Select>
             </div>
 
-            {/* 3º Seletor: Assunto */}
+            {/* 3º Seletor: Submatéria */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                3. Assunto
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  3. Submatéria
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setModalSubmateriasAberto(true)}
+                  disabled={!combAtual}
+                  className="text-2xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer disabled:text-slate-300"
+                >
+                  Gerenciar
+                </button>
+              </div>
               <Select
-                aria-label="Filtrar por Assunto"
+                aria-label="Filtrar por Submatéria"
                 value={filtroAssunto}
                 onChange={(e) => setFiltroAssunto(e.target.value)}
-                className="w-full"
+                className="w-full font-medium"
                 disabled={!combAtual}
               >
-                <option value="todos">Todos os assuntos</option>
+                <option value="todos">Todas as submatérias</option>
                 {assuntos.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.nome}
@@ -520,7 +526,43 @@ export const ProfessorBancoPage: React.FC = () => {
               </Select>
             </div>
 
-            {/* 5º Seletor: Escopo (Da escola / Minhas) */}
+            {/* 5º Seletor: Tipo (Objetiva / Discursiva) */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                5. Tipo
+              </label>
+              <Select
+                aria-label="Filtrar por Tipo de Questão"
+                value={filtroTipo}
+                onChange={(e) => setFiltroTipo(e.target.value)}
+                className="w-full"
+                disabled={!combAtual}
+              >
+                <option value="todos">Todos</option>
+                <option value="objetiva">Objetiva</option>
+                <option value="discursiva">Discursiva</option>
+              </Select>
+            </div>
+
+            {/* 6º Seletor: Origem (Manual / IA) */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                6. Origem
+              </label>
+              <Select
+                aria-label="Filtrar por Origem"
+                value={filtroOrigem}
+                onChange={(e) => setFiltroOrigem(e.target.value)}
+                className="w-full"
+                disabled={!combAtual}
+              >
+                <option value="todos">Todas</option>
+                <option value="manual">Manual</option>
+                <option value="ia">Gerada por IA</option>
+              </Select>
+            </div>
+
+            {/* 7º Seletor: Escopo (Da escola / Minhas) */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
                 Escopo
@@ -800,18 +842,28 @@ export const ProfessorBancoPage: React.FC = () => {
           maxWidth="lg"
         >
           <form onSubmit={handleSalvarQuestao} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Assunto *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Submatéria *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setModalSubmateriasAberto(true)}
+                    className="inline-flex items-center gap-1 text-2xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Nova submatéria</span>
+                  </button>
+                </div>
                 <Select
                   value={formAssuntoId}
                   onChange={(e) => setFormAssuntoId(e.target.value)}
                   required
                 >
                   <option value="" disabled>
-                    Selecione um assunto
+                    Selecione uma submatéria
                   </option>
                   {assuntos.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -835,6 +887,20 @@ export const ProfessorBancoPage: React.FC = () => {
                   <option value="dificil">Difícil</option>
                 </Select>
               </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Tipo *
+                </label>
+                <Select
+                  value={formTipo}
+                  onChange={(e) => setFormTipo(e.target.value as TipoQuestao)}
+                  required
+                >
+                  <option value="objetiva">Objetiva</option>
+                  <option value="discursiva">Discursiva</option>
+                </Select>
+              </div>
             </div>
 
             <div>
@@ -850,75 +916,93 @@ export const ProfessorBancoPage: React.FC = () => {
               />
             </div>
 
-            {/* Alternativas */}
-            <div className="space-y-3 pt-2">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Alternativas (Marque exatamente 1 correta) *
-              </label>
+            {formTipo === 'discursiva' ? (
+              <div className="space-y-1.5 pt-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Resposta Esperada / Critérios de Correção *
+                </label>
+                <Textarea
+                  rows={4}
+                  value={formRespostaEsperada}
+                  onChange={(e) => setFormRespostaEsperada(e.target.value)}
+                  placeholder="Digite os critérios, pontos esperados ou resposta modelo para balizar a correção..."
+                  required
+                />
+                <p className="text-xs text-slate-500">
+                  Esta resposta será usada pelo professor como gabarito orientador na correção manual.
+                </p>
+              </div>
+            ) : (
+              /* Alternativas */
+              <div className="space-y-3 pt-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Alternativas (Marque exatamente 1 correta) *
+                </label>
 
-              {formAlternativas.map((alt, aIdx) => (
-                <div
-                  key={alt.letra}
-                  className={`p-3 rounded-xl border space-y-2 ${
-                    alt.correta
-                      ? 'bg-emerald-50/60 border-emerald-300'
-                      : 'bg-slate-50 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-1.5 cursor-pointer font-bold text-xs text-slate-700">
-                      <input
-                        type="radio"
-                        name="alternativa_correta"
-                        checked={alt.correta}
-                        onChange={() => {
-                          setFormAlternativas((prev) =>
-                            prev.map((item, i) => ({
-                              ...item,
-                              correta: i === aIdx,
-                            }))
-                          );
-                        }}
-                        className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span>Opção {alt.letra}</span>
-                    </label>
+                {formAlternativas.map((alt, aIdx) => (
+                  <div
+                    key={alt.letra}
+                    className={`p-3 rounded-xl border space-y-2 ${
+                      alt.correta
+                        ? 'bg-emerald-50/60 border-emerald-300'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-1.5 cursor-pointer font-bold text-xs text-slate-700">
+                        <input
+                          type="radio"
+                          name="alternativa_correta"
+                          checked={alt.correta}
+                          onChange={() => {
+                            setFormAlternativas((prev) =>
+                              prev.map((item, i) => ({
+                                ...item,
+                                correta: i === aIdx,
+                              }))
+                            );
+                          }}
+                          className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Opção {alt.letra}</span>
+                      </label>
 
-                    <Input
-                      className="flex-1"
-                      placeholder={`Texto da alternativa ${alt.letra}...`}
-                      value={alt.texto}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setFormAlternativas((prev) =>
-                          prev.map((item, i) => (i === aIdx ? { ...item, texto: val } : item))
-                        );
-                      }}
-                      required
-                    />
-                  </div>
-
-                  {!alt.correta && (
-                    <div className="pl-6">
                       <Input
-                        placeholder={`Por que errou na letra ${alt.letra}? (explicação pedagógica para o aluno)`}
-                        value={alt.por_que_errou}
+                        className="flex-1"
+                        placeholder={`Texto da alternativa ${alt.letra}...`}
+                        value={alt.texto}
                         onChange={(e) => {
                           const val = e.target.value;
                           setFormAlternativas((prev) =>
-                            prev.map((item, i) =>
-                              i === aIdx ? { ...item, por_que_errou: val } : item
-                            )
+                            prev.map((item, i) => (i === aIdx ? { ...item, texto: val } : item))
                           );
                         }}
                         required
-                        className="text-xs text-slate-600 bg-white"
                       />
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+
+                    {!alt.correta && (
+                      <div className="pl-6">
+                        <Input
+                          placeholder={`Por que errou na letra ${alt.letra}? (explicação pedagógica para o aluno)`}
+                          value={alt.por_que_errou}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormAlternativas((prev) =>
+                              prev.map((item, i) =>
+                                i === aIdx ? { ...item, por_que_errou: val } : item
+                              )
+                            );
+                          }}
+                          required
+                          className="text-xs text-slate-600 bg-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Dica e Explicação */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
@@ -962,45 +1046,24 @@ export const ProfessorBancoPage: React.FC = () => {
           </form>
         </Modal>
 
-        {/* Modal Novo Assunto */}
-        <Modal
-          isOpen={modalAssuntoAberto}
-          onClose={() => setModalAssuntoAberto(false)}
-          title="Novo Assunto"
-          maxWidth="sm"
-        >
-          <form onSubmit={handleCriarAssunto} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                Nome do Assunto *
-              </label>
-              <Input
-                value={novoAssuntoNome}
-                onChange={(e) => setNovoAssuntoNome(e.target.value)}
-                placeholder="Ex.: Equações de 1º Grau"
-                required
-                autoFocus
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                Válido para a matéria {combAtual?.disciplina_nome}.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setModalAssuntoAberto(false)}
-                disabled={salvandoAssunto}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" variant="primary" isLoading={salvandoAssunto}>
-                Criar assunto
-              </Button>
-            </div>
-          </form>
-        </Modal>
+        {/* Modal de Gerenciamento de Submatérias */}
+        {combAtual && (
+          <ModalGerenciarSubmaterias
+            aberto={modalSubmateriasAberto}
+            onFechar={() => setModalSubmateriasAberto(false)}
+            disciplinaId={combAtual.disciplina_id}
+            disciplinaNome={combAtual.disciplina_nome}
+            onAtualizado={async () => {
+              const lista = await bancoService.listarAssuntos(combAtual.disciplina_id);
+              setAssuntos(lista);
+              await carregarQuestoes();
+            }}
+            onSelecionarSubmateria={(id) => {
+              setFormAssuntoId(id);
+              setFiltroAssunto(id);
+            }}
+          />
+        )}
 
         {/* Confirmação de Arquivar */}
         <ConfirmDialog

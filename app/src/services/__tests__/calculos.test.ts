@@ -7,6 +7,9 @@ import {
   calcularMapaDeCalorQuestao,
   mediaDoAlunoNasAtividades,
   pontuacaoDaResposta,
+  calcularTaxaErro,
+  calcularTaxaAcerto,
+  classificarSemaforoPedagogico,
 } from '../calculos';
 import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao, Atividade } from '@/lib/types';
 
@@ -382,4 +385,37 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
       expect(pontuacaoDaResposta(q, null)).toBeNull();
     });
   });
+
+  describe('7. Métricas de Desempenho Hierárquico e Semáforo Pedagógico', () => {
+    it('calcularTaxaErro deve retornar 0 quando total for 0', () => {
+      expect(calcularTaxaErro(0, 0)).toBe(0);
+    });
+
+    it('calcularTaxaErro deve calcular a porcentagem de erro corretamente', () => {
+      // 10 respostas, 7 acertos -> 3 erros = 30%
+      expect(calcularTaxaErro(7, 10)).toBe(30);
+      // 3 respostas, 1 acerto -> 2 erros = 66.7%
+      expect(calcularTaxaErro(1, 3)).toBe(66.7);
+      // 5 respostas, 5 acertos -> 0 erros = 0%
+      expect(calcularTaxaErro(5, 5)).toBe(0);
+    });
+
+    it('calcularTaxaAcerto deve calcular a porcentagem de acerto corretamente', () => {
+      expect(calcularTaxaAcerto(7, 10)).toBe(70);
+      expect(calcularTaxaAcerto(0, 5)).toBe(0);
+      expect(calcularTaxaAcerto(0, 0)).toBe(0);
+    });
+
+    it('classificarSemaforoPedagogico deve classificar nas faixas verde, ambar e vermelho', () => {
+      expect(classificarSemaforoPedagogico(null)).toBe('verde');
+      expect(classificarSemaforoPedagogico(10)).toBe('verde');
+      expect(classificarSemaforoPedagogico(24.9)).toBe('verde');
+      expect(classificarSemaforoPedagogico(25)).toBe('ambar');
+      expect(classificarSemaforoPedagogico(40)).toBe('ambar');
+      expect(classificarSemaforoPedagogico(45)).toBe('ambar');
+      expect(classificarSemaforoPedagogico(45.1)).toBe('vermelho');
+      expect(classificarSemaforoPedagogico(70)).toBe('vermelho');
+    });
+  });
 });
+

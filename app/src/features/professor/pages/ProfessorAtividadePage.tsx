@@ -27,6 +27,7 @@ import {
   DificuldadeQuestao,
   OfertaDetalhada,
 } from '@/services';
+import { ModalGerenciarSubmaterias } from '../components/ModalGerenciarSubmaterias';
 import {
   ArrowLeft,
   Save,
@@ -45,6 +46,8 @@ import {
   Copy,
   CheckCircle2,
 } from 'lucide-react';
+
+import { TipoQuestao } from '@/lib/types';
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'] as const;
 type Letra = typeof LETRAS[number];
@@ -67,6 +70,9 @@ interface QuestaoEditor {
   assunto_id?: string | null;
   salvar_no_banco?: boolean;
   dificuldade?: DificuldadeQuestao;
+  tipo?: TipoQuestao;
+  resposta_esperada?: string | null;
+  imagem_url?: string | null;
   alternativas: AlternativaEditor[];
 }
 
@@ -84,6 +90,8 @@ export const ProfessorAtividadePage: React.FC = () => {
   // Oferta e Assuntos da Atividade
   const [ofertaAtual, setOfertaAtual] = useState<OfertaDetalhada | null>(null);
   const [assuntosOferta, setAssuntosOferta] = useState<Assunto[]>([]);
+  const [modalSubmateriasAberto, setModalSubmateriasAberto] = useState(false);
+  const [indiceQuestaoParaSubmateria, setIndiceQuestaoParaSubmateria] = useState<number | null>(null);
 
   // Modal Banco de Questões
   const [modalBancoAberto, setModalBancoAberto] = useState(false);
@@ -192,6 +200,9 @@ export const ProfessorAtividadePage: React.FC = () => {
           assunto_id: q.assunto_id || null,
           salvar_no_banco: false,
           dificuldade: 'facil',
+          tipo: q.tipo || 'objetiva',
+          resposta_esperada: q.resposta_esperada || '',
+          imagem_url: q.imagem_url || null,
           alternativas: (q.alternativas || [])
             .sort((a, b) => a.letra.localeCompare(b.letra))
             .map((alt, altIdx) => ({
@@ -263,6 +274,9 @@ export const ProfessorAtividadePage: React.FC = () => {
       enunciado: '',
       dica: '',
       explicacao: '',
+      tipo: 'objetiva',
+      resposta_esperada: '',
+      imagem_url: null,
       alternativas: [
         { letra: 'A', texto: '', correta: true, por_que_errou: '' },
         { letra: 'B', texto: '', correta: false, por_que_errou: '' },
@@ -293,6 +307,9 @@ export const ProfessorAtividadePage: React.FC = () => {
       assunto_id: original.assunto_id || (assuntosOferta.length > 0 ? assuntosOferta[0].id : null),
       salvar_no_banco: false,
       dificuldade: original.dificuldade || 'medio',
+      tipo: original.tipo || 'objetiva',
+      resposta_esperada: original.resposta_esperada || '',
+      imagem_url: original.imagem_url || null,
       alternativas: original.alternativas.map((alt) => ({
         letra: alt.letra,
         texto: alt.texto,
@@ -324,6 +341,10 @@ export const ProfessorAtividadePage: React.FC = () => {
 
   const obterStatusQuestao = (q: QuestaoEditor): 'incompleta' | 'sem_distrator' | 'pronta' => {
     if (!q.enunciado.trim()) return 'incompleta';
+    if (q.tipo === 'discursiva') {
+      if (!q.resposta_esperada?.trim()) return 'incompleta';
+      return 'pronta';
+    }
     if (q.alternativas.length < 2) return 'incompleta';
     const temAlgumaVazia = q.alternativas.some((a) => !a.texto.trim());
     const temCorreta = q.alternativas.some((a) => a.correta);
@@ -331,6 +352,35 @@ export const ProfessorAtividadePage: React.FC = () => {
     const faltaDistrator = q.alternativas.some((a) => !a.correta && !a.por_que_errou?.trim());
     if (faltaDistrator) return 'sem_distrator';
     return 'pronta';
+  };
+
+  const handleAlterarTipoQuestao = (qIndex: number, tipo: 'objetiva' | 'discursiva') => {
+    if (!isRascunho) return;
+    setQuestoes((prev) => {
+      const copia = [...prev];
+      const q = { ...copia[qIndex], tipo };
+      if (tipo === 'objetiva' && (!q.alternativas || q.alternativas.length < 2)) {
+        q.alternativas = [
+          { letra: 'A', texto: '', correta: true, por_que_errou: '' },
+          { letra: 'B', texto: '', correta: false, por_que_errou: '' },
+          { letra: 'C', texto: '', correta: false, por_que_errou: '' },
+          { letra: 'D', texto: '', correta: false, por_que_errou: '' },
+        ];
+      }
+      copia[qIndex] = q;
+      return copia;
+    });
+    setTemAlteracoesNaoSalvas(true);
+  };
+
+  const handleAlterarRespostaEsperada = (qIndex: number, valor: string) => {
+    if (isEncerrada) return;
+    setQuestoes((prev) => {
+      const copia = [...prev];
+      copia[qIndex] = { ...copia[qIndex], resposta_esperada: valor };
+      return copia;
+    });
+    setTemAlteracoesNaoSalvas(true);
   };
 
   const handleMoverQuestao = (index: number, direcao: 'up' | 'down') => {
@@ -561,7 +611,7 @@ export const ProfessorAtividadePage: React.FC = () => {
   };
 
   // Validação e Salvamento
-  const handleSalvar = async () => {
+  const handleSalvar = async (voltarParaMateria: boolean = true) => {
     if (!atividade || isEncerrada) return;
 
     // 1. Validação de metadados
@@ -584,22 +634,29 @@ export const ProfessorAtividadePage: React.FC = () => {
         return;
       }
 
-      if (q.alternativas.length < 2 || q.alternativas.length > 5) {
-        toast.error(`A questão ${num} deve ter entre 2 e 5 alternativas.`);
-        return;
-      }
-
-      const corretas = q.alternativas.filter((a) => a.correta).length;
-      if (corretas !== 1) {
-        toast.error(`A questão ${num} deve conter exatamente 1 alternativa correta marcada.`);
-        return;
-      }
-
-      for (let j = 0; j < q.alternativas.length; j++) {
-        const alt = q.alternativas[j];
-        if (!alt.texto.trim()) {
-          toast.error(`O texto da alternativa ${alt.letra} da questão ${num} não pode ficar vazio.`);
+      if (q.tipo === 'discursiva') {
+        if (!q.resposta_esperada || !q.resposta_esperada.trim()) {
+          toast.error(`A questão discursiva ${num} deve conter uma resposta esperada.`);
           return;
+        }
+      } else {
+        if (q.alternativas.length < 2 || q.alternativas.length > 5) {
+          toast.error(`A questão ${num} deve ter entre 2 e 5 alternativas.`);
+          return;
+        }
+
+        const corretas = q.alternativas.filter((a) => a.correta).length;
+        if (corretas !== 1) {
+          toast.error(`A questão ${num} deve conter exatamente 1 alternativa correta marcada.`);
+          return;
+        }
+
+        for (let j = 0; j < q.alternativas.length; j++) {
+          const alt = q.alternativas[j];
+          if (!alt.texto.trim()) {
+            toast.error(`O texto da alternativa ${alt.letra} da questão ${num} não pode ficar vazio.`);
+            return;
+          }
         }
       }
     }
@@ -619,10 +676,12 @@ export const ProfessorAtividadePage: React.FC = () => {
             serie: ofertaAtual.turma_serie || '',
             assunto_id: q.assunto_id,
             dificuldade: q.dificuldade || 'facil',
+            tipo: q.tipo || 'objetiva',
+            resposta_esperada: q.tipo === 'discursiva' ? q.resposta_esperada?.trim() || null : null,
             enunciado: q.enunciado.trim(),
             dica: q.dica ? q.dica.trim() : null,
             explicacao: q.explicacao ? q.explicacao.trim() : null,
-            alternativas: q.alternativas.map((alt, altIdx) => ({
+            alternativas: q.tipo === 'discursiva' ? [] : q.alternativas.map((alt, altIdx) => ({
               letra: LETRAS[altIdx],
               texto: alt.texto.trim(),
               correta: alt.correta,
@@ -650,7 +709,10 @@ export const ProfessorAtividadePage: React.FC = () => {
         explicacao: q.explicacao ? q.explicacao.trim() : null,
         banco_questao_id: q.banco_questao_id || null,
         assunto_id: q.assunto_id || null,
-        alternativas: q.alternativas.map((alt, altIdx) => ({
+        tipo: q.tipo || 'objetiva',
+        resposta_esperada: q.tipo === 'discursiva' ? q.resposta_esperada?.trim() || null : null,
+        imagem_url: q.imagem_url || null,
+        alternativas: q.tipo === 'discursiva' ? [] : q.alternativas.map((alt, altIdx) => ({
           id: alt.id,
           letra: LETRAS[altIdx],
           texto: alt.texto.trim(),
@@ -661,11 +723,25 @@ export const ProfessorAtividadePage: React.FC = () => {
 
       await professorService.salvarQuestoes(atividade.id, payload);
 
-      toast.success('Atividade salva com sucesso!');
       setTemAlteracoesNaoSalvas(false);
 
-      // Recarrega os dados para sincronizar novos IDs
-      await carregarAtividade();
+      if (voltarParaMateria) {
+        toast.success('Atividade salva com sucesso!');
+        const subAba =
+          atividade.status === 'publicada'
+            ? 'publicada'
+            : atividade.status === 'encerrada'
+            ? 'encerrada'
+            : 'rascunho';
+        const destino = atividade.oferta_id
+          ? `/professor/oferta/${atividade.oferta_id}?aba=atividades&sub=${subAba}`
+          : '/professor';
+        navigate(destino);
+      } else {
+        toast.success('Alterações salvas com sucesso!');
+        // Recarrega os dados para sincronizar novos IDs
+        await carregarAtividade();
+      }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Falha ao salvar atividade.');
     } finally {
@@ -716,18 +792,33 @@ export const ProfessorAtividadePage: React.FC = () => {
               </div>
             )}
 
-            {/* Botão Salvar */}
+            {/* Botões de Salvar */}
             {!isEncerrada && (
-              <Button
-                variant="primary"
-                leftIcon={<Save className="w-4 h-4" />}
-                onClick={handleSalvar}
-                isLoading={salvando}
-                disabled={!temAlteracoesNaoSalvas && !salvando}
-                className="shadow-sm"
-              >
-                Salvar atividade
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  leftIcon={<Save className="w-4 h-4" />}
+                  onClick={() => handleSalvar(false)}
+                  isLoading={salvando}
+                  disabled={!temAlteracoesNaoSalvas && !salvando}
+                  className="shadow-xs text-xs sm:text-sm"
+                  title="Salvar alterações e continuar editando nesta tela"
+                >
+                  Salvar rascunho
+                </Button>
+
+                <Button
+                  variant="primary"
+                  leftIcon={<Save className="w-4 h-4" />}
+                  onClick={() => handleSalvar(true)}
+                  isLoading={salvando}
+                  disabled={!temAlteracoesNaoSalvas && !salvando}
+                  className="shadow-sm text-xs sm:text-sm"
+                  title="Salvar alterações e voltar para a matéria"
+                >
+                  Salvar atividade
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -1006,7 +1097,7 @@ export const ProfessorAtividadePage: React.FC = () => {
 
                             {/* Etiqueta de Tipo */}
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
-                              Objetiva
+                              {q.tipo === 'discursiva' ? 'Discursiva' : 'Objetiva'}
                             </span>
 
                             {/* Selo Visual de Status */}
@@ -1055,10 +1146,16 @@ export const ProfessorAtividadePage: React.FC = () => {
                               {q.enunciado.trim() ? q.enunciado : '(Sem enunciado definido)'}
                             </span>
 
-                            {/* Resumo das Alternativas */}
-                            <span className="text-[11px] text-slate-400 font-medium shrink-0 hidden lg:inline-flex">
-                              {q.alternativas.length} alt • Correta: <strong className="ml-1 text-emerald-700">{altCorreta?.letra || '-'}</strong>
-                            </span>
+                            {/* Resumo das Alternativas / Discursiva */}
+                            {q.tipo === 'discursiva' ? (
+                              <span className="text-[11px] text-slate-400 font-medium shrink-0 hidden lg:inline-flex">
+                                Discursiva • {q.resposta_esperada?.trim() ? 'Com gabarito' : 'Sem gabarito'}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-medium shrink-0 hidden lg:inline-flex">
+                                {q.alternativas.length} alt • Correta: <strong className="ml-1 text-emerald-700">{altCorreta?.letra || '-'}</strong>
+                              </span>
+                            )}
                           </div>
 
                           {/* Controles de Ação Rápida */}
@@ -1132,6 +1229,49 @@ export const ProfessorAtividadePage: React.FC = () => {
                       </CardHeader>
 
                       <CardContent className={isExpanded ? 'p-5 sm:p-6 space-y-5' : 'hidden'}>
+                        {/* Seletor de Tipo de Questão */}
+                        <div className="flex items-center justify-between gap-4 pb-2 border-b border-slate-100 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-600">Tipo de questão:</span>
+                            {isRascunho && !q.banco_questao_id ? (
+                              <div className="inline-flex rounded-lg p-0.5 bg-slate-100 border border-slate-200">
+                                <button
+                                  type="button"
+                                  onClick={() => handleAlterarTipoQuestao(qIndex, 'objetiva')}
+                                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                                    q.tipo !== 'discursiva'
+                                      ? 'bg-white text-indigo-700 shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Objetiva
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAlterarTipoQuestao(qIndex, 'discursiva')}
+                                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                                    q.tipo === 'discursiva'
+                                      ? 'bg-white text-indigo-700 shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Discursiva
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
+                                {q.tipo === 'discursiva' ? 'Discursiva' : 'Objetiva'}
+                              </span>
+                            )}
+                          </div>
+
+                          {q.tipo === 'discursiva' && (
+                            <span className="text-2xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-medium">
+                              Correção manual pelo professor após o envio do aluno
+                            </span>
+                          )}
+                        </div>
+
                         {/* Enunciado */}
                         <Textarea
                           label="Enunciado da Questão *"
@@ -1143,137 +1283,153 @@ export const ProfessorAtividadePage: React.FC = () => {
                           required
                         />
 
-                        {/* Alternativas */}
-                        <div className="space-y-3 pt-2">
-                          <div className="flex items-center justify-between">
-                            <label className="text-xs font-semibold text-slate-700 tracking-tight">
-                              Alternativas (Marque o rádio da resposta correta) *
-                            </label>
-                            <span className="text-[11px] text-slate-400">
-                              {q.alternativas.length} de 5 alternativas
-                            </span>
+                        {/* Discursiva: Resposta Esperada / Gabarito */}
+                        {q.tipo === 'discursiva' ? (
+                          <div className="space-y-2 pt-1">
+                            <Textarea
+                              label="Resposta Esperada / Critérios de Correção *"
+                              value={q.resposta_esperada || ''}
+                              onChange={(e) => handleAlterarRespostaEsperada(qIndex, e.target.value)}
+                              disabled={isEncerrada}
+                              placeholder="Digite a resposta esperada, palavras-chave ou critérios que serão usados para orientar a correção..."
+                              rows={3}
+                              helperText="Exibido na tela de correção para orientar a avaliação da resposta do aluno."
+                              required
+                            />
                           </div>
+                        ) : (
+                          /* Alternativas da Questão Objetiva */
+                          <div className="space-y-3 pt-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-semibold text-slate-700 tracking-tight">
+                                Alternativas (Marque o rádio da resposta correta) *
+                              </label>
+                              <span className="text-[11px] text-slate-400">
+                                {q.alternativas.length} de 5 alternativas
+                              </span>
+                            </div>
 
-                          <div className="space-y-3.5">
-                            {q.alternativas.map((alt, altIndex) => (
-                              <div
-                                key={alt.id || `alt-${qIndex}-${altIndex}`}
-                                className={`p-3.5 rounded-2xl border transition-all ${
-                                  alt.correta
-                                    ? 'border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-400/30'
-                                    : 'border-slate-200 bg-white'
-                                }`}
-                              >
-                                {/* Linha Principal da Alternativa */}
-                                <div className="flex items-center gap-3">
-                                  {/* Rádio da Alternativa Correta */}
-                                  <label
-                                    className={`flex items-center justify-center w-6 h-6 rounded-full border-2 cursor-pointer transition-all shrink-0 ${
-                                      alt.correta
-                                        ? 'border-emerald-600 bg-emerald-600 text-white'
-                                        : 'border-slate-300 hover:border-indigo-400 bg-white'
-                                    } ${!isRascunho ? 'cursor-not-allowed opacity-80' : ''}`}
-                                    title={alt.correta ? 'Alternativa Correta' : 'Marcar como Correta'}
-                                  >
-                                    <input
-                                      type="radio"
-                                      name={`correta-${qIndex}`}
-                                      checked={alt.correta}
-                                      onChange={() => handleMarcarCorreta(qIndex, altIndex)}
-                                      disabled={!isRascunho}
-                                      className="sr-only"
-                                    />
-                                    {alt.correta && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-                                  </label>
-
-                                  {/* Letra */}
-                                  <span
-                                    className={`w-6 h-6 rounded-lg text-xs font-heading font-black flex items-center justify-center shrink-0 ${
-                                      alt.correta
-                                        ? 'bg-emerald-600 text-white'
-                                        : 'bg-slate-200 text-slate-700'
-                                    }`}
-                                  >
-                                    {alt.letra}
-                                  </span>
-
-                                  {/* Texto da Alternativa */}
-                                  <input
-                                    type="text"
-                                    value={alt.texto}
-                                    onChange={(e) =>
-                                      handleAlterarTextoAlternativa(
-                                        qIndex,
-                                        altIndex,
-                                        'texto',
-                                        e.target.value
-                                      )
-                                    }
-                                    disabled={isEncerrada}
-                                    placeholder={`Texto da alternativa ${alt.letra}...`}
-                                    className="flex-1 py-1.5 px-3 bg-white border border-slate-200 text-sm text-slate-900 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500"
-                                  />
-
-                                  {/* Botão Remover Alternativa */}
-                                  {isRascunho && q.alternativas.length > 2 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoverAlternativa(qIndex, altIndex)}
-                                      className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition-colors"
-                                      title="Remover alternativa"
+                            <div className="space-y-3.5">
+                              {q.alternativas.map((alt, altIndex) => (
+                                <div
+                                  key={alt.id || `alt-${qIndex}-${altIndex}`}
+                                  className={`p-3.5 rounded-2xl border transition-all ${
+                                    alt.correta
+                                      ? 'border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-400/30'
+                                      : 'border-slate-200 bg-white'
+                                  }`}
+                                >
+                                  {/* Linha Principal da Alternativa */}
+                                  <div className="flex items-center gap-3">
+                                    {/* Rádio da Alternativa Correta */}
+                                    <label
+                                      className={`flex items-center justify-center w-6 h-6 rounded-full border-2 cursor-pointer transition-all shrink-0 ${
+                                        alt.correta
+                                          ? 'border-emerald-600 bg-emerald-600 text-white'
+                                          : 'border-slate-300 hover:border-indigo-400 bg-white'
+                                      } ${!isRascunho ? 'cursor-not-allowed opacity-80' : ''}`}
+                                      title={alt.correta ? 'Alternativa Correta' : 'Marcar como Correta'}
                                     >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                </div>
+                                      <input
+                                        type="radio"
+                                        name={`correta-${qIndex}`}
+                                        checked={alt.correta}
+                                        onChange={() => handleMarcarCorreta(qIndex, altIndex)}
+                                        disabled={!isRascunho}
+                                        className="sr-only"
+                                      />
+                                      {alt.correta && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                    </label>
 
-                                {/* Campo do Distrator / "Por que errou" em alternativas incorretas */}
-                                {!alt.correta && (
-                                  <div className="mt-2.5 pl-9 space-y-1">
-                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                                      <span>Por que o aluno erraria esta? (Diagnóstico do distrator)</span>
-                                    </div>
+                                    {/* Letra */}
+                                    <span
+                                      className={`w-6 h-6 rounded-lg text-xs font-heading font-black flex items-center justify-center shrink-0 ${
+                                        alt.correta
+                                          ? 'bg-emerald-600 text-white'
+                                          : 'bg-slate-200 text-slate-700'
+                                      }`}
+                                    >
+                                      {alt.letra}
+                                    </span>
+
+                                    {/* Texto da Alternativa */}
                                     <input
                                       type="text"
-                                      value={alt.por_que_errou || ''}
+                                      value={alt.texto}
                                       onChange={(e) =>
                                         handleAlterarTextoAlternativa(
                                           qIndex,
                                           altIndex,
-                                          'por_que_errou',
+                                          'texto',
                                           e.target.value
                                         )
                                       }
                                       disabled={isEncerrada}
-                                      placeholder="Ex: O aluno esqueceu de inverter a fração ao dividir..."
-                                      className="w-full py-1.5 px-3 bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 rounded-xl focus:outline-none focus:border-indigo-500 focus:bg-white disabled:bg-slate-50"
+                                      placeholder={`Texto da alternativa ${alt.letra}...`}
+                                      className="flex-1 py-1.5 px-3 bg-white border border-slate-200 text-sm text-slate-900 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500"
                                     />
 
-                                    {/* Aviso Amarelo se não houver explicação */}
-                                    {(!alt.por_que_errou || !alt.por_que_errou.trim()) && (
-                                      <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-lg mt-1 font-medium">
-                                        <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                        <span>Sem explicação da pegadinha: o aluno não vai saber por que errou.</span>
-                                      </div>
+                                    {/* Botão Remover Alternativa */}
+                                    {isRascunho && q.alternativas.length > 2 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoverAlternativa(qIndex, altIndex)}
+                                        className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition-colors"
+                                        title="Remover alternativa"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
                                     )}
                                   </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
 
-                          {/* Botão Adicionar Alternativa */}
-                          {isRascunho && q.alternativas.length < 5 && (
-                            <button
-                              type="button"
-                              onClick={() => handleAdicionarAlternativa(qIndex)}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 py-1.5 px-3 rounded-lg border border-dashed border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer mt-1"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Adicionar Alternativa ({LETRAS[q.alternativas.length]})</span>
-                            </button>
-                          )}
-                        </div>
+                                  {/* Campo do Distrator / "Por que errou" em alternativas incorretas */}
+                                  {!alt.correta && (
+                                    <div className="mt-2.5 pl-9 space-y-1">
+                                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                                        <span>Por que o aluno erraria esta? (Diagnóstico do distrator)</span>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={alt.por_que_errou || ''}
+                                        onChange={(e) =>
+                                          handleAlterarTextoAlternativa(
+                                            qIndex,
+                                            altIndex,
+                                            'por_que_errou',
+                                            e.target.value
+                                          )
+                                        }
+                                        disabled={isEncerrada}
+                                        placeholder="Ex: O aluno esqueceu de inverter a fração ao dividir..."
+                                        className="w-full py-1.5 px-3 bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 rounded-xl focus:outline-none focus:border-indigo-500 focus:bg-white disabled:bg-slate-50"
+                                      />
+
+                                      {/* Aviso Amarelo se não houver explicação */}
+                                      {(!alt.por_que_errou || !alt.por_que_errou.trim()) && (
+                                        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200/80 px-2.5 py-1 rounded-lg mt-1 font-medium">
+                                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                          <span>Sem explicação da pegadinha: o aluno não vai saber por que errou.</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Botão Adicionar Alternativa */}
+                            {isRascunho && q.alternativas.length < 5 && (
+                              <button
+                                type="button"
+                                onClick={() => handleAdicionarAlternativa(qIndex)}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 py-1.5 px-3 rounded-lg border border-dashed border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer mt-1"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Adicionar Alternativa ({LETRAS[q.alternativas.length]})</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
 
                         {/* Campos Opcionais: Dica e Explicação */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-100">
@@ -1324,23 +1480,40 @@ export const ProfessorAtividadePage: React.FC = () => {
 
                             {q.salvar_no_banco && (
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                <Select
-                                  label="Assunto *"
-                                  value={q.assunto_id || ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setQuestoes((prev) => {
-                                      const c = [...prev];
-                                      c[qIndex] = { ...c[qIndex], assunto_id: val };
-                                      return c;
-                                    });
-                                    setTemAlteracoesNaoSalvas(true);
-                                  }}
-                                  options={[
-                                    { value: '', label: 'Selecione um assunto...' },
-                                    ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
-                                  ]}
-                                />
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-xs font-semibold text-slate-700">
+                                      Submatéria no banco *
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIndiceQuestaoParaSubmateria(qIndex);
+                                        setModalSubmateriasAberto(true);
+                                      }}
+                                      className="inline-flex items-center gap-1 text-2xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="w-3 h-3" />
+                                      <span>Nova submatéria</span>
+                                    </button>
+                                  </div>
+                                  <Select
+                                    value={q.assunto_id || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setQuestoes((prev) => {
+                                        const c = [...prev];
+                                        c[qIndex] = { ...c[qIndex], assunto_id: val };
+                                        return c;
+                                      });
+                                      setTemAlteracoesNaoSalvas(true);
+                                    }}
+                                    options={[
+                                      { value: '', label: 'Selecione uma submatéria...' },
+                                      ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
+                                    ]}
+                                  />
+                                </div>
                                 <Select
                                   label="Dificuldade *"
                                   value={q.dificuldade || 'facil'}
@@ -1479,15 +1652,28 @@ export const ProfessorAtividadePage: React.FC = () => {
             <div className="space-y-4">
               {/* Filtros */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Select
-                  label="Filtrar por Assunto"
-                  value={filtroAssuntoBanco}
-                  onChange={(e) => setFiltroAssuntoBanco(e.target.value)}
-                  options={[
-                    { value: 'todos', label: 'Todos os assuntos' },
-                    ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
-                  ]}
-                />
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Filtrar por Submatéria
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setModalSubmateriasAberto(true)}
+                      className="text-2xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                    >
+                      Gerenciar
+                    </button>
+                  </div>
+                  <Select
+                    value={filtroAssuntoBanco}
+                    onChange={(e) => setFiltroAssuntoBanco(e.target.value)}
+                    options={[
+                      { value: 'todos', label: 'Todas as submatérias' },
+                      ...assuntosOferta.map((a) => ({ value: a.id, label: a.nome })),
+                    ]}
+                  />
+                </div>
                 <Input
                   label="Buscar enunciado"
                   value={buscaBanco}
@@ -1623,16 +1809,29 @@ export const ProfessorAtividadePage: React.FC = () => {
           ) : (
             /* Aba Sortear */
             <div className="space-y-4">
-              <Select
-                label="Selecione o Assunto *"
-                value={sorteioAssuntoId}
-                onChange={(e) => setSorteioAssuntoId(e.target.value)}
-                options={assuntosOferta.map((a) => ({ value: a.id, label: a.nome }))}
-              />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Selecione a Submatéria *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setModalSubmateriasAberto(true)}
+                    className="text-2xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    Gerenciar
+                  </button>
+                </div>
+                <Select
+                  value={sorteioAssuntoId}
+                  onChange={(e) => setSorteioAssuntoId(e.target.value)}
+                  options={assuntosOferta.map((a) => ({ value: a.id, label: a.nome }))}
+                />
+              </div>
 
               {/* Estoque disponível */}
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 text-slate-600">
-                <div className="font-semibold text-slate-700">Estoque disponível neste assunto:</div>
+                <div className="font-semibold text-slate-700">Estoque disponível nesta submatéria:</div>
                 <div className="flex items-center gap-4">
                   <span>Fáceis: <strong className="text-slate-900">{estoqueFacil}</strong></span>
                   <span>Médias: <strong className="text-slate-900">{estoqueMedio}</strong></span>
@@ -1691,6 +1890,39 @@ export const ProfessorAtividadePage: React.FC = () => {
           )}
         </div>
       </Modal>
+
+      {/* Modal de Gerenciamento de Submatérias */}
+      {ofertaAtual && (
+        <ModalGerenciarSubmaterias
+          aberto={modalSubmateriasAberto}
+          onFechar={() => {
+            setModalSubmateriasAberto(false);
+            setIndiceQuestaoParaSubmateria(null);
+          }}
+          disciplinaId={ofertaAtual.disciplina_id}
+          disciplinaNome={ofertaAtual.disciplina_nome}
+          onAtualizado={async () => {
+            try {
+              const lista = await bancoService.listarAssuntos(ofertaAtual.disciplina_id);
+              setAssuntosOferta(lista);
+            } catch (e) {
+              console.error('Falha ao atualizar assuntos da oferta:', e);
+            }
+          }}
+          onSelecionarSubmateria={(id) => {
+            if (indiceQuestaoParaSubmateria !== null) {
+              setQuestoes((prev) => {
+                const c = [...prev];
+                c[indiceQuestaoParaSubmateria] = { ...c[indiceQuestaoParaSubmateria], assunto_id: id };
+                return c;
+              });
+              setTemAlteracoesNaoSalvas(true);
+            }
+            setFiltroAssuntoBanco(id);
+            setSorteioAssuntoId(id);
+          }}
+        />
+      )}
     </AppShell>
   );
 };

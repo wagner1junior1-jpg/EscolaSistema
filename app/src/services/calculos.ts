@@ -385,3 +385,30 @@ export function pontuacaoDaResposta(
   return resposta.acertou ? 1 : 0;
 }
 
+/**
+ * 7. Funções auxiliares para Desempenho Hierárquico e Semáforo Pedagógico
+ */
+
+export function calcularTaxaErro(pontosObtidos: number, totalPossivel: number): number {
+  if (totalPossivel <= 0) return 0;
+  const erro = Math.max(0, totalPossivel - pontosObtidos);
+  const valor = (erro / totalPossivel) * 100;
+  return Math.round(valor * 10) / 10;
+}
+
+export function calcularTaxaAcerto(pontosObtidos: number, totalPossivel: number): number {
+  if (totalPossivel <= 0) return 0;
+  const valor = (pontosObtidos / totalPossivel) * 100;
+  return Math.round(valor * 10) / 10;
+}
+
+export type SemaforoPedagogicoCor = 'verde' | 'ambar' | 'vermelho';
+
+export function classificarSemaforoPedagogico(porcentagemErro: number | null): SemaforoPedagogicoCor {
+  if (porcentagemErro === null) return 'verde';
+  if (porcentagemErro < 25) return 'verde';
+  if (porcentagemErro <= 45) return 'ambar';
+  return 'vermelho';
+}
+
+

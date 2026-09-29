@@ -23,6 +23,8 @@ interface OfertaComContagem extends OfertaDetalhada {
   totalPublicadas: number;
   totalEncerradas: number;
   totalGeral: number;
+  totalPendentesCorrecao: number;
+  primeiraAtividadeComPendenteId?: string | null;
 }
 
 export const ProfessorDashboardPage: React.FC = () => {
@@ -73,7 +75,7 @@ export const ProfessorDashboardPage: React.FC = () => {
       try {
         const listaOfertas = await professorService.minhasOfertas();
 
-        // Para cada oferta, busca suas atividades e calcula a contagem por status
+        // Para cada oferta, busca suas atividades e calcula a contagem por status e pendências
         const ofertasComContagens: OfertaComContagem[] = await Promise.all(
           listaOfertas.map(async (oferta) => {
             try {
@@ -82,12 +84,35 @@ export const ProfessorDashboardPage: React.FC = () => {
               const totalPublicadas = atividades.filter((a) => a.status === 'publicada').length;
               const totalEncerradas = atividades.filter((a) => a.status === 'encerrada').length;
 
+              let totalPendentesCorrecao = 0;
+              let primeiraAtividadeComPendenteId: string | null = null;
+
+              const ativsComRespostas = atividades.filter(
+                (a) => a.status === 'publicada' || a.status === 'encerrada'
+              );
+
+              for (const ativ of ativsComRespostas) {
+                try {
+                  const pends = await professorService.listarCorrecoesPendentes(ativ.id);
+                  if (pends.length > 0) {
+                    totalPendentesCorrecao += pends.length;
+                    if (!primeiraAtividadeComPendenteId) {
+                      primeiraAtividadeComPendenteId = ativ.id;
+                    }
+                  }
+                } catch {
+                  // Silencia se não houver pendentes
+                }
+              }
+
               return {
                 ...oferta,
                 totalRascunhos,
                 totalPublicadas,
                 totalEncerradas,
                 totalGeral: atividades.length,
+                totalPendentesCorrecao,
+                primeiraAtividadeComPendenteId,
               };
             } catch {
               return {
@@ -96,6 +121,8 @@ export const ProfessorDashboardPage: React.FC = () => {
                 totalPublicadas: 0,
                 totalEncerradas: 0,
                 totalGeral: 0,
+                totalPendentesCorrecao: 0,
+                primeiraAtividadeComPendenteId: null,
               };
             }
           })
@@ -321,6 +348,30 @@ export const ProfessorDashboardPage: React.FC = () => {
                         </span>
                       </div>
                     </div>
+
+                    {/* Alerta de Correções Discursivas Pendentes */}
+                    {oferta.totalPendentesCorrecao > 0 && (
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (oferta.primeiraAtividadeComPendenteId) {
+                            navigate(`/professor/atividade/${oferta.primeiraAtividadeComPendenteId}/resultados?aba=correcoes`);
+                          } else {
+                            navigate(`/professor/oferta/${oferta.id}?aba=resultados`);
+                          }
+                        }}
+                        className="mt-2.5 p-2.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 flex items-center justify-between text-xs font-bold hover:bg-purple-100 transition-colors shadow-2xs cursor-pointer"
+                        title="Clique para ir direto às correções pendentes"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
+                          <span>{oferta.totalPendentesCorrecao} discursiva{oferta.totalPendentesCorrecao > 1 ? 's' : ''} para corrigir</span>
+                        </div>
+                        <span className="text-2xs uppercase tracking-wider text-purple-700 bg-white px-2 py-0.5 rounded-md border border-purple-200">
+                          Corrigir →
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Ação Inferior */}

@@ -284,6 +284,7 @@ export interface QuestaoSugeridaIA {
   resposta_esperada?: string | null; // gabarito para discursivas
   imagem_url?: string | null;
   alternativas?: QuestaoSugeridaAlternativa[];
+  avisos?: string[];
 }
 
 export interface RespostaGeracaoIA {
@@ -459,6 +460,11 @@ export interface ItemMapaDeCalorQuestao {
     por_que_errou: string | null;
     total_escolhas: number;
   } | null;
+  distribuicao_discursiva?: {
+    certo: { total: number; porcentagem: number };
+    parcial: { total: number; porcentagem: number };
+    errado: { total: number; porcentagem: number };
+  };
 }
 
 export interface MapaDeCalorAtividade {
@@ -525,6 +531,11 @@ export interface FichaAlunoQuestaoItem {
   acertou: boolean | null;
   tentativas: number;
   acertou_final: boolean | null;
+  tipo?: TipoQuestao;
+  texto_resposta?: string | null;
+  correcao?: StatusCorrecao | null;
+  pontuacao_discursiva?: number | null;
+  comentario_professor?: string | null;
 }
 
 export interface FichaAlunoAtividadeItem {
@@ -575,6 +586,8 @@ export interface DesempenhoTurmaDisciplinaItem {
 
 export interface AlunoEmAtencaoItem {
   aluno_id: string;
+  turma_id?: string;
+  disciplina_id?: string;
   nome_completo: string;
   numero_chamada: number;
   turma_nome: string;
@@ -582,6 +595,9 @@ export interface AlunoEmAtencaoItem {
   professor_nome: string;
   media: number;
   faixa: 'Atenção';
+  total_acertos?: number;
+  total_questoes?: number;
+  turma_total_alunos?: number;
 }
 
 export interface QuestaoCriticaEscolaItem {
@@ -601,3 +617,81 @@ export interface QuestaoCriticaEscolaItem {
     total_escolhas: number;
   } | null;
 }
+
+/* =========================================================================
+ * Desempenho Hierárquico por Subitens (Gestão / Diretoria)
+ * ========================================================================= */
+
+export interface DesempenhoAlternativaItem {
+  id: string;
+  letra: LetraAlternativa;
+  texto: string;
+  correta: boolean;
+  por_que_errou: string | null;
+  total_escolhas: number;
+  porcentagem_escolhas: number;
+}
+
+export interface DesempenhoQuestaoItem {
+  questao_id: string;
+  ordem: number;
+  enunciado: string;
+  tipo: TipoQuestao;
+  imagem_url?: string | null;
+  dica?: string | null;
+  explicacao?: string | null;
+  resposta_esperada?: string | null;
+  total_respostas: number;
+  total_acertos: number;
+  porcentagem_acerto: number;
+  porcentagem_erro: number;
+  alternativas?: DesempenhoAlternativaItem[];
+  distrator_mais_escolhido?: {
+    letra: LetraAlternativa | null;
+    por_que_errou: string | null;
+    total_escolhas: number;
+    porcentagem_escolhas: number;
+  } | null;
+  distribuicao_discursiva?: {
+    certo: number;
+    parcial: number;
+    errado: number;
+    pendente: number;
+  };
+  atividade_titulo?: string;
+  modo_atividade?: ModoAtividade;
+}
+
+export interface DesempenhoConteudoItem {
+  conteudo_id: string;
+  conteudo_nome: string;
+  total_questoes: number;
+  total_respostas: number;
+  porcentagem_erro: number;
+  porcentagem_acerto: number;
+  questoes: DesempenhoQuestaoItem[];
+}
+
+export interface DesempenhoMateriaItem {
+  disciplina_id: string;
+  disciplina_nome: string;
+  professor_nome: string;
+  total_alunos: number;
+  total_respostas: number;
+  porcentagem_erro: number;
+  porcentagem_acerto: number;
+  conteudos: DesempenhoConteudoItem[];
+  aguardando_correcao?: boolean;
+}
+
+export interface DesempenhoTurmaHierarquico {
+  turma_id: string;
+  turma_nome: string;
+  turma_serie: string;
+  total_alunos: number;
+  porcentagem_erro_geral: number | null;
+  porcentagem_acerto_geral: number | null;
+  total_materias_avaliadas: number;
+  materias: DesempenhoMateriaItem[];
+}
+

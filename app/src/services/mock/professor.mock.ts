@@ -239,6 +239,13 @@ export class MockProfessorService implements ProfessorService {
     }
 
     for (const q of questoes) {
+      if (q.tipo === 'discursiva') {
+        if (!q.resposta_esperada || !q.resposta_esperada.trim()) {
+          throw new Error(`A questão ${q.ordem} (discursiva) deve conter uma resposta esperada.`);
+        }
+        continue;
+      }
+
       const alts = db.alternativas.filter((a) => a.questao_id === q.id);
       if (alts.length < 2 || alts.length > 5) {
         throw new Error(
@@ -322,6 +329,11 @@ export class MockProfessorService implements ProfessorService {
         enunciado: q.enunciado,
         dica: q.dica,
         explicacao: q.explicacao,
+        banco_questao_id: q.banco_questao_id || null,
+        assunto_id: q.assunto_id || null,
+        tipo: q.tipo ?? 'objetiva',
+        resposta_esperada: q.resposta_esperada ?? null,
+        imagem_url: q.imagem_url ?? null,
       };
       db.questoes.push(novaQuestao);
 
@@ -365,28 +377,35 @@ export class MockProfessorService implements ProfessorService {
         throw new Error(`O enunciado da questão ${ordemCalculada} não pode ficar vazio.`);
       }
 
-      // Validação de quantidade de alternativas (entre 2 e 5)
-      if (!qPayload.alternativas || qPayload.alternativas.length < 2 || qPayload.alternativas.length > 5) {
-        throw new Error(
-          `A questão ${ordemCalculada} deve conter entre 2 e 5 alternativas (possui ${qPayload.alternativas?.length || 0}).`
-        );
-      }
-
-      // Validação de exatamente 1 correta
-      const totalCorretas = qPayload.alternativas.filter((a) => a.correta).length;
-      if (totalCorretas !== 1) {
-        throw new Error(
-          `A questão ${ordemCalculada} deve ter exatamente 1 alternativa correta marcada.`
-        );
-      }
-
-      // Validação de texto das alternativas
-      for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
-        const alt = qPayload.alternativas[altIdx];
-        if (!alt.texto || !alt.texto.trim()) {
+      // Validação de tipo e alternativas/resposta esperada
+      if (qPayload.tipo === 'discursiva') {
+        if (!qPayload.resposta_esperada || !qPayload.resposta_esperada.trim()) {
+          throw new Error(`A questão ${ordemCalculada} (discursiva) deve conter uma resposta esperada.`);
+        }
+      } else {
+        // Validação de quantidade de alternativas (entre 2 e 5)
+        if (!qPayload.alternativas || qPayload.alternativas.length < 2 || qPayload.alternativas.length > 5) {
           throw new Error(
-            `O texto da alternativa ${letrasValidas[altIdx] || altIdx + 1} da questão ${ordemCalculada} não pode ficar vazio.`
+            `A questão ${ordemCalculada} deve conter entre 2 e 5 alternativas (possui ${qPayload.alternativas?.length || 0}).`
           );
+        }
+
+        // Validação de exatamente 1 correta
+        const totalCorretas = qPayload.alternativas.filter((a) => a.correta).length;
+        if (totalCorretas !== 1) {
+          throw new Error(
+            `A questão ${ordemCalculada} deve ter exatamente 1 alternativa correta marcada.`
+          );
+        }
+
+        // Validação de texto das alternativas
+        for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
+          const alt = qPayload.alternativas[altIdx];
+          if (!alt.texto || !alt.texto.trim()) {
+            throw new Error(
+              `O texto da alternativa ${letrasValidas[altIdx] || altIdx + 1} da questão ${ordemCalculada} não pode ficar vazio.`
+            );
+          }
         }
       }
 
@@ -400,11 +419,13 @@ export class MockProfessorService implements ProfessorService {
       }
 
       // Se trouxer id de alternativa, ela deve pertencer àquela questão
-      for (const altPayload of qPayload.alternativas) {
-        if (altPayload.id) {
-          const altExistente = db.alternativas.find((a) => a.id === altPayload.id);
-          if (!altExistente || !qPayload.id || altExistente.questao_id !== qPayload.id) {
-            throw new Error('Questão ou alternativa inválida para esta atividade.');
+      if (qPayload.alternativas) {
+        for (const altPayload of qPayload.alternativas) {
+          if (altPayload.id) {
+            const altExistente = db.alternativas.find((a) => a.id === altPayload.id);
+            if (!altExistente || !qPayload.id || altExistente.questao_id !== qPayload.id) {
+              throw new Error('Questão ou alternativa inválida para esta atividade.');
+            }
           }
         }
       }
@@ -433,12 +454,17 @@ export class MockProfessorService implements ProfessorService {
           throw new Error('Atividade publicada: só é possível corrigir textos.');
         }
 
+        if (qAtual.tipo === 'discursiva') {
+          // Questões discursivas não possuem alternativas
+          continue;
+        }
+
         const altsAtuais = db.alternativas
           .filter((a) => a.questao_id === qAtual.id)
           .sort((a, b) => a.letra.localeCompare(b.letra));
 
         // Não pode mudar quantidade de alternativas
-        if (qPayload.alternativas.length !== altsAtuais.length) {
+        if ((qPayload.alternativas || []).length !== altsAtuais.length) {
           throw new Error('Atividade publicada: só é possível corrigir textos.');
         }
 
@@ -458,6 +484,13 @@ export class MockProfessorService implements ProfessorService {
         qAtual.enunciado = qPayload.enunciado.trim();
         qAtual.dica = qPayload.dica ? qPayload.dica.trim() : null;
         qAtual.explicacao = qPayload.explicacao ? qPayload.explicacao.trim() : null;
+
+        if (qAtual.tipo === 'discursiva') {
+          if (qPayload.resposta_esperada !== undefined) {
+            qAtual.resposta_esperada = qPayload.resposta_esperada ? qPayload.resposta_esperada.trim() : null;
+          }
+          continue;
+        }
 
         const altsAtuais = db.alternativas
           .filter((a) => a.questao_id === qAtual.id)
@@ -495,9 +528,9 @@ export class MockProfessorService implements ProfessorService {
           explicacao: qPayload.explicacao ? qPayload.explicacao.trim() : null,
           banco_questao_id: qPayload.banco_questao_id || null,
           assunto_id: qPayload.assunto_id || null,
-          tipo: 'objetiva',
-          imagem_url: null,
-          resposta_esperada: null,
+          tipo: qPayload.tipo || 'objetiva',
+          imagem_url: qPayload.imagem_url || null,
+          resposta_esperada: qPayload.resposta_esperada || null,
         };
         db.questoes.push(questao);
       } else {
@@ -511,23 +544,34 @@ export class MockProfessorService implements ProfessorService {
         if (qPayload.assunto_id !== undefined) {
           questao.assunto_id = qPayload.assunto_id;
         }
+        if (qPayload.tipo !== undefined) {
+          questao.tipo = qPayload.tipo;
+        }
+        if (qPayload.resposta_esperada !== undefined) {
+          questao.resposta_esperada = qPayload.resposta_esperada;
+        }
+        if (qPayload.imagem_url !== undefined) {
+          questao.imagem_url = qPayload.imagem_url;
+        }
       }
 
       // Reatribuição das alternativas da questão
       db.alternativas = db.alternativas.filter((a) => a.questao_id !== idFinal);
-      for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
-        const altPayload = qPayload.alternativas[altIdx];
-        const letraAtribuida = letrasValidas[altIdx];
+      if (qPayload.tipo !== 'discursiva' && qPayload.alternativas) {
+        for (let altIdx = 0; altIdx < qPayload.alternativas.length; altIdx++) {
+          const altPayload = qPayload.alternativas[altIdx];
+          const letraAtribuida = letrasValidas[altIdx];
 
-        db.alternativas.push({
-          id: altPayload.id || gerarId('alt'),
-          created_at: agora,
-          questao_id: idFinal,
-          letra: letraAtribuida,
-          texto: altPayload.texto.trim(),
-          correta: altPayload.correta,
-          por_que_errou: altPayload.por_que_errou ? altPayload.por_que_errou.trim() : null,
-        });
+          db.alternativas.push({
+            id: altPayload.id || gerarId('alt'),
+            created_at: agora,
+            questao_id: idFinal,
+            letra: letraAtribuida,
+            texto: altPayload.texto.trim(),
+            correta: altPayload.correta,
+            por_que_errou: altPayload.por_que_errou ? altPayload.por_que_errou.trim() : null,
+          });
+        }
       }
     }
 
@@ -801,6 +845,11 @@ export class MockProfessorService implements ProfessorService {
           acertou: r ? r.acertou : null,
           tentativas: r ? r.tentativas : 0,
           acertou_final: r ? r.acertou_final : null,
+          tipo: q.tipo ?? 'objetiva',
+          texto_resposta: r ? r.texto_resposta : null,
+          correcao: r ? r.correcao : null,
+          pontuacao_discursiva: r ? (r.pontuacao ?? null) : null,
+          comentario_professor: r ? r.comentario_professor : null,
         });
       }
 

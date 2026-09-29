@@ -87,6 +87,103 @@ export class MockBancoService implements ServicoBanco {
     return novoAssunto;
   }
 
+  async renomearAssunto(assuntoId: string, novoNome: string): Promise<Assunto> {
+    const usuario = await exigirUsuario();
+    const nomeLimpo = novoNome.trim();
+    if (!nomeLimpo) {
+      throw new Error('O nome da submatéria não pode ficar vazio.');
+    }
+
+    const db = await getDatabase();
+    const assunto = (db.assuntos || []).find((a) => a.id === assuntoId);
+    if (!assunto) {
+      throw new Error('Submatéria não encontrada.');
+    }
+
+    if (usuario.papel === 'professor') {
+      const leciona = db.ofertas.some(
+        (o) => o.professor_id === usuario.id && o.disciplina_id === assunto.disciplina_id
+      );
+      if (!leciona) {
+        throw new Error('Você não tem permissão para alterar submatérias desta disciplina.');
+      }
+    }
+
+    const jaExiste = (db.assuntos || []).some(
+      (a) =>
+        a.id !== assuntoId &&
+        a.disciplina_id === assunto.disciplina_id &&
+        a.nome.toLowerCase() === nomeLimpo.toLowerCase()
+    );
+    if (jaExiste) {
+      throw new Error('Já existe uma submatéria com este nome nesta disciplina.');
+    }
+
+    assunto.nome = nomeLimpo;
+    saveDatabase(db);
+    return assunto;
+  }
+
+  async excluirAssunto(assuntoId: string): Promise<void> {
+    const usuario = await exigirUsuario();
+    const db = await getDatabase();
+    const assunto = (db.assuntos || []).find((a) => a.id === assuntoId);
+    if (!assunto) {
+      throw new Error('Submatéria não encontrada.');
+    }
+
+    if (usuario.papel === 'professor') {
+      const leciona = db.ofertas.some(
+        (o) => o.professor_id === usuario.id && o.disciplina_id === assunto.disciplina_id
+      );
+      if (!leciona) {
+        throw new Error('Você não tem permissão para excluir submatérias desta disciplina.');
+      }
+    }
+
+    // Verifica se existem questões vinculadas no banco de questões ou nas atividades
+    const qtdNoBanco = (db.banco_questoes || []).filter(
+      (q) => q.assunto_id === assuntoId && !q.arquivada
+    ).length;
+
+    if (qtdNoBanco > 0) {
+      throw new Error(
+        `Não é possível excluir esta submatéria pois existem ${qtdNoBanco} questão(ões) vinculada(s) no Banco.`
+      );
+    }
+
+    const qtdEmAtividades = (db.questoes || []).filter(
+      (q) => q.assunto_id === assuntoId
+    ).length;
+
+    if (qtdEmAtividades > 0) {
+      throw new Error(
+        `Não é possível excluir esta submatéria pois ela está vinculada a questões de atividades.`
+      );
+    }
+
+    db.assuntos = (db.assuntos || []).filter((a) => a.id !== assuntoId);
+    saveDatabase(db);
+  }
+
+  async contarQuestoesPorAssunto(disciplinaId: string): Promise<Record<string, number>> {
+    await exigirUsuario();
+    const db = await getDatabase();
+    const contagem: Record<string, number> = {};
+
+    const questoes = (db.banco_questoes || []).filter(
+      (q) => q.disciplina_id === disciplinaId && !q.arquivada
+    );
+
+    for (const q of questoes) {
+      if (q.assunto_id) {
+        contagem[q.assunto_id] = (contagem[q.assunto_id] || 0) + 1;
+      }
+    }
+
+    return contagem;
+  }
+
   // 2. Consulta de Combinações de Matéria + Série
   async listarCombinacoesDoProfessor(): Promise<CombinacaoProfessor[]> {
     const usuario = await exigirUsuario();
@@ -183,6 +280,8 @@ export class MockBancoService implements ServicoBanco {
       if (filtros.assunto_id && q.assunto_id !== filtros.assunto_id) return false;
       if (filtros.dificuldade && q.dificuldade !== filtros.dificuldade) return false;
       if (filtros.escopo === 'minhas' && q.criado_por !== usuario.id) return false;
+      if (filtros.tipo && q.tipo !== filtros.tipo) return false;
+      if (filtros.origem && q.origem !== filtros.origem) return false;
       return true;
     });
 
@@ -528,9 +627,9 @@ export class MockBancoService implements ServicoBanco {
         explicacao: bq.explicacao,
         banco_questao_id: bq.id,
         assunto_id: bq.assunto_id,
-        tipo: 'objetiva',
-        imagem_url: null,
-        resposta_esperada: null,
+        tipo: bq.tipo || 'objetiva',
+        imagem_url: bq.imagem_url ?? null,
+        resposta_esperada: bq.resposta_esperada ?? null,
       });
 
       const altsBanco = (db.banco_alternativas || [])

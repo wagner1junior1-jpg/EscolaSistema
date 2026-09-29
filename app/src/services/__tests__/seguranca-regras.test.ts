@@ -702,4 +702,123 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
       ).rejects.toThrow('Você não tem permissão para esta ação.');
     });
   });
+
+  describe('Cadastro de Aluno com PIN Customizado', () => {
+    it('cadastra aluno com PIN personalizado de 4 dígitos e permite login do aluno', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      const { aluno, pin_puro } = await gestaoService.cadastrarAluno({
+        escola_id: 'esc-001',
+        turma_id: 'turma-7a',
+        nome_completo: 'Mariana Lima',
+        numero_chamada: 98,
+        ativo: true,
+        pin: '9876',
+      });
+
+      expect(aluno.id).toBeTruthy();
+      expect(aluno.nome_completo).toBe('Mariana Lima');
+      expect(pin_puro).toBe('9876');
+      expect((aluno as Record<string, unknown>).pin_hash).toBeUndefined();
+
+      // O aluno consegue fazer login com o PIN definido pela direção
+      const { token, aluno: alunoLogado } = await alunoService.login(aluno.id, '9876');
+      expect(token).toBeTruthy();
+      expect(alunoLogado.id).toBe(aluno.id);
+    });
+
+    it('rejeita PIN com formato inválido (diferente de 4 dígitos numéricos)', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      await expect(
+        gestaoService.cadastrarAluno({
+          escola_id: 'esc-001',
+          turma_id: 'turma-7a',
+          nome_completo: 'Aluno Pin Invalido',
+          numero_chamada: 97,
+          ativo: true,
+          pin: '12',
+        })
+      ).rejects.toThrow('O PIN deve conter exatamente 4 dígitos numéricos.');
+
+      await expect(
+        gestaoService.cadastrarAluno({
+          escola_id: 'esc-001',
+          turma_id: 'turma-7a',
+          nome_completo: 'Aluno Pin Letras',
+          numero_chamada: 97,
+          ativo: true,
+          pin: 'abcd',
+        })
+      ).rejects.toThrow('O PIN deve conter exatamente 4 dígitos numéricos.');
+    });
+
+    it('gera PIN aleatório quando o PIN não for informado ou for vazio', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      const res1 = await gestaoService.cadastrarAluno({
+        escola_id: 'esc-001',
+        turma_id: 'turma-7a',
+        nome_completo: 'Aluno Sem Pin',
+        numero_chamada: 96,
+        ativo: true,
+      });
+      expect(res1.pin_puro).toMatch(/^\d{4}$/);
+
+      const res2 = await gestaoService.cadastrarAluno({
+        escola_id: 'esc-001',
+        turma_id: 'turma-7a',
+        nome_completo: 'Aluno Pin Vazio',
+        numero_chamada: 95,
+        ativo: true,
+        pin: '   ',
+      });
+      expect(res2.pin_puro).toMatch(/^\d{4}$/);
+    });
+  });
+
+  describe('Reset de PIN com Opção Manual e Automática', () => {
+    it('reseta PIN de aluno com PIN manual de 4 dígitos e valida login com o novo PIN', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      // aluno-7a-1 tem PIN padrão '1420' no seed
+      const { pin_puro } = await gestaoService.gerarOuResetarPin('aluno-7a-1', '5566');
+      expect(pin_puro).toBe('5566');
+
+      // Login com o PIN antigo '1420' deve falhar
+      await expect(
+        alunoService.login('aluno-7a-1', '1420')
+      ).rejects.toThrow('PIN incorreto');
+
+      // Login com o novo PIN '5566' deve funcionar
+      const { token, aluno } = await alunoService.login('aluno-7a-1', '5566');
+      expect(token).toBeTruthy();
+      expect(aluno.id).toBe('aluno-7a-1');
+    });
+
+    it('rejeita reset com PIN de formato inválido', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      await expect(
+        gestaoService.gerarOuResetarPin('aluno-7a-1', '99')
+      ).rejects.toThrow('O PIN deve conter exatamente 4 dígitos numéricos.');
+
+      await expect(
+        gestaoService.gerarOuResetarPin('aluno-7a-1', 'senha')
+      ).rejects.toThrow('O PIN deve conter exatamente 4 dígitos numéricos.');
+    });
+
+    it('mantém geração automática quando novoPin não for informado ou for vazio', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      const res1 = await gestaoService.gerarOuResetarPin('aluno-7a-1');
+      expect(res1.pin_puro).toMatch(/^\d{4}$/);
+
+      const res2 = await gestaoService.gerarOuResetarPin('aluno-7a-1', '   ');
+      expect(res2.pin_puro).toMatch(/^\d{4}$/);
+
+      const { token } = await alunoService.login('aluno-7a-1', res2.pin_puro);
+      expect(token).toBeTruthy();
+    });
+  });
 });

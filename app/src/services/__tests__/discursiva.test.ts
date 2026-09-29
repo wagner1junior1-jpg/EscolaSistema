@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAuthService } from '../mock/auth.mock';
 import { MockProfessorService } from '../mock/professor.mock';
 import { MockAlunoService } from '../mock/aluno.mock';
+import { MockBancoService } from '../mock/banco.mock';
 import { resetDatabase, getDatabase, saveDatabase } from '../mock/db';
 import { Questao, Atividade, Resposta } from '@/lib/types';
 import { mediaDoAlunoNasAtividades } from '../calculos';
@@ -460,3 +461,201 @@ describe('Discursivas — Cálculo de Média e Aproveitamento', () => {
     expect(resDepois.media).toBe(83.3);
   });
 });
+
+describe('Discursivas — Fluxo do Professor e Banco de Questões (Fases P1, P2 e P3)', () => {
+  const authService = new MockAuthService();
+  const professorService = new MockProfessorService();
+  const bancoService = new MockBancoService();
+
+  beforeEach(async () => {
+    await resetDatabase();
+    await authService.logout();
+    await authService.login('ana@demo.com', 'demo123'); // Ana leciona Matemática 7º Ano
+  });
+
+  // T1: adicionarDoBanco preserva tipo, imagem_url e resposta_esperada
+  it('T1: adicionarDoBanco preserva tipo, imagem_url e resposta_esperada na questão da atividade', async () => {
+    const questaoBanco = await bancoService.salvarQuestaoBanco({
+      disciplina_id: 'disc-mat',
+      serie: '7º Ano',
+      assunto_id: 'assunto-mat-eq1',
+      tipo: 'discursiva',
+      dificuldade: 'medio',
+      enunciado: 'Explique o princípio aditivo das equações.',
+      imagem_url: 'https://exemplo.com/balanca.png',
+      resposta_esperada: 'Ao somar ou subtrair o mesmo número de ambos os lados, a igualdade se mantém.',
+      alternativas: [],
+    });
+
+    const ativ = await professorService.criarAtividade('oferta-mat-7a', {
+      periodo_id: 'per-bim-3',
+      titulo: 'Atividade Rascunho Discursiva',
+      descricao: 'Instruções da atividade',
+      modo: 'exercicio',
+      prazo: '2026-11-01',
+    });
+
+    await bancoService.adicionarDoBanco(ativ.id, [questaoBanco.id]);
+
+    const ativAtualizada = await professorService.obterAtividade(ativ.id);
+    expect(ativAtualizada).toBeDefined();
+    const questaoCriada = ativAtualizada!.questoes[0];
+
+    expect(questaoCriada).toBeDefined();
+    expect(questaoCriada.tipo).toBe('discursiva');
+    expect(questaoCriada.resposta_esperada).toBe(
+      'Ao somar ou subtrair o mesmo número de ambos os lados, a igualdade se mantém.'
+    );
+    expect(questaoCriada.imagem_url).toBe('https://exemplo.com/balanca.png');
+    expect(questaoCriada.banco_questao_id).toBe(questaoBanco.id);
+  });
+
+  // T2: salvarQuestoes aceita discursiva sem alternativas e persiste dados
+  it('T2: salvarQuestoes aceita discursiva sem alternativas e persiste resposta_esperada e tipo', async () => {
+    const ativ = await professorService.criarAtividade('oferta-mat-7a', {
+      periodo_id: 'per-bim-3',
+      titulo: 'Atividade Mista',
+      descricao: 'Instruções da atividade',
+      modo: 'exercicio',
+      prazo: '2026-11-01',
+    });
+
+    await professorService.salvarQuestoes(ativ.id, [
+      {
+        enunciado: 'Qual o valor de x em 2x = 8?',
+        tipo: 'discursiva',
+        resposta_esperada: 'x = 4',
+        alternativas: [],
+      },
+    ]);
+
+    const ativAtualizada = await professorService.obterAtividade(ativ.id);
+    expect(ativAtualizada).toBeDefined();
+    expect(ativAtualizada!.questoes).toHaveLength(1);
+    expect(ativAtualizada!.questoes[0].tipo).toBe('discursiva');
+    expect(ativAtualizada!.questoes[0].resposta_esperada).toBe('x = 4');
+
+    const db = await getDatabase();
+    const qDb = db.questoes.find((q) => q.id === ativAtualizada!.questoes[0].id);
+    expect(qDb?.tipo).toBe('discursiva');
+    expect(qDb?.resposta_esperada).toBe('x = 4');
+  });
+
+  // T3: salvarQuestoes e publicarAtividade recusam questão discursiva sem resposta esperada
+  it('T3: salvarQuestoes e publicarAtividade recusam discursiva sem resposta esperada', async () => {
+    const ativ = await professorService.criarAtividade('oferta-mat-7a', {
+      periodo_id: 'per-bim-3',
+      titulo: 'Atividade Incompleta',
+      descricao: 'Instruções da atividade',
+      modo: 'exercicio',
+      prazo: '2026-11-01',
+    });
+
+    // 1. salvarQuestoes rejeita discursiva sem resposta esperada
+    await expect(
+      professorService.salvarQuestoes(ativ.id, [
+        {
+          enunciado: 'Discorra sobre o teorema de Pitágoras.',
+          tipo: 'discursiva',
+          resposta_esperada: '   ',
+          alternativas: [],
+        },
+      ])
+    ).rejects.toThrow(/resposta esperada/i);
+
+    // 2. publicarAtividade também valida e rejeita questão discursiva sem resposta esperada
+    const db = await getDatabase();
+    db.questoes.push({
+      id: 'q-legada-sem-resp',
+      created_at: new Date().toISOString(),
+      atividade_id: ativ.id,
+      ordem: 1,
+      enunciado: 'Questão legada sem gabarito',
+      tipo: 'discursiva',
+      resposta_esperada: null,
+      dica: null,
+      explicacao: null,
+    });
+
+    await expect(professorService.publicarAtividade(ativ.id)).rejects.toThrow(
+      /resposta esperada/i
+    );
+  });
+
+  // T4: fichaAluno traz campos tipo, texto_resposta, correcao e pontuacao_discursiva
+  it('T4: fichaAluno traz campos tipo, texto_resposta, correcao e pontuacao_discursiva', async () => {
+    const ativ = await professorService.criarAtividade('oferta-mat-7a', {
+      periodo_id: 'per-bim-3',
+      titulo: 'Atividade Avaliada',
+      descricao: 'Instruções da atividade',
+      modo: 'exercicio',
+      prazo: '2026-11-01',
+    });
+
+    await professorService.salvarQuestoes(ativ.id, [
+      {
+        enunciado: 'O que é uma fração equivalente?',
+        tipo: 'discursiva',
+        resposta_esperada: 'Frações que representam a mesma quantidade.',
+        alternativas: [],
+      },
+    ]);
+
+    const ativAtualizada = await professorService.obterAtividade(ativ.id);
+    expect(ativAtualizada).toBeDefined();
+    const qSalva = ativAtualizada!.questoes[0];
+
+    await professorService.publicarAtividade(ativ.id);
+
+    // Aluno responde a discursiva
+    const alunoService = new MockAlunoService();
+    const loginAluno = await alunoService.login('aluno-7a-1', '1420');
+    await alunoService.responderDiscursiva(loginAluno.token, qSalva.id, 'Frações com o mesmo valor.');
+
+    // Professor consulta ficha do aluno
+    const ficha = await professorService.fichaAluno('oferta-mat-7a', 'aluno-7a-1');
+    expect(ficha).toBeDefined();
+
+    const ativItem = ficha.atividades.find((a) => a.atividade_id === ativ.id);
+    expect(ativItem).toBeDefined();
+
+    const qDisc = ativItem?.questoes.find((q) => q.questao_id === qSalva.id);
+    expect(qDisc).toBeDefined();
+    expect(qDisc?.tipo).toBe('discursiva');
+    expect(qDisc?.texto_resposta).toBe('Frações com o mesmo valor.');
+    expect(qDisc?.correcao).toBe('pendente');
+    expect(qDisc?.pontuacao_discursiva).toBeNull();
+  });
+
+  // T5: duplicarAtividade preserva tipo e resposta_esperada
+  it('T5: duplicarAtividade preserva tipo e resposta_esperada das questões discursivas', async () => {
+    const ativ = await professorService.criarAtividade('oferta-mat-7a', {
+      periodo_id: 'per-bim-3',
+      titulo: 'Atividade Original',
+      descricao: 'Instruções da atividade',
+      modo: 'exercicio',
+      prazo: '2026-11-01',
+    });
+
+    await professorService.salvarQuestoes(ativ.id, [
+      {
+        enunciado: 'Explique o método da substituição.',
+        tipo: 'discursiva',
+        resposta_esperada: 'Isola uma incógnita e substitui na outra equação.',
+        alternativas: [],
+      },
+    ]);
+
+    const duplicada = await professorService.duplicarAtividade(ativ.id, 'oferta-mat-7a');
+    expect(duplicada.id).not.toBe(ativ.id);
+
+    const detalheDuplicada = await professorService.obterAtividade(duplicada.id);
+    expect(detalheDuplicada).toBeDefined();
+    expect(detalheDuplicada!.questoes).toHaveLength(1);
+    expect(detalheDuplicada!.questoes[0].tipo).toBe('discursiva');
+    expect(detalheDuplicada!.questoes[0].resposta_esperada).toBe(
+      'Isola uma incógnita e substitui na outra equação.'
+    );
+  });
+});
+

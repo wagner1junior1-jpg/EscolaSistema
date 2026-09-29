@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   Card,
-  CardHeader,
   CardContent,
   Select,
   Input,
   useToast,
+  MathText,
 } from '@/components/ui';
 import {
   gestaoService,
@@ -16,7 +16,20 @@ import {
   BancoQuestao,
   DificuldadeQuestao,
 } from '@/services';
-import { Database, Loader2, Check, AlertTriangle, BookOpen } from 'lucide-react';
+import { Database, Loader2, Check, AlertTriangle, BookOpen, ChevronDown } from 'lucide-react';
+import { ModalGerenciarSubmaterias } from '@/features/professor/components/ModalGerenciarSubmaterias';
+
+const DIFICULDADE_ROTULO: Record<DificuldadeQuestao, string> = {
+  facil: 'Fácil',
+  medio: 'Médio',
+  dificil: 'Difícil',
+};
+
+const DIFICULDADE_COR: Record<DificuldadeQuestao, string> = {
+  facil: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  medio: 'bg-amber-50 text-amber-800 border-amber-200',
+  dificil: 'bg-rose-50 text-rose-800 border-rose-200',
+};
 
 export const GestaoBancoSecao: React.FC = () => {
   const toast = useToast();
@@ -31,9 +44,22 @@ export const GestaoBancoSecao: React.FC = () => {
   const [assuntoId, setAssuntoId] = useState<string>('todos');
   const [dificuldade, setDificuldade] = useState<string>('todas');
   const [busca, setBusca] = useState<string>('');
+  const [modalSubmateriasAberto, setModalSubmateriasAberto] = useState<boolean>(false);
 
   const [carregandoFiltros, setCarregandoFiltros] = useState<boolean>(true);
   const [carregandoQuestoes, setCarregandoQuestoes] = useState<boolean>(false);
+
+  // Controle de expansão de questões (em linha por padrão; clica para abrir)
+  const [questoesExpandidas, setQuestoesExpandidas] = useState<Set<string>>(new Set());
+
+  const toggleExpandirQuestao = (id: string) => {
+    setQuestoesExpandidas((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  };
 
   // Séries únicas das turmas ativas
   const seriesDisponiveis = useMemo(() => {
@@ -174,17 +200,30 @@ export const GestaoBancoSecao: React.FC = () => {
               ]}
             />
 
-            {/* Assunto */}
-            <Select
-              label="Assunto"
-              value={assuntoId}
-              onChange={(e) => setAssuntoId(e.target.value)}
-              disabled={carregandoFiltros || assuntos.length === 0}
-              options={[
-                { value: 'todos', label: 'Todos os assuntos' },
-                ...assuntos.map((a) => ({ value: a.id, label: a.nome })),
-              ]}
-            />
+            {/* Submatéria */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">Submatéria</label>
+                {disciplinaId && (
+                  <button
+                    type="button"
+                    onClick={() => setModalSubmateriasAberto(true)}
+                    className="text-2xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  >
+                    Gerenciar
+                  </button>
+                )}
+              </div>
+              <Select
+                value={assuntoId}
+                onChange={(e) => setAssuntoId(e.target.value)}
+                disabled={carregandoFiltros || assuntos.length === 0}
+                options={[
+                  { value: 'todos', label: 'Todas as submatérias' },
+                  ...assuntos.map((a) => ({ value: a.id, label: a.nome })),
+                ]}
+              />
+            </div>
 
             {/* Dificuldade */}
             <Select
@@ -234,116 +273,264 @@ export const GestaoBancoSecao: React.FC = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {questoesFiltradas.map((q, idx) => (
-            <Card key={q.id} className="border-slate-200 shadow-xs hover:border-slate-300 transition-colors">
-              <CardHeader className="bg-slate-50/70 border-b border-slate-200/80 py-3.5 px-5 sm:px-6">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-heading font-black text-xs flex items-center justify-center shadow-xs">
-                      {idx + 1}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between px-1">
+            <div className="text-xs font-semibold text-slate-500">
+              Exibindo {questoesFiltradas.length} questão(ões) no banco — clique na pergunta para abrir
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setQuestoesExpandidas(new Set())}
+                className="text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors cursor-pointer"
+              >
+                Recolher todas
+              </button>
+              <span className="text-slate-300">•</span>
+              <button
+                type="button"
+                onClick={() => setQuestoesExpandidas(new Set(questoesFiltradas.map((q) => q.id)))}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+              >
+                Expandir todas
+              </button>
+            </div>
+          </div>
+
+          {questoesFiltradas.map((q, idx) => {
+            const isExpanded = questoesExpandidas.has(q.id);
+
+            return (
+              <Card key={q.id} className="border-slate-200 overflow-hidden shadow-xs hover:border-slate-300 transition-colors">
+                {/* Linha única compacta da pergunta — clica para abrir/recolher */}
+                <div
+                  onClick={() => toggleExpandirQuestao(q.id)}
+                  className={`py-3 px-4 sm:px-5 flex items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
+                    isExpanded
+                      ? 'bg-slate-50/90 border-b border-slate-200'
+                      : 'bg-white hover:bg-slate-50/70'
+                  }`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleExpandirQuestao(q.id);
+                    }
+                  }}
+                  aria-expanded={isExpanded}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-xs font-bold text-slate-500 shrink-0">
+                      #{idx + 1}
                     </span>
-                    <span className="font-heading font-bold text-sm text-slate-800">
-                      {q.assunto_nome}
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                        DIFICULDADE_COR[q.dificuldade] || 'bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {DIFICULDADE_ROTULO[q.dificuldade] || q.dificuldade}
                     </span>
-                    <span className="text-xs text-slate-400">•</span>
-                    <span className="text-xs font-semibold text-slate-600">
-                      {q.serie}
+                    {q.assunto_nome && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 shrink-0">
+                        {q.assunto_nome}
+                      </span>
+                    )}
+                    {q.serie && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
+                        {q.serie}
+                      </span>
+                    )}
+
+                    {/* APENAS 1 LINHA DA PERGUNTA */}
+                    <span
+                      className="text-sm font-medium text-slate-800 truncate flex-1 min-w-0"
+                      title={q.enunciado}
+                    >
+                      {q.enunciado.replace(/\n+/g, ' ')}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full uppercase border ${
-                        q.dificuldade === 'facil'
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : q.dificuldade === 'medio'
-                          ? 'bg-amber-50 text-amber-800 border-amber-200'
-                          : 'bg-rose-50 text-rose-800 border-rose-200'
-                      }`}
-                    >
-                      {q.dificuldade}
-                    </span>
-
+                  {/* Informações da Direita: Autor e Seta */}
+                  <div className="flex items-center gap-2.5 shrink-0">
                     {q.autor_nome && (
-                      <span className="text-[11px] text-slate-500 font-medium">
+                      <span className="text-[11px] text-slate-500 font-medium hidden sm:inline-block">
                         Prof(a). {q.autor_nome}
                       </span>
                     )}
+
+                    <div
+                      className="p-1 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      title={isExpanded ? 'Recolher detalhes' : 'Abrir pergunta completa'}
+                    >
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          isExpanded ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </div>
                   </div>
                 </div>
-              </CardHeader>
 
-              <CardContent className="p-5 sm:p-6 space-y-4">
-                {/* Enunciado */}
-                <p className="text-sm font-medium text-slate-900 leading-relaxed whitespace-pre-wrap">
-                  {q.enunciado}
-                </p>
-
-                {/* Alternativas */}
-                <div className="space-y-2.5 pt-1">
-                  {(q.alternativas || []).map((alt) => (
-                    <div
-                      key={alt.id || alt.letra}
-                      className={`p-3 rounded-xl border text-xs sm:text-sm ${
-                        alt.correta
-                          ? 'bg-emerald-50/50 border-emerald-300 ring-1 ring-emerald-400/20 text-emerald-950 font-medium'
-                          : 'bg-white border-slate-200 text-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <span
-                          className={`w-5 h-5 rounded-md text-[11px] font-heading font-black flex items-center justify-center shrink-0 ${
-                            alt.correta
-                              ? 'bg-emerald-600 text-white'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}
-                        >
-                          {alt.letra}
+                {/* Conteúdo Completo Expandido ao Clicar */}
+                {isExpanded && (
+                  <CardContent className="p-5 sm:p-6 space-y-4 bg-white">
+                    <div className="flex items-center justify-between text-xs text-slate-500 pb-2 border-b border-slate-100 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span>
+                          Autor: <strong>{q.autor_nome ? `Prof(a). ${q.autor_nome}` : 'Não informado'}</strong>
                         </span>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span>{alt.texto}</span>
-                            {alt.correta && (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 uppercase">
-                                <Check className="w-3.5 h-3.5 stroke-[3]" /> Correta (Gabarito)
-                              </span>
-                            )}
-                          </div>
-
-                          {!alt.correta && alt.por_que_errou && (
-                            <div className="text-[11px] text-slate-500 italic flex items-center gap-1.5 pt-0.5">
-                              <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span>Distrator: {alt.por_que_errou}</span>
-                            </div>
-                          )}
+                        <span>•</span>
+                        <span>
+                          Tipo: <strong>{q.tipo === 'discursiva' ? 'Discursiva' : 'Objetiva'}</strong>
+                        </span>
+                      </div>
+                      {discAtual?.nome && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400">Disciplina: {discAtual.nome}</span>
                         </div>
+                      )}
+                    </div>
+
+                    {/* Enunciado Completo */}
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                        Enunciado Completo
+                      </h4>
+                      <div className="text-sm font-medium text-slate-900 leading-relaxed font-sans">
+                        <MathText text={q.enunciado} className="whitespace-pre-wrap" />
                       </div>
                     </div>
-                  ))}
-                </div>
 
-                {/* Dica e Explicação */}
-                {(q.dica || q.explicacao) && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
-                    {q.dica && (
-                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                        <span className="font-bold text-slate-700 block mb-0.5">Dica:</span>
-                        <p className="text-slate-600">{q.dica}</p>
+                    {/* Imagem anexada à questão, se houver */}
+                    {q.imagem_url && (
+                      <div className="mt-2">
+                        <img
+                          src={q.imagem_url}
+                          alt="Ilustração da questão"
+                          className="max-h-64 rounded-xl border border-slate-200 object-contain shadow-xs bg-slate-50"
+                        />
                       </div>
                     )}
-                    {q.explicacao && (
-                      <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-200">
-                        <span className="font-bold text-indigo-900 block mb-0.5">Explicação / Resolução:</span>
-                        <p className="text-indigo-800">{q.explicacao}</p>
+
+                    {/* Discursiva: Resposta Esperada */}
+                    {q.tipo === 'discursiva' ? (
+                      <div className="p-3.5 rounded-xl bg-purple-50/70 border border-purple-200 text-xs text-purple-950 space-y-1">
+                        <span className="font-bold block text-purple-900">
+                          Resposta Esperada (Gabarito do Professor):
+                        </span>
+                        <p className="whitespace-pre-wrap leading-relaxed">
+                          {q.resposta_esperada || 'Critérios abertos de avaliação pelo professor.'}
+                        </p>
+                      </div>
+                    ) : (
+                      /* Alternativas (Objetiva) */
+                      q.alternativas &&
+                      q.alternativas.length > 0 && (
+                        <div className="space-y-2.5 pt-1">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                            Alternativas
+                          </h4>
+                          <div className="space-y-2">
+                            {q.alternativas.map((alt) => (
+                              <div
+                                key={alt.id || alt.letra}
+                                className={`p-3 rounded-xl border text-xs sm:text-sm ${
+                                  alt.correta
+                                    ? 'bg-emerald-50/60 border-emerald-300 ring-1 ring-emerald-400/20 text-emerald-950 font-medium'
+                                    : 'bg-white border-slate-200 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-start gap-2.5">
+                                  <span
+                                    className={`w-5 h-5 rounded-md text-[11px] font-heading font-black flex items-center justify-center shrink-0 ${
+                                      alt.correta
+                                        ? 'bg-emerald-600 text-white'
+                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                    }`}
+                                  >
+                                    {alt.letra}
+                                  </span>
+                                  <div className="flex-1 space-y-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span>
+                                        <MathText text={alt.texto} />
+                                      </span>
+                                      {alt.correta && (
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 uppercase shrink-0">
+                                          <Check className="w-3.5 h-3.5 stroke-[3]" /> Correta (Gabarito)
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {!alt.correta && alt.por_que_errou && (
+                                      <div className="text-[11px] text-slate-500 italic flex items-center gap-1.5 pt-0.5">
+                                        <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                                        <span>
+                                          Distrator: <MathText text={alt.por_que_errou} />
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    )}
+
+                    {/* Dica e Explicação */}
+                    {(q.dica || q.explicacao) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
+                        {q.dica && (
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                            <span className="font-bold text-slate-700 block mb-0.5">Dica pedagógica:</span>
+                            <div className="text-slate-600">
+                              <MathText text={q.dica} />
+                            </div>
+                          </div>
+                        )}
+                        {q.explicacao && (
+                          <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-200">
+                            <span className="font-bold text-indigo-900 block mb-0.5">Explicação / Resolução:</span>
+                            <div className="text-indigo-800">
+                              <MathText text={q.explicacao} />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
+                  </CardContent>
                 )}
-              </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
+      )}
+
+      {/* Modal Gerenciar Submatérias da Disciplina */}
+      {discAtual && (
+        <ModalGerenciarSubmaterias
+          aberto={modalSubmateriasAberto}
+          onFechar={() => setModalSubmateriasAberto(false)}
+          disciplinaId={discAtual.id}
+          disciplinaNome={discAtual.nome}
+          onAtualizado={async () => {
+            try {
+              const lista = await bancoService.listarAssuntos(discAtual.id);
+              setAssuntos(lista);
+              if (assuntoId !== 'todos' && !lista.some((a) => a.id === assuntoId)) {
+                setAssuntoId('todos');
+              }
+            } catch (err) {
+              console.error('Falha ao atualizar assuntos:', err);
+            }
+          }}
+          onSelecionarSubmateria={(id) => {
+            setAssuntoId(id);
+          }}
+        />
       )}
     </div>
   );

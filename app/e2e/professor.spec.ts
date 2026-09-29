@@ -71,12 +71,9 @@ test.describe('Portal do Professor', () => {
       // Alternativa D: 3
       await page.getByPlaceholder('Texto da alternativa D...').fill('3');
 
-      // Salva a atividade
+      // Salva a atividade (retorna automaticamente para a matéria)
       await page.getByRole('button', { name: 'Salvar atividade' }).click();
       await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
-
-      // Volta para as atividades da turma
-      await page.getByText('Voltar para as atividades da turma').click();
 
       // Na aba Rascunhos, publica a atividade
       const card = page.locator('.rounded-2xl').filter({ hasText: 'Teste E2E' });
@@ -339,11 +336,11 @@ test.describe('Portal do Professor', () => {
     const textareaEnunciado = page.getByPlaceholder('Digite aqui o problema ou enunciado completo da questão...').first();
     await expect(textareaEnunciado).toBeVisible();
 
-    // Clica em Salvar atividade
-    const btnSalvar = page.getByRole('button', { name: 'Salvar atividade' });
+    // Clica em Salvar rascunho
+    const btnSalvar = page.getByRole('button', { name: 'Salvar rascunho' });
     if (await btnSalvar.isEnabled()) {
       await btnSalvar.click();
-      await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
+      await expect(page.getByText('Alterações salvas com sucesso!')).toBeVisible();
     }
 
     // Rola para a seção de questões para evidenciar o layout compacto, selos e controles

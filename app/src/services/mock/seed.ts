@@ -42,7 +42,7 @@ export function isTestEnvironment(): boolean {
 }
 
 export function getVersaoSeedAtiva(): number {
-  return isTestEnvironment() ? dadosDemo.versao_seed : dadosDemo.versao_seed + 306;
+  return isTestEnvironment() ? dadosDemo.versao_seed : dadosDemo.versao_seed + 317;
 }
 
 export interface MockDatabaseSchema {
@@ -941,6 +941,14 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
 
     for (let pos = 0; pos < ativ.questoes.length; pos++) {
       const q = ativ.questoes[pos];
+      let assuntoId: string | null = null;
+      if (q.id.includes('frac')) assuntoId = 'assunto-mat-frac';
+      else if (q.id.includes('porc')) assuntoId = 'assunto-mat-porc';
+      else if (q.id.includes('cien') || q.id.includes('dig')) assuntoId = 'assunto-cien-dig';
+      else if (q.id.includes('port')) assuntoId = 'assunto-port-interp';
+      else if (q.id.includes('int')) assuntoId = 'assunto-mat-int';
+      else if (q.id.includes('geo')) assuntoId = 'assunto-mat-geo';
+
       questoes.push({
         id: q.id,
         created_at: agora,
@@ -949,6 +957,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
         enunciado: q.enunciado,
         dica: q.dica,
         explicacao: q.explicacao,
+        assunto_id: assuntoId,
       });
 
       for (const alt of q.alternativas) {
@@ -1026,15 +1035,36 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
   const banco_questoes: BancoQuestao[] = [];
   const banco_alternativas: BancoAlternativa[] = [];
 
+  const assuntosPadraoDemo = [
+    { id: 'assunto-mat-frac', disciplina_id: 'disc-mat', nome: 'Frações' },
+    { id: 'assunto-mat-porc', disciplina_id: 'disc-mat', nome: 'Porcentagem' },
+    { id: 'assunto-mat-int', disciplina_id: 'disc-mat', nome: 'Números Inteiros' },
+    { id: 'assunto-mat-geo', disciplina_id: 'disc-mat', nome: 'Geometria Básica' },
+    { id: 'assunto-cien-dig', disciplina_id: 'disc-cien', nome: 'Digestão e Nutrição' },
+    { id: 'assunto-port-interp', disciplina_id: 'disc-port', nome: 'Leitura e Interpretação' },
+  ];
+
+  for (const ass of assuntosPadraoDemo) {
+    assuntos.push({
+      id: ass.id,
+      created_at: agora,
+      escola_id: escolaId,
+      disciplina_id: ass.disciplina_id,
+      nome: ass.nome,
+    });
+  }
+
   if (dadosDemo.assuntos) {
     for (const ass of dadosDemo.assuntos) {
-      assuntos.push({
-        id: ass.id,
-        created_at: agora,
-        escola_id: escolaId,
-        disciplina_id: ass.disciplina_id,
-        nome: ass.nome,
-      });
+      if (!assuntos.some((a) => a.id === ass.id)) {
+        assuntos.push({
+          id: ass.id,
+          created_at: agora,
+          escola_id: escolaId,
+          disciplina_id: ass.disciplina_id,
+          nome: ass.nome,
+        });
+      }
     }
   }
 

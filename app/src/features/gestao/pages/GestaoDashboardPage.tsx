@@ -18,6 +18,7 @@ import {
   HelpCircle,
   Megaphone,
   Database,
+  ClipboardList,
 } from 'lucide-react';
 
 import { GestaoInicioSecao } from '../components/GestaoInicioSecao';
@@ -30,6 +31,7 @@ import { GestaoEscolaSecao } from '../components/GestaoEscolaSecao';
 import { GestaoDesempenhoSecao } from '../components/GestaoDesempenhoSecao';
 import { GestaoAlunosAtencaoSecao } from '../components/GestaoAlunosAtencaoSecao';
 import { GestaoQuestoesCriticasSecao } from '../components/GestaoQuestoesCriticasSecao';
+import { GestaoConselhoSecao } from '../components/GestaoConselhoSecao';
 import { GestaoMuralSecao } from '../components/GestaoMuralSecao';
 import { GestaoBancoSecao } from '../components/GestaoBancoSecao';
 
@@ -43,6 +45,7 @@ type SecaoGestao =
   | 'desempenho'
   | 'atencao'
   | 'questoes_criticas'
+  | 'conselho'
   | 'mural'
   | 'bimestres'
   | 'escola';
@@ -86,6 +89,11 @@ export const GestaoDashboardPage: React.FC = () => {
       id: 'questoes_criticas',
       label: 'Questões Críticas',
       icon: <HelpCircle className="w-4 h-4" />,
+    },
+    {
+      id: 'conselho',
+      label: 'Conselho de Professores',
+      icon: <ClipboardList className="w-4 h-4" />,
     },
     {
       id: 'banco',
@@ -225,6 +233,7 @@ export const GestaoDashboardPage: React.FC = () => {
             {secaoAtiva === 'desempenho' && <GestaoDesempenhoSecao />}
             {secaoAtiva === 'atencao' && <GestaoAlunosAtencaoSecao />}
             {secaoAtiva === 'questoes_criticas' && <GestaoQuestoesCriticasSecao />}
+            {secaoAtiva === 'conselho' && <GestaoConselhoSecao />}
             {secaoAtiva === 'banco' && <GestaoBancoSecao />}
             {secaoAtiva === 'mural' && <GestaoMuralSecao />}
             {secaoAtiva === 'turmas' && <GestaoTurmasSecao />}

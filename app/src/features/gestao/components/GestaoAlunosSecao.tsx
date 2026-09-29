@@ -7,7 +7,6 @@ import {
   Button,
   Input,
   Modal,
-  ConfirmDialog,
   useToast,
 } from '@/components/ui';
 import {
@@ -54,6 +53,7 @@ export const GestaoAlunosSecao: React.FC = () => {
   const [modalNovoAberto, setModalNovoAberto] = useState(false);
   const [novoNome, setNovoNome] = useState('');
   const [novoNumero, setNovoNumero] = useState<number>(1);
+  const [novoPin, setNovoPin] = useState('');
   const [salvandoNovo, setSalvandoNovo] = useState(false);
   const [erroNovo, setErroNovo] = useState<string | null>(null);
 
@@ -75,6 +75,9 @@ export const GestaoAlunosSecao: React.FC = () => {
   // Reset Individual
   const [alunoParaResetPin, setAlunoParaResetPin] = useState<AlunoPublico | null>(null);
   const [resetandoPinIndividual, setResetandoPinIndividual] = useState(false);
+  const [modoResetPin, setModoResetPin] = useState<'manual' | 'automatico'>('manual');
+  const [resetPinValor, setResetPinValor] = useState('');
+  const [erroResetPin, setErroResetPin] = useState<string | null>(null);
 
   // Reset Geral de Turma
   const [modalResetGeralAberto, setModalResetGeralAberto] = useState(false);
@@ -154,6 +157,7 @@ export const GestaoAlunosSecao: React.FC = () => {
     const proximoNumero = alunos.reduce((max, a) => (a.numero_chamada > max ? a.numero_chamada : max), 0) + 1;
     setNovoNome('');
     setNovoNumero(proximoNumero);
+    setNovoPin('');
     setErroNovo(null);
     setModalNovoAberto(true);
   };
@@ -169,6 +173,12 @@ export const GestaoAlunosSecao: React.FC = () => {
       return;
     }
 
+    const pinLimpo = novoPin.trim();
+    if (pinLimpo && !/^\d{4}$/.test(pinLimpo)) {
+      setErroNovo('O PIN deve conter exatamente 4 números (ou deixe em branco para gerar automaticamente).');
+      return;
+    }
+
     setSalvandoNovo(true);
     setErroNovo(null);
     try {
@@ -178,6 +188,7 @@ export const GestaoAlunosSecao: React.FC = () => {
         nome_completo: novoNome.trim(),
         numero_chamada: novoNumero,
         ativo: true,
+        pin: pinLimpo || undefined,
       });
 
       toast.success('Aluno cadastrado com sucesso!');
@@ -276,13 +287,36 @@ export const GestaoAlunosSecao: React.FC = () => {
   };
 
   // Resetar PIN Individual
-  const handleConfirmarResetIndividual = async () => {
+  const abrirResetPinAluno = (aluno: AlunoPublico) => {
+    setAlunoParaResetPin(aluno);
+    setModoResetPin('automatico');
+    setResetPinValor('');
+    setErroResetPin(null);
+  };
+
+  const handleConfirmarResetIndividual = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!alunoParaResetPin) return;
 
+    const pinCustomizado = modoResetPin === 'manual' ? resetPinValor.trim() : undefined;
+    if (modoResetPin === 'manual') {
+      if (!pinCustomizado) {
+        setErroResetPin('Informe o novo PIN de 4 números ou selecione a opção "Gerar Automático".');
+        return;
+      }
+      if (!/^\d{4}$/.test(pinCustomizado)) {
+        setErroResetPin('O PIN deve conter exatamente 4 números.');
+        return;
+      }
+    }
+
     setResetandoPinIndividual(true);
+    setErroResetPin(null);
     try {
-      const res = await gestaoService.gerarOuResetarPin(alunoParaResetPin.id);
-      toast.success(`Novo PIN gerado para ${alunoParaResetPin.nome_completo}`);
+      const res = await gestaoService.gerarOuResetarPin(alunoParaResetPin.id, pinCustomizado);
+      toast.success(
+        `Novo PIN ${modoResetPin === 'manual' ? 'definido' : 'gerado'} para ${alunoParaResetPin.nome_completo}`
+      );
       const item: PinGeradoItem = {
         aluno: alunoParaResetPin,
         pin_puro: res.pin_puro,
@@ -291,7 +325,9 @@ export const GestaoAlunosSecao: React.FC = () => {
       setPinsGerados([item]);
       setModalPinsAberto(true);
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao resetar PIN.');
+      const msg = err instanceof Error ? err.message : 'Erro ao resetar PIN.';
+      setErroResetPin(msg);
+      toast.error(msg);
     } finally {
       setResetandoPinIndividual(false);
     }
@@ -533,7 +569,7 @@ export const GestaoAlunosSecao: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setAlunoParaResetPin(aluno)}
+                      onClick={() => abrirResetPinAluno(aluno)}
                       className="text-xs flex items-center gap-1.5 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
                       title="Gerar novo PIN"
                     >
@@ -586,9 +622,21 @@ export const GestaoAlunosSecao: React.FC = () => {
             disabled={salvandoNovo}
           />
 
-          <p className="text-xs text-slate-500">
-            Um PIN de 4 dígitos será gerado automaticamente após a criação.
-          </p>
+          <Input
+            label="PIN de Acesso (4 dígitos numéricos)"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={4}
+            value={novoPin}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+              setNovoPin(val);
+            }}
+            placeholder="Ex: 1234 (opcional)"
+            disabled={salvandoNovo}
+            helperText="Deixe em branco para gerar automaticamente ou digite 4 números para definir agora."
+          />
 
           {erroNovo && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs">
@@ -724,18 +772,120 @@ export const GestaoAlunosSecao: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Diálogo Confirmar Reset Individual */}
-      <ConfirmDialog
+      {/* Modal Resetar PIN Individual */}
+      <Modal
         isOpen={!!alunoParaResetPin}
-        onClose={() => setAlunoParaResetPin(null)}
-        onConfirm={handleConfirmarResetIndividual}
-        title="Resetar PIN do Aluno"
-        message={`Deseja gerar um novo PIN de acesso para "${alunoParaResetPin?.nome_completo}"? O PIN anterior deixará de funcionar imediatamente.`}
-        confirmText={resetandoPinIndividual ? 'Gerando...' : 'Gerar Novo PIN'}
-        cancelText="Cancelar"
-        variant="primary"
-        isLoading={resetandoPinIndividual}
-      />
+        onClose={() => !resetandoPinIndividual && setAlunoParaResetPin(null)}
+        title={`Resetar PIN — ${alunoParaResetPin?.nome_completo || ''}`}
+      >
+        <form onSubmit={handleConfirmarResetIndividual} className="space-y-4">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Atenção ao redefinir</p>
+              <p className="text-amber-800 mt-0.5">
+                O PIN anterior de <strong>{alunoParaResetPin?.nome_completo}</strong> deixará de funcionar imediatamente.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-xs font-semibold text-slate-700">
+              Como deseja definir o novo PIN?
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setModoResetPin('manual');
+                  setErroResetPin(null);
+                }}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  modoResetPin === 'manual'
+                    ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20 text-indigo-900 font-semibold'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                }`}
+              >
+                <div className="text-xs font-bold">Criar PIN Manual</div>
+                <div className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  A diretora digita o PIN
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setModoResetPin('automatico');
+                  setErroResetPin(null);
+                }}
+                className={`p-3 rounded-xl border text-left transition-all ${
+                  modoResetPin === 'automatico'
+                    ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20 text-indigo-900 font-semibold'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                }`}
+              >
+                <div className="text-xs font-bold">Gerar Automático</div>
+                <div className="text-[11px] text-slate-500 font-normal mt-0.5">
+                  Sistema sorteia 4 dígitos
+                </div>
+              </button>
+            </div>
+
+            {modoResetPin === 'manual' ? (
+              <div className="space-y-1 pt-1">
+                <Input
+                  label="Novo PIN (4 dígitos numéricos)"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={4}
+                  value={resetPinValor}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setResetPinValor(val);
+                    setErroResetPin(null);
+                  }}
+                  placeholder="Ex: 5678"
+                  autoFocus
+                  required
+                  disabled={resetandoPinIndividual}
+                  helperText="Informe exatamente 4 números para o novo PIN do aluno."
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                Um novo PIN de 4 dígitos será gerado aleatoriamente e exibido na tela a seguir para cópia e impressão.
+              </p>
+            )}
+          </div>
+
+          {erroResetPin && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs">
+              {erroResetPin}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAlunoParaResetPin(null)}
+              disabled={resetandoPinIndividual}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={resetandoPinIndividual}
+              className="flex items-center gap-2"
+            >
+              {resetandoPinIndividual && <Loader2 className="w-4 h-4 animate-spin" />}
+              {resetandoPinIndividual ? 'Redefinindo...' : 'Gerar Novo PIN'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Modal Reset Geral da Turma (Exige digitar o nome da turma) */}
       <Modal

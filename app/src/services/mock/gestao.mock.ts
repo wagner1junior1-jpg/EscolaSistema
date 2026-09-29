@@ -304,15 +304,27 @@ export class MockGestaoService implements GestaoService {
   }
 
   async cadastrarAluno(
-    dados: Omit<Aluno, 'id' | 'created_at' | 'pin_hash'>
+    dados: Omit<Aluno, 'id' | 'created_at' | 'pin_hash'> & { pin?: string }
   ): Promise<{ aluno: AlunoPublico; pin_puro: string }> {
     await exigirUsuario(['direcao', 'coordenacao']);
     const db = await getDatabase();
-    const pinPuro = gerarPin4Digitos();
+
+    let pinPuro: string;
+    if (dados.pin !== undefined && dados.pin !== null && dados.pin.trim() !== '') {
+      const pinLimpo = dados.pin.trim();
+      if (!/^\d{4}$/.test(pinLimpo)) {
+        throw new Error('O PIN deve conter exatamente 4 dígitos numéricos.');
+      }
+      pinPuro = pinLimpo;
+    } else {
+      pinPuro = gerarPin4Digitos();
+    }
+
     const pinHash = await hashPin(pinPuro);
+    const { pin: _pinInformado, ...dadosAluno } = dados;
 
     const novoAluno: Aluno = {
-      ...dados,
+      ...dadosAluno,
       id: gerarId('aluno'),
       created_at: new Date().toISOString(),
       pin_hash: pinHash,
@@ -384,13 +396,23 @@ export class MockGestaoService implements GestaoService {
     return toAlunoPublico(aluno);
   }
 
-  async gerarOuResetarPin(alunoId: string): Promise<{ pin_puro: string }> {
+  async gerarOuResetarPin(alunoId: string, novoPin?: string): Promise<{ pin_puro: string }> {
     await exigirUsuario(['direcao', 'coordenacao']);
     const db = await getDatabase();
     const aluno = db.alunos.find((a) => a.id === alunoId);
     if (!aluno) throw new Error('Aluno não encontrado.');
 
-    const pinPuro = gerarPin4Digitos();
+    let pinPuro: string;
+    if (novoPin !== undefined && novoPin !== null && novoPin.trim() !== '') {
+      const pinLimpo = novoPin.trim();
+      if (!/^\d{4}$/.test(pinLimpo)) {
+        throw new Error('O PIN deve conter exatamente 4 dígitos numéricos.');
+      }
+      pinPuro = pinLimpo;
+    } else {
+      pinPuro = gerarPin4Digitos();
+    }
+
     aluno.pin_hash = await hashPin(pinPuro);
 
     saveDatabase(db);

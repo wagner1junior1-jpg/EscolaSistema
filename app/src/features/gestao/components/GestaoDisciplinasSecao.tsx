@@ -11,7 +11,8 @@ import {
   useToast,
 } from '@/components/ui';
 import { gestaoService, Disciplina } from '@/services';
-import { BookOpen, Plus, Trash2, Loader2, AlertCircle, Search } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Loader2, AlertCircle, Search, Layers } from 'lucide-react';
+import { ModalGerenciarSubmaterias } from '@/features/professor/components/ModalGerenciarSubmaterias';
 
 export const GestaoDisciplinasSecao: React.FC = () => {
   const toast = useToast();
@@ -32,6 +33,9 @@ export const GestaoDisciplinasSecao: React.FC = () => {
   // Modal Excluir
   const [disciplinaParaExcluir, setDisciplinaParaExcluir] = useState<Disciplina | null>(null);
   const [excluindo, setExcluindo] = useState(false);
+
+  // Modal Submatérias da Disciplina
+  const [disciplinaSubmaterias, setDisciplinaSubmaterias] = useState<Disciplina | null>(null);
 
   const carregarDisciplinas = useCallback(async () => {
     setCarregando(true);
@@ -192,6 +196,16 @@ export const GestaoDisciplinasSecao: React.FC = () => {
 
                   <div className="flex items-center gap-2">
                     <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDisciplinaSubmaterias(disc)}
+                      className="text-xs font-semibold text-indigo-700 border-indigo-200 hover:bg-indigo-50 flex items-center gap-1.5"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Submatérias</span>
+                    </Button>
+
+                    <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => setDisciplinaParaExcluir(disc)}
@@ -255,6 +269,16 @@ export const GestaoDisciplinasSecao: React.FC = () => {
         variant="danger"
         isLoading={excluindo}
       />
+
+      {/* Modal Gerenciar Submatérias da Disciplina */}
+      {disciplinaSubmaterias && (
+        <ModalGerenciarSubmaterias
+          aberto={!!disciplinaSubmaterias}
+          onFechar={() => setDisciplinaSubmaterias(null)}
+          disciplinaId={disciplinaSubmaterias.id}
+          disciplinaNome={disciplinaSubmaterias.nome}
+        />
+      )}
     </div>
   );
 };

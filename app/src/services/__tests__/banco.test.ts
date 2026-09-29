@@ -344,4 +344,111 @@ describe('Banco de Questões — Regras e Isolamento (Fase H1)', () => {
       })
     ).rejects.toThrow('Esta questão foi alterada por outro usuário ou em outra aba. Recarregue a página.');
   });
+
+  // 10. Submatérias compartilhadas entre professores da mesma matéria
+  it('submatéria criada por um professor vira filtro e fica disponível para outros professores da matéria', async () => {
+    // 1. Ana (professora de Matemática) cadastra a submatéria "Geometria Espacial"
+    await authService.login('ana@demo.com', 'demo123');
+    const novaSubmateria = await bancoService.criarAssunto('disc-mat', 'Geometria Espacial');
+    expect(novaSubmateria.id).toBeDefined();
+    expect(novaSubmateria.nome).toBe('Geometria Espacial');
+
+    // Ana cria uma questão vinculada à nova submatéria
+    const qAna = await bancoService.salvarQuestaoBanco({
+      disciplina_id: 'disc-mat',
+      serie: '7º Ano',
+      assunto_id: novaSubmateria.id,
+      dificuldade: 'facil',
+      enunciado: 'Qual a definição de um prisma reto?',
+      alternativas: [
+        { letra: 'A', texto: 'Poliedro com bases paralelas congruentes e faces laterais retangulares', correta: true },
+        { letra: 'B', texto: 'Uma pirâmide', correta: false, por_que_errou: 'Pirâmides possuem vértice comum' },
+      ],
+    });
+    expect(qAna.id).toBeDefined();
+
+    // 2. Cria oferta para a Profª Paula também no 7º Ano de Matemática
+    await authService.login('direcao@demo.com', 'demo123');
+    const profPaula = await gestaoService.convidarProfessor('paula2@demo.com', 'Profª Paula 2');
+    const t7c = await gestaoService.criarTurma({
+      escola_id: 'esc-001',
+      nome: '7º Ano C',
+      serie: '7º Ano',
+      segmento: 'fund2',
+      ano_letivo: 2026,
+      codigo_acesso: '7C-MAT',
+      ativa: true,
+    });
+    await gestaoService.criarOferta({
+      turma_id: t7c.id,
+      disciplina_id: 'disc-mat',
+      professor_id: profPaula.id,
+    });
+
+    // 3. Paula faz login e lista os assuntos de Matemática
+    await authService.login('paula2@demo.com', 'demo123');
+    const assuntosPaula = await bancoService.listarAssuntos('disc-mat');
+    const encontrouSubmateria = assuntosPaula.find((a) => a.id === novaSubmateria.id);
+    expect(encontrouSubmateria).toBeDefined();
+    expect(encontrouSubmateria?.nome).toBe('Geometria Espacial');
+
+    // 4. Paula filtra o Banco de Questões no escopo "Da escola" usando a submatéria criada pela Ana
+    const questoesFiltradas = await bancoService.listarBanco({
+      disciplina_id: 'disc-mat',
+      serie: '7º Ano',
+      assunto_id: novaSubmateria.id,
+      escopo: 'escola',
+    });
+
+    expect(questoesFiltradas.length).toBe(1);
+    expect(questoesFiltradas[0].id).toBe(qAna.id);
+    expect(questoesFiltradas[0].enunciado).toBe('Qual a definição de um prisma reto?');
+  });
+
+  // 11. Renomeação e proteção na exclusão de submatérias com questões
+  it('renomeia submatéria e impede exclusão caso existam questões vinculadas', async () => {
+    await authService.login('ana@demo.com', 'demo123');
+
+    // Cria submatéria temporária
+    const subTemp = await bancoService.criarAssunto('disc-mat', 'Trigonometria Básica');
+    expect(subTemp.nome).toBe('Trigonometria Básica');
+
+    // Renomeia para nome corrigido
+    const subRenomeada = await bancoService.renomearAssunto(subTemp.id, 'Trigonometria no Triângulo Retângulo');
+    expect(subRenomeada.nome).toBe('Trigonometria no Triângulo Retângulo');
+
+    // Cria questão vinculada a essa submatéria
+    await bancoService.salvarQuestaoBanco({
+      disciplina_id: 'disc-mat',
+      serie: '7º Ano',
+      assunto_id: subRenomeada.id,
+      dificuldade: 'medio',
+      enunciado: 'O que é o cateto oposto?',
+      alternativas: [
+        { letra: 'A', texto: 'Lado oposto ao ângulo considerado', correta: true },
+        { letra: 'B', texto: 'Hipotenusa', correta: false, por_que_errou: 'É o maior lado' },
+      ],
+    });
+
+    // Tentativa de exclusão deve falhar porque existe questão vinculada
+    await expect(bancoService.excluirAssunto(subRenomeada.id)).rejects.toThrow(
+      /Não é possível excluir esta submatéria pois existem \d+ questão\(ões\) vinculada\(s\) no Banco/
+    );
+
+    // Cria outra submatéria vazia e testa exclusão permitida
+    const subVazia = await bancoService.criarAssunto('disc-mat', 'Submatéria Sem Questões');
+    await expect(bancoService.excluirAssunto(subVazia.id)).resolves.not.toThrow();
+
+    const assuntosAtualizados = await bancoService.listarAssuntos('disc-mat');
+    expect(assuntosAtualizados.some((a) => a.id === subVazia.id)).toBe(false);
+  });
+
+  // 12. Contagem de questões por submatéria
+  it('contarQuestoesPorAssunto contabiliza questões ativas por submatéria corretamente', async () => {
+    await authService.login('ana@demo.com', 'demo123');
+    const contagens = await bancoService.contarQuestoesPorAssunto('disc-mat');
+    expect(typeof contagens).toBe('object');
+    // Deve haver contagens numéricas para os assuntos de Matemática
+    expect(Object.values(contagens).every((c) => typeof c === 'number' && c >= 0)).toBe(true);
+  });
 });
