@@ -29,6 +29,9 @@ import {
   FichaAlunoAtividadeItem,
   FichaAlunoQuestaoItem,
   ItemCorrecaoPendente,
+  AlunoObservacao,
+  DesempenhoAlunoMateriaItem,
+  AlunoComDesempenhoResumo,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { gerarId } from './ids';
@@ -786,25 +789,42 @@ export class MockProfessorService implements ProfessorService {
     };
   }
 
-  async fichaAluno(ofertaId: string, alunoId: string): Promise<FichaAluno> {
-    await this.validarAcessoLeituraOferta(ofertaId);
+  async fichaAluno(ofertaIdOuAlunoId: string, alunoId?: string): Promise<FichaAluno> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
     const db = await getDatabase();
-    const oferta = db.ofertas.find((o) => o.id === ofertaId);
-    if (!oferta) throw new Error('Oferta não encontrada.');
 
-    const turma = db.turmas.find((t) => t.id === oferta.turma_id);
-    const disciplina = db.disciplinas.find((d) => d.id === oferta.disciplina_id);
-    const aluno = db.alunos.find((a) => a.id === alunoId);
+    let realOfertaId = alunoId ? ofertaIdOuAlunoId : '';
+    const realAlunoId = alunoId ? alunoId : ofertaIdOuAlunoId;
+
+    const aluno = db.alunos.find((a) => a.id === realAlunoId);
     if (!aluno) throw new Error('Aluno não encontrado.');
 
-    if (aluno.turma_id !== oferta.turma_id) {
+    if (!realOfertaId) {
+      const ofertaDoProf = db.ofertas.find(
+        (o) => o.turma_id === aluno.turma_id && (usuario.papel !== 'professor' || o.professor_id === usuario.id)
+      );
+      const qualquerOferta = db.ofertas.find((o) => o.turma_id === aluno.turma_id);
+      realOfertaId = ofertaDoProf ? ofertaDoProf.id : qualquerOferta ? qualquerOferta.id : '';
+    }
+
+    const oferta = realOfertaId ? db.ofertas.find((o) => o.id === realOfertaId) : null;
+    if (realOfertaId) {
+      await this.validarAcessoLeituraOferta(realOfertaId);
+    }
+
+    const turma = db.turmas.find((t) => t.id === aluno.turma_id);
+    const disciplina = oferta ? db.disciplinas.find((d) => d.id === oferta.disciplina_id) : null;
+
+    if (oferta && aluno.turma_id !== oferta.turma_id) {
       throw new Error('O aluno não pertence à turma desta oferta.');
     }
 
     // Atividades publicadas ou encerradas da oferta
-    const atividades = db.atividades
-      .filter((a) => a.oferta_id === ofertaId && (a.status === 'publicada' || a.status === 'encerrada'))
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const atividades = oferta
+      ? db.atividades
+          .filter((a) => a.oferta_id === oferta.id && (a.status === 'publicada' || a.status === 'encerrada'))
+          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      : [];
 
     let somaAcertosMedia = 0;
     let somaQuestoesMedia = 0;
@@ -822,7 +842,7 @@ export class MockProfessorService implements ProfessorService {
 
       for (const q of questoes) {
         const r = db.respostas.find(
-          (resp) => resp.aluno_id === alunoId && resp.questao_id === q.id
+          (resp) => resp.aluno_id === aluno.id && resp.questao_id === q.id
         );
         const corretaAlt = db.alternativas.find((alt) => alt.questao_id === q.id && alt.correta);
 
@@ -886,14 +906,234 @@ export class MockProfessorService implements ProfessorService {
     const faixa = faixaDesempenho(mediaPeriodo);
     const { pin_hash, ...alunoPublico } = aluno;
 
+    const desempenhoMaterias = await this.desempenhoAlunoPorMaterias(aluno.id);
+    const observacoes = await this.listarObservacoesAluno(aluno.id);
+
     return {
       aluno: alunoPublico,
       turma_nome: turma?.nome || 'Turma',
-      disciplina_nome: disciplina?.nome || 'Disciplina',
+      disciplina_nome: disciplina?.nome || 'Todas as matérias',
       atividades: atividadesFicha,
       media_periodo: mediaPeriodo,
       faixa,
+      desempenho_materias: desempenhoMaterias,
+      observacoes,
     };
+  }
+
+  async listarAlunosPorSerie(serie: string): Promise<AlunoComDesempenhoResumo[]> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
+    const db = await getDatabase();
+
+    let ofertasValidas = db.ofertas;
+    if (usuario.papel === 'professor') {
+      ofertasValidas = db.ofertas.filter((o) => o.professor_id === usuario.id);
+    }
+
+    const turmaIdsDoProf = new Set(ofertasValidas.map((o) => o.turma_id));
+    const turmasDaSerie = db.turmas.filter((t) => {
+      const serieMatch = (t.serie || 'Outras turmas') === serie;
+      return serieMatch && turmaIdsDoProf.has(t.id) && t.ativa;
+    });
+
+    const turmaIdsSerie = new Set(turmasDaSerie.map((t) => t.id));
+    const alunosDaSerie = db.alunos.filter((a) => turmaIdsSerie.has(a.turma_id) && a.ativo);
+
+    alunosDaSerie.sort((a, b) => {
+      const turmaA = db.turmas.find((t) => t.id === a.turma_id)?.nome || '';
+      const turmaB = db.turmas.find((t) => t.id === b.turma_id)?.nome || '';
+      const cmp = turmaA.localeCompare(turmaB, 'pt-BR');
+      if (cmp !== 0) return cmp;
+      return a.numero_chamada - b.numero_chamada;
+    });
+
+    const resultado: AlunoComDesempenhoResumo[] = [];
+
+    for (const aluno of alunosDaSerie) {
+      const turma = turmasDaSerie.find((t) => t.id === aluno.turma_id);
+      const materias = await this.desempenhoAlunoPorMaterias(aluno.id);
+      const observacoes = (db.aluno_observacoes || []).filter((obs) => obs.aluno_id === aluno.id);
+      observacoes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+      let somaAcertos = 0;
+      let somaQuestoes = 0;
+      materias.forEach((m) => {
+        somaAcertos += m.soma_acertos;
+        somaQuestoes += m.soma_questoes;
+      });
+      const mediaGeral = calcularMediaPeriodo(somaAcertos, somaQuestoes);
+      const faixaGeral = faixaDesempenho(mediaGeral);
+
+      const { pin_hash, ...alunoPublico } = aluno;
+
+      resultado.push({
+        aluno: alunoPublico,
+        turma_id: aluno.turma_id,
+        turma_nome: turma?.nome || 'Turma',
+        turma_serie: turma?.serie || serie,
+        materias,
+        media_geral: mediaGeral,
+        faixa_geral: faixaGeral,
+        ultima_observacao: observacoes[0] || null,
+        total_observacoes: observacoes.length,
+      });
+    }
+
+    return resultado;
+  }
+
+  async desempenhoAlunoPorMaterias(
+    alunoId: string,
+    periodoId?: string
+  ): Promise<DesempenhoAlunoMateriaItem[]> {
+    await exigirUsuario(['professor', 'direcao', 'coordenacao']);
+    const db = await getDatabase();
+    const aluno = db.alunos.find((a) => a.id === alunoId);
+    if (!aluno) throw new Error('Aluno não encontrado.');
+
+    const turma = db.turmas.find((t) => t.id === aluno.turma_id);
+    if (!turma) throw new Error('Turma não encontrada.');
+
+    const periodo = periodoId
+      ? db.periodos.find((p) => p.id === periodoId)
+      : db.periodos.find((p) => p.escola_id === turma.escola_id && p.ativo) || db.periodos[0];
+
+    const periodoFinalId = periodo ? periodo.id : '';
+    const ofertasTurma = db.ofertas.filter((o) => o.turma_id === turma.id);
+    const respostasDoAluno = db.respostas.filter((r) => r.aluno_id === alunoId);
+
+    const resultado: DesempenhoAlunoMateriaItem[] = [];
+
+    for (const of of ofertasTurma) {
+      const disc = db.disciplinas.find((d) => d.id === of.disciplina_id);
+      const prof = db.perfis.find((p) => p.id === of.professor_id);
+
+      const ativs = db.atividades.filter(
+        (a) =>
+          a.oferta_id === of.id &&
+          (!periodoFinalId || a.periodo_id === periodoFinalId) &&
+          (a.status === 'publicada' || a.status === 'encerrada')
+      );
+
+      const { media, atividades_avaliadas, soma_acertos, soma_questoes } = mediaDoAlunoNasAtividades(
+        ativs,
+        db.questoes,
+        respostasDoAluno
+      );
+      const faixa = faixaDesempenho(media);
+
+      resultado.push({
+        disciplina_id: of.disciplina_id,
+        disciplina_nome: disc?.nome || 'Disciplina',
+        professor_nome: prof?.nome || 'Professor(a)',
+        oferta_id: of.id,
+        media,
+        faixa,
+        total_atividades: ativs.length,
+        atividades_concluidas: atividades_avaliadas,
+        soma_acertos,
+        soma_questoes,
+      });
+    }
+
+    return resultado;
+  }
+
+  async listarObservacoesAluno(alunoId: string): Promise<AlunoObservacao[]> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
+    const db = await getDatabase();
+
+    const aluno = db.alunos.find((a) => a.id === alunoId);
+    if (!aluno) throw new Error('Aluno não encontrado.');
+
+    if (usuario.papel === 'professor') {
+      const leciona = db.ofertas.some(
+        (o) => o.professor_id === usuario.id && o.turma_id === aluno.turma_id
+      );
+      if (!leciona) {
+        throw new Error('Você não tem permissão para esta ação.');
+      }
+    }
+
+    const observacoes = (db.aluno_observacoes || []).filter((obs) => obs.aluno_id === alunoId);
+    return observacoes.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  }
+
+  async salvarObservacaoAluno(alunoId: string, texto: string): Promise<AlunoObservacao> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
+    const db = await getDatabase();
+
+    const aluno = db.alunos.find((a) => a.id === alunoId);
+    if (!aluno) throw new Error('Aluno não encontrado.');
+
+    if (usuario.papel === 'professor') {
+      const leciona = db.ofertas.some(
+        (o) => o.professor_id === usuario.id && o.turma_id === aluno.turma_id
+      );
+      if (!leciona) {
+        throw new Error('Você não tem permissão para esta ação.');
+      }
+    }
+
+    if (!texto.trim()) {
+      throw new Error('A observação não pode ser vazia.');
+    }
+
+    if (!db.aluno_observacoes) {
+      db.aluno_observacoes = [];
+    }
+
+    const agora = new Date().toISOString();
+    const existente = db.aluno_observacoes.find(
+      (obs) => obs.aluno_id === alunoId && obs.professor_id === usuario.id
+    );
+
+    if (existente) {
+      existente.texto = texto.trim();
+      existente.updated_at = agora;
+      existente.professor_nome = usuario.nome;
+      saveDatabase(db);
+      return existente;
+    }
+
+    const nova: AlunoObservacao = {
+      id: gerarId('obs'),
+      aluno_id: alunoId,
+      professor_id: usuario.id,
+      professor_nome: usuario.nome,
+      texto: texto.trim(),
+      created_at: agora,
+      updated_at: agora,
+    };
+
+    db.aluno_observacoes.push(nova);
+    saveDatabase(db);
+    return nova;
+  }
+
+  async excluirObservacaoAluno(observacaoId: string): Promise<void> {
+    const usuario = await exigirUsuario(['professor', 'direcao', 'coordenacao']);
+    const db = await getDatabase();
+    if (!db.aluno_observacoes) return;
+
+    const obs = db.aluno_observacoes.find((o) => o.id === observacaoId);
+    if (!obs) throw new Error('Observação não encontrada.');
+
+    if (usuario.papel === 'professor') {
+      if (obs.professor_id !== usuario.id) {
+        throw new Error('Você só pode excluir suas próprias observações.');
+      }
+      const aluno = db.alunos.find((a) => a.id === obs.aluno_id);
+      const leciona = aluno && db.ofertas.some(
+        (o) => o.professor_id === usuario.id && o.turma_id === aluno.turma_id
+      );
+      if (!leciona) {
+        throw new Error('Você não tem permissão para esta ação.');
+      }
+    }
+
+    db.aluno_observacoes = db.aluno_observacoes.filter((o) => o.id !== observacaoId);
+    saveDatabase(db);
   }
 
   async listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]> {
@@ -981,6 +1221,9 @@ export class MockProfessorService implements ProfessorService {
         respondida_em: r.respondida_em,
         correcao: r.correcao as 'certo' | 'parcial' | 'errado',
         pontuacao: r.pontuacao ?? null,
+        nota: typeof r.pontuacao === 'number'
+          ? (r.pontuacao <= 1 ? Math.round(r.pontuacao * 100) : Math.round(r.pontuacao))
+          : (r.correcao === 'certo' ? 100 : r.correcao === 'parcial' ? 50 : r.correcao === 'errado' ? 0 : null),
         comentario_professor: r.comentario_professor ?? null,
         corrigido_em: r.corrigido_em ?? null,
       };
@@ -990,7 +1233,8 @@ export class MockProfessorService implements ProfessorService {
   async corrigirResposta(
     respostaId: string,
     correcao: 'certo' | 'parcial' | 'errado',
-    comentario?: string
+    comentario?: string,
+    nota?: number
   ): Promise<void> {
     const db = await getDatabase();
     const resposta = db.respostas.find((r) => r.id === respostaId);
@@ -1018,11 +1262,33 @@ export class MockProfessorService implements ProfessorService {
       throw new Error('O comentário do professor deve ter no máximo 500 caracteres.');
     }
 
-    const pontuacao = pontuacaoDaResposta(questao, { correcao });
+    if (nota !== undefined && nota !== null) {
+      if (typeof nota !== 'number' || isNaN(nota) || nota < 0 || nota > 100) {
+        throw new Error('A nota deve estar entre 0 e 100.');
+      }
+    }
+
+    // Se nota for passada, calcula pontuação proporcional (0..1) e deriva a classificação
+    let pontuacaoFinal: number | null;
+    let correcaoFinal = correcao;
+
+    if (typeof nota === 'number') {
+      pontuacaoFinal = Math.round((nota / 100) * 100) / 100;
+      if (nota === 100) {
+        correcaoFinal = 'certo';
+      } else if (nota === 0) {
+        correcaoFinal = 'errado';
+      } else {
+        correcaoFinal = 'parcial';
+      }
+    } else {
+      pontuacaoFinal = pontuacaoDaResposta(questao, { correcao });
+    }
+
     const agora = new Date().toISOString();
 
-    resposta.correcao = correcao;
-    resposta.pontuacao = pontuacao;
+    resposta.correcao = correcaoFinal;
+    resposta.pontuacao = pontuacaoFinal;
     resposta.comentario_professor = comentario ? comentario.trim() : null;
     resposta.corrigido_por = usuario.id;
     resposta.corrigido_em = agora;
