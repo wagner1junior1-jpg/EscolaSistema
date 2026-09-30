@@ -1811,8 +1811,8 @@ export const ProfessorAtividadePage: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Selecione a Submatéria *
+                  <label htmlFor="sorteio-assunto-select" className="block text-xs font-semibold text-slate-700">
+                    Selecione o Assunto *
                   </label>
                   <button
                     type="button"
@@ -1823,6 +1823,8 @@ export const ProfessorAtividadePage: React.FC = () => {
                   </button>
                 </div>
                 <Select
+                  id="sorteio-assunto-select"
+                  aria-label="Selecione o Assunto *"
                   value={sorteioAssuntoId}
                   onChange={(e) => setSorteioAssuntoId(e.target.value)}
                   options={assuntosOferta.map((a) => ({ value: a.id, label: a.nome }))}

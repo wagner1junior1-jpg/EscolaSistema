@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@/components/ui';
 import {
   professorService,
+  assinarMudancas,
   FichaAluno,
   LetraAlternativa,
 } from '@/services';
@@ -16,24 +17,37 @@ import {
   AlertCircle,
   Loader2,
   BookOpen,
+  MessageSquare,
+  FileEdit,
+  GraduationCap,
+  Clock,
 } from 'lucide-react';
+import { ModalObservacaoAluno } from '../components/ModalObservacaoAluno';
 
 export const ProfessorFichaAlunoPage: React.FC = () => {
-  const { ofertaId, alunoId } = useParams<{ ofertaId: string; alunoId: string }>();
+  const { ofertaId, alunoId } = useParams<{ ofertaId?: string; alunoId?: string }>();
   const navigate = useNavigate();
+
+  // Se a rota for /professor/aluno/:alunoId, o parâmetro alunoId vem preenchido
+  const idDoAluno = alunoId || '';
+  const idDaOferta = ofertaId || '';
 
   const [ficha, setFicha] = useState<FichaAluno | null>(null);
   const [mapaLetras, setMapaLetras] = useState<Record<string, Record<string, LetraAlternativa>>>({});
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [modalObsAberto, setModalObsAberto] = useState(false);
 
   const carregarFicha = useCallback(async () => {
-    if (!ofertaId || !alunoId) return;
+    if (!idDoAluno) return;
     setCarregando(true);
     setErro(null);
 
     try {
-      const fichaCarregada = await professorService.fichaAluno(ofertaId, alunoId);
+      const fichaCarregada = idDaOferta
+        ? await professorService.fichaAluno(idDaOferta, idDoAluno)
+        : await professorService.fichaAluno(idDoAluno);
+
       setFicha(fichaCarregada);
 
       // Busca dados estruturais das atividades para mapear letras de cada alternativa
@@ -64,10 +78,16 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
     } finally {
       setCarregando(false);
     }
-  }, [ofertaId, alunoId]);
+  }, [idDaOferta, idDoAluno]);
 
   useEffect(() => {
     carregarFicha();
+    const desassinar = assinarMudancas(() => {
+      carregarFicha();
+    });
+    return () => {
+      desassinar();
+    };
   }, [carregarFicha]);
 
   const obterLetra = (ativId: string, altId: string | null) => {
@@ -75,16 +95,24 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
     return mapaLetras[ativId]?.[altId] || null;
   };
 
+  const linkVoltar = idDaOferta
+    ? `/professor/oferta/${idDaOferta}?aba=desempenho`
+    : '/professor';
+
+  const textoVoltar = idDaOferta
+    ? 'Voltar para o Desempenho da Turma'
+    : 'Voltar para Minhas Turmas';
+
   return (
     <AppShell>
       <div className="space-y-6 pb-20">
         {/* Navegação Voltar */}
         <Link
-          to={`/professor/oferta/${ofertaId}?aba=desempenho`}
+          to={linkVoltar}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md py-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Voltar para o Desempenho</span>
+          <span>{textoVoltar}</span>
         </Link>
 
         {/* Estado de Carregamento */}
@@ -107,17 +135,18 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
             </div>
             <Button
               variant="outline"
-              onClick={() => navigate(`/professor/oferta/${ofertaId}?aba=desempenho`)}
+              onClick={() => navigate(linkVoltar)}
               className="mx-auto"
             >
-              Voltar para o Desempenho
+              {textoVoltar}
             </Button>
           </div>
         )}
 
-        {/* Cabeçalho do Aluno */}
+        {/* Conteúdo Principal do Aluno */}
         {!carregando && !erro && ficha && (
           <>
+            {/* 1. Cabeçalho do Aluno */}
             <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-7 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center shrink-0 shadow-xs">
@@ -138,11 +167,11 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Média e Faixa */}
+              {/* Média no Período e Faixa */}
               <div className="flex items-center gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 w-full sm:w-auto justify-between sm:justify-end">
                 <div className="text-right">
                   <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    Média no Período
+                    {idDaOferta ? 'Média na Matéria' : 'Média Geral'}
                   </div>
                   <div className="font-heading font-black text-2xl text-slate-900">
                     {ficha.media_periodo !== null ? `${ficha.media_periodo}%` : '—'}
@@ -167,7 +196,161 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Lista de Atividades do Aluno */}
+            {/* 2. Média de Acerto de Cada Aluno por Matéria */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-7 shadow-xs space-y-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="w-5 h-5 text-indigo-600" />
+                  <h2 className="font-heading font-black text-lg text-slate-900">
+                    Média de Acerto por Matéria
+                  </h2>
+                </div>
+                <span className="text-xs text-slate-400 font-medium">
+                  Desempenho consolidado do aluno em todas as disciplinas da turma
+                </span>
+              </div>
+
+              {(!ficha.desempenho_materias || ficha.desempenho_materias.length === 0) ? (
+                <p className="text-xs text-slate-400 italic">
+                  Nenhuma disciplina com atividades avaliadas encontrada para este aluno.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                  {ficha.desempenho_materias.map((mat) => {
+                    const temMedia = mat.media !== null;
+                    const corBadge =
+                      mat.faixa === 'Ótimo'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : mat.faixa === 'Bom'
+                        ? 'bg-sky-50 text-sky-800 border-sky-200'
+                        : mat.faixa === 'Atenção'
+                        ? 'bg-rose-50 text-rose-800 border-rose-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200';
+
+                    const corBarra =
+                      mat.faixa === 'Ótimo'
+                        ? 'bg-emerald-500'
+                        : mat.faixa === 'Bom'
+                        ? 'bg-sky-500'
+                        : mat.faixa === 'Atenção'
+                        ? 'bg-rose-500'
+                        : 'bg-slate-300';
+
+                    return (
+                      <div
+                        key={mat.disciplina_id}
+                        className="p-4 rounded-xl border border-slate-200/90 bg-slate-50/50 space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h3 className="font-heading font-bold text-sm text-slate-900 leading-snug">
+                              {mat.disciplina_nome}
+                            </h3>
+                            <span className="text-[11px] text-slate-400 block mt-0.5">
+                              {mat.professor_nome}
+                            </span>
+                          </div>
+
+                          <span
+                            className={`font-mono font-black text-sm px-2.5 py-0.5 rounded-lg border ${corBadge}`}
+                          >
+                            {temMedia ? `${mat.media}%` : '—'}
+                          </span>
+                        </div>
+
+                        {/* Barra de Progresso do Aproveitamento */}
+                        <div className="space-y-1">
+                          <div className="w-full bg-slate-200/80 rounded-full h-2 overflow-hidden">
+                            <div
+                              className={`h-2 rounded-full transition-all duration-500 ${corBarra}`}
+                              style={{ width: `${mat.media ?? 0}%` }}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                            <span>
+                              {mat.atividades_concluidas} de {mat.total_atividades}{' '}
+                              {mat.total_atividades === 1 ? 'atividade' : 'atividades'}
+                            </span>
+                            <span className="font-semibold">{mat.faixa}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Seção de Observações Pedagógicas do Aluno */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-6 sm:p-7 shadow-xs space-y-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-indigo-600" />
+                  <h2 className="font-heading font-black text-lg text-slate-900">
+                    Observações Pedagógicas do Aluno
+                  </h2>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<FileEdit className="w-4 h-4 text-indigo-600" />}
+                  onClick={() => setModalObsAberto(true)}
+                  className="font-semibold text-xs"
+                >
+                  Registrar / Editar Observação
+                </Button>
+              </div>
+
+              {(!ficha.observacoes || ficha.observacoes.length === 0) ? (
+                <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center space-y-2">
+                  <p className="text-xs text-slate-500">
+                    Nenhuma observação registrada para este aluno até o momento.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FileEdit className="w-3.5 h-3.5" />}
+                    onClick={() => setModalObsAberto(true)}
+                    className="text-xs"
+                  >
+                    Adicionar a primeira observação
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {ficha.observacoes.map((obs) => (
+                    <div
+                      key={obs.id}
+                      className="p-4 rounded-xl bg-amber-50/50 border border-amber-200/70 text-xs text-slate-700 space-y-2"
+                    >
+                      <div className="flex items-center justify-between text-slate-400 gap-2 flex-wrap">
+                        <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-indigo-600" />
+                          {obs.professor_nome}
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                          <Clock className="w-3 h-3" />
+                          {new Date(obs.updated_at || obs.created_at).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="whitespace-pre-wrap leading-relaxed text-slate-800 text-xs sm:text-sm">
+                        {obs.texto}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 4. Lista de Atividades do Aluno */}
             <div className="space-y-6">
               <h2 className="font-heading font-black text-xl text-slate-900 tracking-tight">
                 Atividades Realizadas ({ficha.atividades.length})
@@ -177,10 +360,10 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                 <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center space-y-3">
                   <BookOpen className="w-10 h-10 text-slate-300 mx-auto" />
                   <h3 className="font-heading font-bold text-base text-slate-700">
-                    Nenhuma atividade avaliada
+                    Nenhuma atividade avaliada nesta oferta
                   </h3>
                   <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto">
-                    Não há registros de atividades concluídas ou em andamento para este aluno no período.
+                    Não há registros de atividades concluídas ou em andamento para este aluno nesta matéria.
                   </p>
                 </div>
               ) : (
@@ -238,7 +421,6 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                         const letraCorreta = obterLetra(ativ.atividade_id, q.alternativa_correta_id);
                         const semResposta = isDiscursiva ? !q.texto_resposta : !q.alternativa_escolhida_id;
 
-                        // Condição do selo de retentativa
                         const temRetentativa = !isDiscursiva && q.tentativas > 1 && q.acertou_final;
 
                         let borderBg = 'border-slate-200 bg-slate-50/50';
@@ -268,36 +450,45 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
 
                                   {isDiscursiva ? (
                                     <>
-                                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">
-                                        Discursiva
-                                      </span>
-                                      {q.correcao === 'certo' && (
-                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
-                                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                                          <span>Certo (100%)</span>
-                                        </span>
-                                      )}
-                                      {q.correcao === 'parcial' && (
-                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800">
-                                          <AlertCircle className="w-4 h-4 text-amber-600" />
-                                          <span>Parcial (50%)</span>
-                                        </span>
-                                      )}
-                                      {q.correcao === 'errado' && (
-                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
-                                          <XCircle className="w-4 h-4 text-rose-600" />
-                                          <span>Errado (0%)</span>
-                                        </span>
-                                      )}
-                                      {q.correcao === null && (
-                                        <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                                          <span>Aguardando correção</span>
-                                        </span>
-                                      )}
+                                      {(() => {
+                                        const notaDisc = typeof q.pontuacao_discursiva === 'number'
+                                          ? Math.round(q.pontuacao_discursiva <= 1 ? q.pontuacao_discursiva * 100 : q.pontuacao_discursiva)
+                                          : (q.correcao === 'certo' ? 100 : q.correcao === 'parcial' ? 50 : 0);
+
+                                        return (
+                                          <>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full">
+                                              Discursiva
+                                            </span>
+                                            {q.correcao === 'certo' && (
+                                              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
+                                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                                <span>Certo ({notaDisc}/100)</span>
+                                              </span>
+                                            )}
+                                            {q.correcao === 'parcial' && (
+                                              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800">
+                                                <AlertCircle className="w-4 h-4 text-amber-600" />
+                                                <span>Parcial ({notaDisc}/100)</span>
+                                              </span>
+                                            )}
+                                            {q.correcao === 'errado' && (
+                                              <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-700">
+                                                <XCircle className="w-4 h-4 text-rose-600" />
+                                                <span>Errado ({notaDisc}/100)</span>
+                                              </span>
+                                            )}
+                                            {q.correcao === null && (
+                                              <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                                                <span>Aguardando correção</span>
+                                              </span>
+                                            )}
+                                          </>
+                                        );
+                                      })()}
                                     </>
                                   ) : (
                                     <>
-                                      {/* Ícone de acerto/erro objetiva */}
                                       {q.acertou || q.acertou_final ? (
                                         <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700">
                                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -310,7 +501,6 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                                         </span>
                                       )}
 
-                                      {/* Selo: acertou na Nª tentativa */}
                                       {temRetentativa && (
                                         <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
                                           <Sparkles className="w-3 h-3 text-amber-600" />
@@ -327,11 +517,13 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                               </div>
                             </div>
 
-                            {/* Respostas discursivas ou objetivas */}
+                            {/* Detalhes da resposta */}
                             {isDiscursiva ? (
                               <div className="mt-3 pt-3 border-t border-slate-200/60 space-y-2">
                                 <div className="text-xs">
-                                  <span className="font-semibold text-slate-600 block mb-1">Resposta do aluno:</span>
+                                  <span className="font-semibold text-slate-600 block mb-1">
+                                    Resposta do aluno:
+                                  </span>
                                   <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs sm:text-sm text-slate-800 whitespace-pre-wrap">
                                     {q.texto_resposta ? (
                                       q.texto_resposta
@@ -351,7 +543,9 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                             ) : (
                               <div className="mt-3 pt-3 border-t border-slate-200/60 flex items-center gap-4 text-xs flex-wrap">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-semibold text-slate-500">Resposta do aluno:</span>
+                                  <span className="font-semibold text-slate-500">
+                                    Resposta do aluno:
+                                  </span>
                                   {semResposta ? (
                                     <span className="italic text-slate-400">Em branco</span>
                                   ) : (
@@ -369,7 +563,9 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
 
                                 {(!q.acertou || semResposta) && (
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-semibold text-slate-500">Resposta correta:</span>
+                                    <span className="font-semibold text-slate-500">
+                                      Resposta correta:
+                                    </span>
                                     <span className="font-heading font-black px-2 py-0.5 rounded-md bg-emerald-600 text-white">
                                       Letra {letraCorreta || '?'}
                                     </span>
@@ -385,6 +581,19 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                 ))
               )}
             </div>
+
+            {/* Modal de Registro e Edição de Observações */}
+            {modalObsAberto && (
+              <ModalObservacaoAluno
+                isOpen={modalObsAberto}
+                onClose={() => setModalObsAberto(false)}
+                alunoId={ficha.aluno.id}
+                alunoNome={ficha.aluno.nome_completo}
+                turmaNome={ficha.turma_nome}
+                numeroChamada={ficha.aluno.numero_chamada}
+                onSalvo={carregarFicha}
+              />
+            )}
           </>
         )}
       </div>

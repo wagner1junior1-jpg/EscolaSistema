@@ -146,25 +146,7 @@ export const ProfessorBancoPage: React.FC = () => {
     (c) => `${c.disciplina_id}__${c.serie}` === combinacaoSelecionada
   );
 
-  // Séries únicas ordenadas e matérias filtradas pela série selecionada
-  const seriesDisponiveis = Array.from(new Set(combinacoes.map((c) => c.serie))).sort((a, b) =>
-    a.localeCompare(b, 'pt-BR', { numeric: true })
-  );
-  const serieAtual = combAtual?.serie || seriesDisponiveis[0] || '';
-  const materiasDaSerie = combinacoes.filter((c) => c.serie === serieAtual);
 
-  const handleMudarSerie = (novaSerie: string) => {
-    const primeiraDaSerie = combinacoes.find((c) => c.serie === novaSerie);
-    if (primeiraDaSerie) {
-      setCombinacaoSelecionada(`${primeiraDaSerie.disciplina_id}__${primeiraDaSerie.serie}`);
-      setFiltroAssunto('todos');
-    }
-  };
-
-  const handleMudarMateria = (novaCombinacao: string) => {
-    setCombinacaoSelecionada(novaCombinacao);
-    setFiltroAssunto('todos');
-  };
 
   // 2. Carrega assuntos da disciplina selecionada
   useEffect(() => {
@@ -422,65 +404,48 @@ export const ProfessorBancoPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Barra de Filtros em Cascata: 1º Série -> 2º Matéria -> 3º Assunto -> 4º Dificuldade -> 5º Tipo -> 6º Origem -> 7º Escopo */}
+        {/* Barra de Filtros: 1º Matéria e Série -> 2º Assunto -> 3º Dificuldade -> 4º Tipo -> 5º Origem -> 6º Escopo */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-            {/* 1º Seletor: Série */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+            {/* 1º Seletor: Matéria e Série */}
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                1. Série
+                Matéria e Série
               </label>
               {carregandoCombinacoes ? (
                 <div className="h-10 flex items-center text-xs text-slate-400">
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
                   Carregando...
                 </div>
-              ) : seriesDisponiveis.length === 0 ? (
-                <p className="text-xs text-slate-500 py-2">Nenhuma série atribuída.</p>
+              ) : combinacoes.length === 0 ? (
+                <p className="text-xs text-slate-500 py-2">Nenhuma oferta atribuída.</p>
               ) : (
                 <Select
-                  aria-label="Filtrar por Série"
-                  value={serieAtual}
-                  onChange={(e) => handleMudarSerie(e.target.value)}
+                  aria-label="Filtrar por Matéria e Série"
+                  value={combinacaoSelecionada}
+                  onChange={(e) => {
+                    setCombinacaoSelecionada(e.target.value);
+                    setFiltroAssunto('todos');
+                  }}
                   className="w-full font-semibold"
                 >
-                  {seriesDisponiveis.map((serie) => (
-                    <option key={serie} value={serie}>
-                      {serie}
+                  {combinacoes.map((c) => (
+                    <option
+                      key={`${c.disciplina_id}__${c.serie}`}
+                      value={`${c.disciplina_id}__${c.serie}`}
+                    >
+                      {c.label}
                     </option>
                   ))}
                 </Select>
               )}
             </div>
 
-            {/* 2º Seletor: Matéria */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                2. Matéria
-              </label>
-              <Select
-                aria-label="Filtrar por Matéria"
-                value={combinacaoSelecionada}
-                onChange={(e) => handleMudarMateria(e.target.value)}
-                className="w-full font-semibold"
-                disabled={!serieAtual || materiasDaSerie.length === 0}
-              >
-                {materiasDaSerie.map((c) => (
-                  <option
-                    key={`${c.disciplina_id}__${c.serie}`}
-                    value={`${c.disciplina_id}__${c.serie}`}
-                  >
-                    {c.disciplina_nome}
-                  </option>
-                ))}
-              </Select>
-            </div>
-
-            {/* 3º Seletor: Submatéria */}
+            {/* 2º Seletor: Submatéria */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                  3. Submatéria
+                  Assunto
                 </label>
                 <button
                   type="button"

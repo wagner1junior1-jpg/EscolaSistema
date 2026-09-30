@@ -821,4 +821,74 @@ describe('Bateria de Segurança, Autorização e Regras de Negócio', () => {
       expect(token).toBeTruthy();
     });
   });
+
+  describe('Gestão de Senhas de Professores pela Direção', () => {
+    it('diretora cadastra professor com senha customizada e o professor consegue logar', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      const prof = await gestaoService.convidarProfessor(
+        'marina.silva@demo.com',
+        'Profª Marina Silva',
+        'MinhaSenha@2026'
+      );
+      expect(prof.id).toBeTruthy();
+      expect(prof.email).toBe('marina.silva@demo.com');
+
+      // Tenta logar com a senha customizada
+      const profLogado = await authService.login('marina.silva@demo.com', 'MinhaSenha@2026');
+      expect(profLogado.id).toBe(prof.id);
+      expect(profLogado.papel).toBe('professor');
+
+      // Tentar com senha incorreta falha
+      await expect(
+        authService.login('marina.silva@demo.com', 'senha_errada')
+      ).rejects.toThrow('E-mail ou senha incorretos.');
+    });
+
+    it('cadastrar professor sem senha mantém a senha padrão demo123', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      const prof = await gestaoService.convidarProfessor(
+        'roberto.santos@demo.com',
+        'Prof. Roberto Santos'
+      );
+      expect(prof.id).toBeTruthy();
+
+      const profLogado = await authService.login('roberto.santos@demo.com', 'demo123');
+      expect(profLogado.id).toBe(prof.id);
+    });
+
+    it('rejeita cadastro de professor com senha menor que 4 caracteres', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      await expect(
+        gestaoService.convidarProfessor('lucas@demo.com', 'Prof. Lucas', '123')
+      ).rejects.toThrow('A senha deve ter pelo menos 4 caracteres.');
+    });
+
+    it('diretora consegue redefinir a senha de um professor existente', async () => {
+      await authService.login('direcao@demo.com', 'demo123');
+
+      // Carlos tem a senha inicial demo123
+      await gestaoService.redefinirSenhaProfessor('usr-prof-carlos', 'NovaSenhaCarlos#99');
+
+      // Carlos consegue logar com a nova senha
+      const carlos = await authService.login('carlos@demo.com', 'NovaSenhaCarlos#99');
+      expect(carlos.id).toBe('usr-prof-carlos');
+
+      // Antiga senha demo123 deixa de funcionar
+      await expect(
+        authService.login('carlos@demo.com', 'demo123')
+      ).rejects.toThrow('E-mail ou senha incorretos.');
+    });
+
+    it('usuário sem papel de direção não consegue redefinir senha de professor', async () => {
+      // Login como professora
+      await authService.login('ana@demo.com', 'demo123');
+
+      await expect(
+        gestaoService.redefinirSenhaProfessor('usr-prof-carlos', 'TentativaHacker123')
+      ).rejects.toThrow('Você não tem permissão para esta ação.');
+    });
+  });
 });

@@ -291,8 +291,8 @@ export async function enriquecerEscolaReal3a6Ano(db: MockDatabaseSchema): Promis
   if (ativCien1) {
     ativCien1.oferta_id = 'oferta-cien-7a';
     ativCien1.criado_por = 'usr-prof-carlos';
-    ativCien1.status = 'encerrada';
-    ativCien1.prazo = '2026-09-15';
+    ativCien1.status = 'publicada';
+    ativCien1.prazo = '2026-10-18';
   }
 
   const ativCienProva = db.atividades.find((a) => a.id === 'ativ-demo-cien-prova');
@@ -1174,6 +1174,17 @@ export async function enriquecerEscolaReal3a6Ano(db: MockDatabaseSchema): Promis
       questoesCor.forEach((qId, idx) => {
         const acertou = (aluno.numero_chamada + idx) % 4 !== 0;
         registrarResposta(aluno.id, qId, acertou, '2026-09-24T14:10:00Z');
+      });
+    }
+
+    // 9. Ciências: Prova Sistema Digestório (Prof. Carlos Roberto - Encerrada)
+    // Alunos 2 (Bia) e 3 (Gabriel) já possuem respostas pré-definidas no demo inicial
+    if (aluno.id !== 'aluno-7a-2' && aluno.id !== 'aluno-7a-3') {
+      const questoesCien = ['q-demo-dig-1', 'q-demo-dig-2', 'q-demo-dig-3', 'q-demo-dig-4', 'q-demo-dig-5'];
+      questoesCien.forEach((qId, idx) => {
+        // Alunos em geral têm bom desempenho (~70-80%), exceto Enzo (dificuldade persistente)
+        const acertou = isLucas || (isEnzo ? idx < 2 : (aluno.numero_chamada + idx) % 4 !== 0);
+        registrarResposta(aluno.id, qId, acertou, '2026-09-22T10:15:00Z');
       });
     }
   }

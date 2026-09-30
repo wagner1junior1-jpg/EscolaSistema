@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande, ChipInfo } from '@/components/aluno';
 import { alunoService, assinarMudancas } from '@/services';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useToast } from '@/components/ui';
+import { IndicadorSincronizacao } from '@/components/common/IndicadorSincronizacao';
 import {
   LogOut,
   Sparkles,
@@ -28,21 +29,80 @@ import {
   BarChart3,
   Trophy,
   X,
+  Lock,
 } from 'lucide-react';
 import { AtividadeResumoAluno, Aviso, MeuDesempenhoAluno } from '@/lib/types';
 import { isSomHabilitado, setSomHabilitado, tocarSomAcerto } from '../utils/audio';
 import { dispararConfeteFim } from '../utils/confetti';
 
-export const AVATARES = [
-  { id: 'astronauta', emoji: '🚀', nome: 'Astronauta', bg: 'bg-indigo-600' },
-  { id: 'raposa', emoji: '🦊', nome: 'Raposa', bg: 'bg-amber-500' },
-  { id: 'cientista', emoji: '🔬', nome: 'Cientista', bg: 'bg-emerald-600' },
-  { id: 'robo', emoji: '🤖', nome: 'Robô', bg: 'bg-cyan-600' },
-  { id: 'leao', emoji: '🦁', nome: 'Leão', bg: 'bg-orange-500' },
-  { id: 'coruja', emoji: '🦉', nome: 'Coruja', bg: 'bg-violet-600' },
-  { id: 'artista', emoji: '🎨', nome: 'Artista', bg: 'bg-pink-500' },
-  { id: 'heroi', emoji: '⚡', nome: 'Herói', bg: 'bg-yellow-500' },
-] as const;
+export interface ConfigAvatar {
+  id: string;
+  emoji: string;
+  nome: string;
+  bg: string;
+  requisitoTipo: 'inicial' | 'atividades' | 'streak';
+  requisitoValor: number;
+  descricaoRequisito: string;
+}
+
+export const AVATARES: ConfigAvatar[] = [
+  { id: 'astronauta', emoji: '🚀', nome: 'Astronauta', bg: 'bg-indigo-600', requisitoTipo: 'inicial', requisitoValor: 0, descricaoRequisito: 'Mascote inicial' },
+  { id: 'raposa', emoji: '🦊', nome: 'Raposa', bg: 'bg-amber-500', requisitoTipo: 'inicial', requisitoValor: 0, descricaoRequisito: 'Mascote inicial' },
+  { id: 'heroi', emoji: '⚡', nome: 'Herói', bg: 'bg-yellow-500', requisitoTipo: 'inicial', requisitoValor: 0, descricaoRequisito: 'Mascote inicial' },
+  { id: 'cientista', emoji: '🔬', nome: 'Cientista', bg: 'bg-emerald-600', requisitoTipo: 'atividades', requisitoValor: 1, descricaoRequisito: 'Conclua 1 atividade' },
+  { id: 'artista', emoji: '🎨', nome: 'Artista', bg: 'bg-pink-500', requisitoTipo: 'atividades', requisitoValor: 2, descricaoRequisito: 'Conclua 2 atividades' },
+  { id: 'coruja', emoji: '🦉', nome: 'Coruja', bg: 'bg-violet-600', requisitoTipo: 'streak', requisitoValor: 2, descricaoRequisito: 'Mantenha 2 dias de sequência' },
+  { id: 'robo', emoji: '🤖', nome: 'Robô', bg: 'bg-cyan-600', requisitoTipo: 'atividades', requisitoValor: 4, descricaoRequisito: 'Conclua 4 atividades' },
+  { id: 'leao', emoji: '🦁', nome: 'Leão', bg: 'bg-orange-500', requisitoTipo: 'atividades', requisitoValor: 6, descricaoRequisito: 'Conclua 6 atividades' },
+];
+
+export function isAvatarDesbloqueado(av: ConfigAvatar, totalConcluidas: number, streak: number): boolean {
+  if (av.requisitoTipo === 'inicial') return true;
+  if (av.requisitoTipo === 'atividades') return totalConcluidas >= av.requisitoValor;
+  if (av.requisitoTipo === 'streak') return streak >= av.requisitoValor;
+  return true;
+}
+
+function calcularEAtualizarStreak(alunoId: string): number {
+  const hoje = new Date();
+  const hojeStr = hoje.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  const keyUltimoAcesso = `saberpontual_ultimo_acesso_${alunoId}`;
+  const keyStreak = `saberpontual_streak_${alunoId}`;
+  
+  const ultimoAcessoStr = localStorage.getItem(keyUltimoAcesso);
+  const streakSalvo = localStorage.getItem(keyStreak);
+  const streakAtual = streakSalvo ? parseInt(streakSalvo, 10) : 1;
+  
+  if (!ultimoAcessoStr) {
+    localStorage.setItem(keyUltimoAcesso, hojeStr);
+    localStorage.setItem(keyStreak, String(streakAtual > 0 ? streakAtual : 1));
+    return streakAtual > 0 ? streakAtual : 1;
+  }
+  
+  if (ultimoAcessoStr === hojeStr) {
+    return Math.max(1, streakAtual);
+  }
+  
+  const partesHoje = hojeStr.split('-').map(Number);
+  const partesUltimo = ultimoAcessoStr.split('-').map(Number);
+  const dataHojeMs = Date.UTC(partesHoje[0], partesHoje[1] - 1, partesHoje[2]);
+  const dataUltimoMs = Date.UTC(partesUltimo[0], partesUltimo[1] - 1, partesUltimo[2]);
+  const diffDias = Math.round((dataHojeMs - dataUltimoMs) / (1000 * 60 * 60 * 24));
+  
+  let novoStreak = 1;
+  if (diffDias === 1) {
+    novoStreak = streakAtual + 1;
+  } else if (diffDias > 1) {
+    novoStreak = 1;
+  } else {
+    novoStreak = Math.max(1, streakAtual);
+  }
+  
+  localStorage.setItem(keyUltimoAcesso, hojeStr);
+  localStorage.setItem(keyStreak, String(novoStreak));
+  return novoStreak;
+}
 
 function obterSaudacao(): string {
   const hora = new Date().getHours();
@@ -108,7 +168,7 @@ export const AlunoPainelPage: React.FC = () => {
 
   const [somAtivo, setSomAtivoState] = useState<boolean>(() => isSomHabilitado());
   const [abaAtiva, setAbaAtiva] = useState<'para_fazer' | 'concluidas'>('para_fazer');
-  const [expandirAvisos, setExpandirAvisos] = useState(false);
+  const [expandirAvisos, setExpandirAvisos] = useState(true);
   const [indiceAvisoAtual, setIndiceAvisoAtual] = useState(0);
   const [muralMinimizado, setMuralMinimizado] = useState(false);
 
@@ -243,22 +303,62 @@ export const AlunoPainelPage: React.FC = () => {
     return AVATARES.find((a) => a.id === avatarEscolhido) || AVATARES[0];
   }, [avatarEscolhido]);
 
-  // Sincroniza avatar e streak do aluno com o localStorage
+  // Sincroniza avatar e streak do aluno com cálculo de data civil
   useEffect(() => {
     if (dadosAluno?.aluno.id) {
-      const avatarSalvo = localStorage.getItem(`saberpontual_avatar_${dadosAluno.aluno.id}`);
+      const alunoId = dadosAluno.aluno.id;
+      const avatarSalvo = localStorage.getItem(`saberpontual_avatar_${alunoId}`);
       if (avatarSalvo && AVATARES.some((a) => a.id === avatarSalvo)) {
         setAvatarEscolhido(avatarSalvo);
       }
-      const streakSalvo = localStorage.getItem(`saberpontual_streak_${dadosAluno.aluno.id}`);
-      if (streakSalvo) {
-        setDiasStreak(parseInt(streakSalvo, 10) || 3);
-      } else {
-        localStorage.setItem(`saberpontual_streak_${dadosAluno.aluno.id}`, '3');
-        setDiasStreak(3);
-      }
+      const streakCalculado = calcularEAtualizarStreak(alunoId);
+      setDiasStreak(streakCalculado);
     }
   }, [dadosAluno?.aluno.id]);
+
+  // Gamificação: Cálculo de XP acumulado pelo aluno
+  const xpAcumulado = useMemo(() => {
+    let xp = 0;
+    // Cada atividade concluída confere 50 XP
+    xp += totalConcluidasGeral * 50;
+    // Aproveitamento de cada atividade soma XP proporcional
+    for (const ativ of atividadesConcluidas) {
+      if (ativ.aproveitamento !== undefined && ativ.aproveitamento !== null) {
+        xp += Math.round(ativ.aproveitamento * 0.5);
+      }
+    }
+    // Bônus de streak de frequência diária: 15 XP por dia
+    xp += diasStreak * 15;
+    return xp;
+  }, [totalConcluidasGeral, atividadesConcluidas, diasStreak]);
+
+  // Nível pedagógico do aluno baseado em XP
+  const nivelAluno = useMemo(() => {
+    if (xpAcumulado >= 500) {
+      return { nivel: 4, titulo: 'Mestre do Saber', cor: 'text-amber-800 bg-amber-50 border-amber-300' };
+    }
+    if (xpAcumulado >= 300) {
+      return { nivel: 3, titulo: 'Estudante Focado', cor: 'text-purple-700 bg-purple-50 border-purple-200' };
+    }
+    if (xpAcumulado >= 150) {
+      return { nivel: 2, titulo: 'Explorador', cor: 'text-indigo-700 bg-indigo-50 border-indigo-200' };
+    }
+    return { nivel: 1, titulo: 'Aprendiz', cor: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
+  }, [xpAcumulado]);
+
+  // Celebração automática quando todas as atividades forem concluídas
+  const disparouConfeteRef = useRef(false);
+  useEffect(() => {
+    if (
+      !carregando &&
+      atividades.length > 0 &&
+      atividadesParaFazer.length === 0 &&
+      !disparouConfeteRef.current
+    ) {
+      disparouConfeteRef.current = true;
+      dispararConfeteFim();
+    }
+  }, [carregando, atividades.length, atividadesParaFazer.length]);
 
   // Avisos ordenados: prioridade 'alta' (Importante) vem primeiro, seguido de data decrescente
   const avisosOrdenados = useMemo(() => {
@@ -347,10 +447,16 @@ export const AlunoPainelPage: React.FC = () => {
               </button>
 
               <div className="min-w-0">
-                <h1 className="font-heading font-black text-lg sm:text-2xl text-slate-900 tracking-tight truncate">
-                  {obterSaudacao()}, {alunoNome}!
+                <h1
+                  className="font-heading font-black text-lg sm:text-2xl text-slate-900 tracking-tight leading-snug line-clamp-1"
+                  title={alunoNome}
+                >
+                  Olá, <span className="text-indigo-700">{alunoNome}</span>!
                 </h1>
                 <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <span className="text-[11px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                    {obterSaudacao()}
+                  </span>
                   {turmaNome && (
                     <ChipInfo color="indigo" className="py-0.5 px-2 text-[11px]">
                       {turmaNome}
@@ -362,7 +468,15 @@ export const AlunoPainelPage: React.FC = () => {
                     title="Dias seguidos acessando a plataforma!"
                   >
                     <span>🔥</span>
-                    <span>{diasStreak} dias seguidos</span>
+                    <span>{diasStreak} {diasStreak === 1 ? 'dia' : 'dias'} seguidos</span>
+                  </div>
+                  {/* XP Pedagógico e Título de Nível */}
+                  <div
+                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-heading font-bold shadow-2xs ${nivelAluno.cor}`}
+                    title={`${xpAcumulado} pontos de experiência acumulados`}
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>{xpAcumulado} XP • {nivelAluno.titulo}</span>
                   </div>
                 </div>
               </div>
@@ -370,6 +484,9 @@ export const AlunoPainelPage: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 sm:border-none">
+            {/* Indicador de Nuvem / Sincronização */}
+            <IndicadorSincronizacao variante="aluno" />
+
             {/* Botão Meu Boletim / Desempenho */}
             <button
               type="button"
@@ -475,6 +592,17 @@ export const AlunoPainelPage: React.FC = () => {
 
                   const rotuloFaixa = item.faixa;
 
+                  const mediaNum = item.media_periodo !== null ? item.media_periodo : null;
+                  const pctMedia = mediaNum !== null ? Math.min(100, Math.max(0, (mediaNum / 10) * 100)) : 0;
+                  const corBarra =
+                    item.faixa === 'Ótimo'
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                      : item.faixa === 'Bom'
+                      ? 'bg-gradient-to-r from-indigo-500 to-blue-500'
+                      : item.faixa === 'Atenção'
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500'
+                      : 'bg-slate-300';
+
                   return (
                     <div
                       key={item.oferta_id}
@@ -508,6 +636,26 @@ export const AlunoPainelPage: React.FC = () => {
                           </span>
                         </div>
                       </div>
+
+                      {/* Mini Barra Visual de Aproveitamento com Marcador de Meta 6.0 */}
+                      <div className="space-y-1 pt-1.5 border-t border-slate-100">
+                        <div className="flex items-center justify-between text-[11px] font-heading font-semibold text-slate-500">
+                          <span>Aproveitamento da média</span>
+                          <span>{mediaNum !== null ? `${Math.round(pctMedia)}%` : 'Sem notas'}</span>
+                        </div>
+                        <div className="relative w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200/60">
+                          <div
+                            className={`h-full transition-all duration-500 rounded-full ${corBarra}`}
+                            style={{ width: `${pctMedia}%` }}
+                          />
+                          {/* Linha indicadora de meta 6.0 (60%) */}
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-slate-400/70 z-10"
+                            style={{ left: '60%' }}
+                            title="Meta da escola: 6,0"
+                          />
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -517,7 +665,7 @@ export const AlunoPainelPage: React.FC = () => {
         )}
 
         {/* 2. MURAL DE AVISOS (alunoService.avisos) */}
-        {avisos.length > 0 && (
+        {avisos.length > 0 ? (
           <section aria-labelledby="mural-avisos-titulo">
             {muralMinimizado ? (
               <CartaoVidro className="p-3 sm:p-4 flex items-center justify-between gap-3">
@@ -713,6 +861,27 @@ export const AlunoPainelPage: React.FC = () => {
               </CartaoVidro>
             )}
           </section>
+        ) : (
+          <section aria-label="Mural de avisos">
+            <CartaoVidro className="p-3.5 sm:p-4 flex items-center justify-between gap-3 bg-white/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-heading font-bold text-xs sm:text-sm text-slate-700 block">
+                    Mural de Avisos
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-sans">
+                    Nenhum aviso novo no momento. Bons estudos!
+                  </span>
+                </div>
+              </div>
+              <span className="text-[11px] font-heading font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                Tudo em dia ✨
+              </span>
+            </CartaoVidro>
+          </section>
         )}
 
         {/* 2.1 META DO BIMESTRE E PROGRESSO GERAL (Gamificação Módulo 2) */}
@@ -732,7 +901,7 @@ export const AlunoPainelPage: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-xs sm:text-sm text-slate-500 font-sans mt-0.5">
-                  {totalConcluidasGeral} de {totalGeralAtividades} atividades concluídas até o momento
+                  {totalConcluidasGeral} de {totalGeralAtividades} atividades concluídas • <span className="font-bold text-indigo-600">+{xpAcumulado} XP acumulado</span>
                 </p>
               </div>
             </div>
@@ -918,6 +1087,13 @@ export const AlunoPainelPage: React.FC = () => {
                             {isEncerrada && (
                               <ChipInfo color="slate">Encerrada</ChipInfo>
                             )}
+
+                            {ativ.aguardando_correcao && (
+                              <span className="inline-flex items-center gap-1 py-0.5 px-2 rounded-full text-[11px] font-heading font-bold bg-amber-50 border border-amber-300 text-amber-800 shadow-2xs">
+                                <Clock className="w-3 h-3 text-amber-600" />
+                                Aguardando correção
+                              </span>
+                            )}
                           </div>
 
                           {/* Alerta Inteligente de Prazo (Módulo 3) */}
@@ -1034,6 +1210,15 @@ export const AlunoPainelPage: React.FC = () => {
                               Continuar
                             </BotaoGrande>
                           )
+                        ) : ativ.aguardando_correcao ? (
+                          <BotaoGrande
+                            variant="outline"
+                            onClick={() => navigate(`/aluno/atividade/${ativ.id}`)}
+                            leftIcon={<Clock className="w-4 h-4 text-amber-600" />}
+                            className="w-full text-sm sm:text-base min-h-[48px] border-amber-300 text-amber-900 bg-amber-50/50 hover:bg-amber-100/60"
+                          >
+                            Ver envio (em correção)
+                          </BotaoGrande>
                         ) : (
                           <BotaoGrande
                             variant="outline"
@@ -1056,7 +1241,7 @@ export const AlunoPainelPage: React.FC = () => {
         {/* 4. MODAL DE SELEÇÃO DE AVATAR (Módulo 5) */}
         {modalAvatarAberto && (
           <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-            <CartaoVidro className="w-full max-w-sm p-6 space-y-4 bg-white/95 shadow-2xl border-2 border-indigo-100 animate-in fade-in zoom-in-95 duration-150">
+            <CartaoVidro className="w-full max-w-md p-6 space-y-4 bg-white/95 shadow-2xl border-2 border-indigo-100 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between">
                 <h3 className="font-heading font-black text-lg text-slate-900">
                   Escolha seu Avatar
@@ -1071,17 +1256,23 @@ export const AlunoPainelPage: React.FC = () => {
               </div>
 
               <p className="text-xs text-slate-600 font-sans">
-                Escolha o mascote que mais combina com seu estilo de estudo:
+                Escolha o mascote que mais combina com seu estilo de estudo. Alguns são desbloqueados conforme suas conquistas!
               </p>
 
-              <div className="grid grid-cols-4 gap-2.5 pt-1">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                 {AVATARES.map((av) => {
                   const selecionado = avatarEscolhido === av.id;
+                  const desbloqueado = isAvatarDesbloqueado(av, totalConcluidasGeral, diasStreak);
+
                   return (
                     <button
                       key={av.id}
                       type="button"
                       onClick={() => {
+                        if (!desbloqueado) {
+                          toast.info(`Complete a missão: "${av.descricaoRequisito}" para liberar o avatar ${av.nome}!`, 'Mascote Bloqueado');
+                          return;
+                        }
                         setAvatarEscolhido(av.id);
                         if (dadosAluno?.aluno.id) {
                           localStorage.setItem(`saberpontual_avatar_${dadosAluno.aluno.id}`, av.id);
@@ -1089,16 +1280,30 @@ export const AlunoPainelPage: React.FC = () => {
                         setModalAvatarAberto(false);
                         toast.success(`Avatar ${av.nome} selecionado!`, 'Avatar atualizado');
                       }}
-                      className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition-all cursor-pointer ${
-                        selecionado
+                      className={`p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all cursor-pointer relative ${
+                        !desbloqueado
+                          ? 'bg-slate-100/90 text-slate-400 border border-dashed border-slate-300 opacity-70 hover:opacity-100 hover:border-slate-400'
+                          : selecionado
                           ? `${av.bg} text-white ring-4 ring-indigo-200 scale-105 shadow-md`
                           : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 hover:scale-105'
                       }`}
                     >
-                      <span className="text-2xl">{av.emoji}</span>
-                      <span className="text-[10px] font-heading font-bold truncate max-w-full">
+                      {!desbloqueado && (
+                        <div className="absolute top-1.5 right-1.5 bg-slate-800/80 text-white p-1 rounded-full text-[9px]">
+                          <Lock className="w-2.5 h-2.5" />
+                        </div>
+                      )}
+                      <span className={`text-2xl ${!desbloqueado ? 'grayscale contrast-50' : ''}`}>
+                        {av.emoji}
+                      </span>
+                      <span className="text-[11px] font-heading font-bold truncate max-w-full">
                         {av.nome}
                       </span>
+                      {!desbloqueado && (
+                        <span className="text-[9px] text-slate-500 font-sans text-center leading-tight">
+                          {av.descricaoRequisito}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

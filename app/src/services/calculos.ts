@@ -375,6 +375,15 @@ export function pontuacaoDaResposta(
 
   // Questão discursiva
   if (questaoOuCorrecao?.tipo === 'discursiva') {
+    if (resposta.correcao === 'pendente' || !resposta.correcao) {
+      return null;
+    }
+    // Se a resposta possui pontuação numérica customizada (escala 0..1 ou 0..100)
+    if (typeof resposta.pontuacao === 'number' && !isNaN(resposta.pontuacao)) {
+      return resposta.pontuacao > 1
+        ? Math.min(1, Math.max(0, resposta.pontuacao / 100))
+        : Math.min(1, Math.max(0, resposta.pontuacao));
+    }
     if (resposta.correcao === 'certo') return 1;
     if (resposta.correcao === 'parcial') return 0.5;
     if (resposta.correcao === 'errado') return 0;

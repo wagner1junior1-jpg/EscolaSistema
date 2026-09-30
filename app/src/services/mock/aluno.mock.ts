@@ -340,6 +340,10 @@ export class MockAlunoService implements AlunoService {
           imagem_url: q.imagem_url || null,
           texto_respondido: respostaRegistrada.texto_resposta ?? undefined,
           correcao: respostaRegistrada.correcao ?? undefined,
+          pontuacao: respostaRegistrada.pontuacao ?? null,
+          nota: respostaRegistrada.pontuacao !== null && respostaRegistrada.pontuacao !== undefined
+            ? Math.round(respostaRegistrada.pontuacao <= 1 ? respostaRegistrada.pontuacao * 100 : respostaRegistrada.pontuacao)
+            : null,
           comentario_professor: respostaRegistrada.comentario_professor ?? undefined,
           ...(foiCorrigida && q.resposta_esperada ? { resposta_esperada: q.resposta_esperada } : {}),
           acertou: respostaRegistrada.acertou ?? undefined,
@@ -619,6 +623,10 @@ export class MockAlunoService implements AlunoService {
           imagem_url: q.imagem_url || null,
           texto_respondido: r.texto_resposta ?? undefined,
           correcao: r.correcao ?? undefined,
+          pontuacao: r.pontuacao ?? null,
+          nota: typeof r.pontuacao === 'number'
+            ? (r.pontuacao <= 1 ? Math.round(r.pontuacao * 100) : Math.round(r.pontuacao))
+            : (r.correcao === 'certo' ? 100 : r.correcao === 'parcial' ? 50 : r.correcao === 'errado' ? 0 : null),
           comentario_professor: r.comentario_professor ?? undefined,
           ...(foiCorrigida && q.resposta_esperada ? { resposta_esperada: q.resposta_esperada } : {}),
         };

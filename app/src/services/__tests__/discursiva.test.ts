@@ -341,6 +341,225 @@ describe('Discursivas — Gravação, Validações e Correção no Mock (docs/ES
       professorService.listarCorrecoesFeitas('ativ-mat-01')
     ).rejects.toThrow('Você não tem permissão para esta ação');
   });
+
+  /* =========================================================================
+   * Testes de Correção Discursiva com Nota de 0 a 100
+   * ========================================================================= */
+  describe('Correção Discursiva com Escala 0 a 100', () => {
+    it('deve aceitar nota numérica de 0 a 100 e calcular pontuacao proporcional no banco e em listarCorrecoesFeitas', async () => {
+      await alunoService.responderDiscursiva(
+        tokenAluno7A,
+        questaoDiscursivaExercicioId,
+        'O teorema afirma que o quadrado da hipotenusa é a soma dos quadrados dos catetos.'
+      );
+
+      const db = await getDatabase();
+      const resposta = db.respostas.find((r) => r.questao_id === questaoDiscursivaExercicioId)!;
+
+      await authService.login('ana@demo.com', 'demo123');
+
+      // Atribui nota 85 de 100
+      await professorService.corrigirResposta(
+        resposta.id,
+        'parcial',
+        'Ótima explicação, faltou citar o triângulo retângulo.',
+        85
+      );
+
+      const dbAtualizado = await getDatabase();
+      const rAtualizada = dbAtualizado.respostas.find((r) => r.id === resposta.id)!;
+
+      expect(rAtualizada.correcao).toBe('parcial');
+      expect(rAtualizada.pontuacao).toBe(0.85);
+      expect(rAtualizada.comentario_professor).toBe('Ótima explicação, faltou citar o triângulo retângulo.');
+
+      const correcoesFeitas = await professorService.listarCorrecoesFeitas('ativ-mat-01');
+      const itemFeito = correcoesFeitas.find((cf) => cf.resposta_id === resposta.id);
+      expect(itemFeito).toBeDefined();
+      expect(itemFeito?.nota).toBe(85);
+      expect(itemFeito?.correcao).toBe('parcial');
+    });
+
+    it('deve derivar status automaticamente se informado nota 100 (certo) ou 0 (errado)', async () => {
+      await alunoService.responderDiscursiva(
+        tokenAluno7A,
+        questaoDiscursivaExercicioId,
+        'Resposta nota máxima'
+      );
+
+      const db = await getDatabase();
+      const resposta = db.respostas.find((r) => r.questao_id === questaoDiscursivaExercicioId)!;
+
+      await authService.login('ana@demo.com', 'demo123');
+
+      // Nota 100 -> deve derivar status 'certo' e pontuacao 1.0
+      await professorService.corrigirResposta(resposta.id, 'parcial', 'Perfeito!', 100);
+
+      let dbAtualizado = await getDatabase();
+      let rAtualizada = dbAtualizado.respostas.find((r) => r.id === resposta.id)!;
+      expect(rAtualizada.correcao).toBe('certo');
+      expect(rAtualizada.pontuacao).toBe(1.0);
+
+      // Reavaliação com nota 0 -> deve derivar status 'errado' e pontuacao 0.0
+      await professorService.corrigirResposta(resposta.id, 'certo', 'Completamente incorreto.', 0);
+
+      dbAtualizado = await getDatabase();
+      rAtualizada = dbAtualizado.respostas.find((r) => r.id === resposta.id)!;
+      expect(rAtualizada.correcao).toBe('errado');
+      expect(rAtualizada.pontuacao).toBe(0.0);
+    });
+
+    it('deve rejeitar notas fora do intervalo [0, 100]', async () => {
+      await alunoService.responderDiscursiva(
+        tokenAluno7A,
+        questaoDiscursivaExercicioId,
+        'Minha resposta'
+      );
+
+      const db = await getDatabase();
+      const resposta = db.respostas.find((r) => r.questao_id === questaoDiscursivaExercicioId)!;
+
+      await authService.login('ana@demo.com', 'demo123');
+
+      // Nota negativa (< 0)
+      await expect(
+        professorService.corrigirResposta(resposta.id, 'parcial', 'Nota inválida', -1)
+      ).rejects.toThrow('A nota deve estar entre 0 e 100.');
+
+      // Nota maior que 100 (> 100)
+      await expect(
+        professorService.corrigirResposta(resposta.id, 'certo', 'Nota inválida', 101)
+      ).rejects.toThrow('A nota deve estar entre 0 e 100.');
+
+      // NaN
+      await expect(
+        professorService.corrigirResposta(resposta.id, 'parcial', 'Nota inválida', Number.NaN)
+      ).rejects.toThrow('A nota deve estar entre 0 e 100.');
+    });
+
+    it('deve manter retrocompatibilidade quando chamada sem parâmetro nota', async () => {
+      await alunoService.responderDiscursiva(
+        tokenAluno7A,
+        questaoDiscursivaExercicioId,
+        'Resposta legada'
+      );
+
+      const db = await getDatabase();
+      const resposta = db.respostas.find((r) => r.questao_id === questaoDiscursivaExercicioId)!;
+
+      await authService.login('ana@demo.com', 'demo123');
+
+      // Sem informar o 4º argumento (nota)
+      await professorService.corrigirResposta(resposta.id, 'certo');
+      let rAtualizada = (await getDatabase()).respostas.find((r) => r.id === resposta.id)!;
+      expect(rAtualizada.correcao).toBe('certo');
+      expect(rAtualizada.pontuacao).toBe(1.0);
+
+      await professorService.corrigirResposta(resposta.id, 'parcial');
+      rAtualizada = (await getDatabase()).respostas.find((r) => r.id === resposta.id)!;
+      expect(rAtualizada.correcao).toBe('parcial');
+      expect(rAtualizada.pontuacao).toBe(0.5);
+
+      await professorService.corrigirResposta(resposta.id, 'errado');
+      rAtualizada = (await getDatabase()).respostas.find((r) => r.id === resposta.id)!;
+      expect(rAtualizada.correcao).toBe('errado');
+      expect(rAtualizada.pontuacao).toBe(0.0);
+    });
+
+    it('deve refletir a nota de 0 a 100 no resultado da prova e na visão da atividade do aluno', async () => {
+      // Cria prova mista (1 objetiva + 1 discursiva)
+      await authService.login('ana@demo.com', 'demo123');
+      const prova = await professorService.criarAtividade('oferta-mat-7a', {
+        periodo_id: 'per-bim-3',
+        titulo: 'Prova Mista Avaliada',
+        descricao: 'Prova com questões mistas',
+        modo: 'prova',
+        prazo: '2026-11-01',
+      });
+
+      await professorService.salvarQuestoes(prova.id, [
+        {
+          enunciado: 'Quanto é 2 + 2?',
+          tipo: 'objetiva',
+          resposta_esperada: null,
+          alternativas: [
+            { letra: 'A', texto: '4', correta: true, por_que_errou: null },
+            { letra: 'B', texto: '5', correta: false, por_que_errou: 'Soma incorreta' },
+          ],
+        },
+        {
+          enunciado: 'Defina o que é polígono.',
+          tipo: 'discursiva',
+          resposta_esperada: 'Figura geométrica plana fechada formada por segmentos de reta.',
+          alternativas: [],
+        },
+      ]);
+
+      await professorService.publicarAtividade(prova.id);
+
+      const db = await getDatabase();
+      const ativQuestoes = db.questoes.filter((q) => q.atividade_id === prova.id);
+      const qObj = ativQuestoes.find((q) => q.tipo === 'objetiva')!;
+      const qDisc = ativQuestoes.find((q) => q.tipo === 'discursiva')!;
+      const altA = db.alternativas.find((a) => a.questao_id === qObj.id && a.letra === 'A')!;
+
+      // Aluno responde a prova
+      await alunoService.responder(tokenAluno7A, qObj.id, altA.id);
+      await alunoService.responderDiscursiva(
+        tokenAluno7A,
+        qDisc.id,
+        'É uma figura fechada por linhas retas.'
+      );
+
+      // Professora corrige a discursiva atribuindo nota 80
+      const respDisc = (await getDatabase()).respostas.find(
+        (r) => r.questao_id === qDisc.id && r.aluno_id === 'aluno-7a-1'
+      )!;
+
+      await professorService.corrigirResposta(respDisc.id, 'parcial', 'Muito bom!', 80);
+
+      // Aluno consulta resultado da prova
+      const resultado = await alunoService.resultadoProva(tokenAluno7A, prova.id);
+      expect(resultado).toBeDefined();
+
+      const itemDiscResultado = resultado.questoes.find((q) => q.questao_id === qDisc.id);
+      expect(itemDiscResultado).toBeDefined();
+      expect(itemDiscResultado?.tipo).toBe('discursiva');
+      expect(itemDiscResultado?.pontuacao).toBe(0.8);
+      expect(itemDiscResultado?.nota).toBe(80);
+      expect(itemDiscResultado?.correcao).toBe('parcial');
+
+      // Aproveitamento: (1.0 obj + 0.8 disc) / 2 = 1.8 / 2 = 90%
+      expect(resultado.aproveitamento).toBe(90);
+
+      // Aluno consulta carregarAtividade
+      const ativCarregada = await alunoService.carregarAtividade(tokenAluno7A, prova.id);
+      const qDiscCarregada = ativCarregada.questoes.find((q) => q.id === qDisc.id);
+      expect(qDiscCarregada?.pontuacao).toBe(0.8);
+      expect(qDiscCarregada?.nota).toBe(80);
+    });
+
+    it('deve refletir a nota de 0 a 100 na ficha do aluno', async () => {
+      await alunoService.responderDiscursiva(
+        tokenAluno7A,
+        questaoDiscursivaExercicioId,
+        'Resposta para teste de ficha'
+      );
+
+      const db = await getDatabase();
+      const resposta = db.respostas.find((r) => r.questao_id === questaoDiscursivaExercicioId)!;
+
+      await authService.login('ana@demo.com', 'demo123');
+      await professorService.corrigirResposta(resposta.id, 'parcial', 'Nota 75', 75);
+
+      const ficha = await professorService.fichaAluno('oferta-mat-7a', 'aluno-7a-1');
+      const ativItem = ficha.atividades.find((a) => a.atividade_id === 'ativ-mat-01');
+      const qDisc = ativItem?.questoes.find((q) => q.questao_id === questaoDiscursivaExercicioId);
+
+      expect(qDisc?.correcao).toBe('parcial');
+      expect(qDisc?.pontuacao_discursiva).toBe(0.75);
+    });
+  });
 });
 
 describe('Discursivas — Cálculo de Média e Aproveitamento', () => {

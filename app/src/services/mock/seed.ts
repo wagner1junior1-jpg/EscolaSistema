@@ -30,6 +30,7 @@ import {
   DificuldadeQuestao,
   TipoQuestao,
   OrigemQuestao,
+  AlunoObservacao,
 } from '@/lib/types';
 import { hashPin } from './crypto';
 import dadosDemo from './dados-demo.json';
@@ -42,7 +43,7 @@ export function isTestEnvironment(): boolean {
 }
 
 export function getVersaoSeedAtiva(): number {
-  return isTestEnvironment() ? dadosDemo.versao_seed : dadosDemo.versao_seed + 317;
+  return isTestEnvironment() ? dadosDemo.versao_seed : dadosDemo.versao_seed + 318;
 }
 
 export interface MockDatabaseSchema {
@@ -66,6 +67,7 @@ export interface MockDatabaseSchema {
   assuntos: Assunto[];
   banco_questoes: BancoQuestao[];
   banco_alternativas: BancoAlternativa[];
+  aluno_observacoes: AlunoObservacao[];
 }
 
 
@@ -1125,6 +1127,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
     assuntos,
     banco_questoes,
     banco_alternativas,
+    aluno_observacoes: [],
   };
 
   if (!isTestEnvironment()) {

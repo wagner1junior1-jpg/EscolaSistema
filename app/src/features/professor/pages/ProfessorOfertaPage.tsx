@@ -215,16 +215,6 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   }, [ofertaId]);
 
-  useEffect(() => {
-    carregarDadosBase();
-    const desassinar = assinarMudancas(() => {
-      carregarDadosBase();
-    });
-    return () => {
-      desassinar();
-    };
-  }, [carregarDadosBase]);
-
   // Carregamento de Desempenho
   const carregarDesempenho = useCallback(async (periodoIdParam: string) => {
     if (!ofertaId || !periodoIdParam) return;
@@ -238,6 +228,19 @@ export const ProfessorOfertaPage: React.FC = () => {
       setCarregandoDesempenho(false);
     }
   }, [ofertaId, toast]);
+
+  useEffect(() => {
+    carregarDadosBase();
+    const desassinar = assinarMudancas(() => {
+      carregarDadosBase();
+      if (abaPrincipal === 'desempenho' && periodoSelecionadoId) {
+        void carregarDesempenho(periodoSelecionadoId);
+      }
+    });
+    return () => {
+      desassinar();
+    };
+  }, [carregarDadosBase, abaPrincipal, periodoSelecionadoId, carregarDesempenho]);
 
   useEffect(() => {
     if (abaPrincipal === 'desempenho' && periodoSelecionadoId) {
@@ -681,13 +684,25 @@ export const ProfessorOfertaPage: React.FC = () => {
         {/* Navegação e Cabeçalho da Oferta */}
         <div>
           <div className="flex items-center justify-between gap-3 mb-3">
-            <Link
-              to="/professor"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md py-1"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Voltar para Minhas Turmas</span>
-            </Link>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Link
+                to="/professor"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md py-1"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Voltar para Minhas Turmas</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  mudarAbaPrincipal('atividades');
+                  setAbaAtividades('rascunho');
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md py-1 cursor-pointer"
+              >
+                <span>Voltar para as atividades da turma</span>
+              </button>
+            </div>
 
             <Link
               to="/professor/banco"
