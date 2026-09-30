@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande, ChipInfo } from '@/components/aluno';
 import { alunoService } from '@/services';
 import { useToast, MathText } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   ArrowLeft,
   Volume2,
@@ -44,9 +45,14 @@ interface RespostaLocalState {
   tipo?: TipoQuestao;
   texto_respondido?: string | null;
   correcao?: StatusCorrecao | null;
+  pontuacao?: number | null;
+  nota?: number | null;
   comentario_professor?: string | null;
   resposta_esperada?: string | null;
 }
+
+const chaveRascunhoDiscursiva = (questaoId: string): string =>
+  `saberpontual_rascunho_discursiva_${questaoId}`;
 
 export const AlunoAtividadePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -63,6 +69,7 @@ export const AlunoAtividadePage: React.FC = () => {
   const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
   const [textoDiscursiva, setTextoDiscursiva] = useState<string>('');
   const [confirmando, setConfirmando] = useState(false);
+  const [confirmarEnvioDiscursiva, setConfirmarEnvioDiscursiva] = useState(false);
   const [dicaAberta, setDicaAberta] = useState(false);
   const [falando, setFalando] = useState(false);
   const [modoTentarNovamente, setModoTentarNovamente] = useState(false);
@@ -116,6 +123,8 @@ export const AlunoAtividadePage: React.FC = () => {
             tipo: q.tipo,
             texto_respondido: q.texto_respondido,
             correcao: q.correcao,
+            pontuacao: q.pontuacao,
+            nota: q.nota,
             comentario_professor: q.comentario_professor,
             resposta_esperada: q.resposta_esperada,
           };
@@ -214,7 +223,31 @@ export const AlunoAtividadePage: React.FC = () => {
     setModoTentarNovamente(false);
     setSelecionadaId(null);
     setTextoDiscursiva('');
+    setConfirmarEnvioDiscursiva(false);
   }, [indiceAtual]);
+
+  // Recupera o rascunho da resposta discursiva ao abrir a questão (sobrevive a recarregar a página)
+  const questaoAtualId = questaoAtual?.id;
+  useEffect(() => {
+    if (!questaoAtualId || !isDiscursiva) return;
+    try {
+      const salvo = sessionStorage.getItem(chaveRascunhoDiscursiva(questaoAtualId));
+      if (salvo) setTextoDiscursiva(salvo);
+    } catch {
+      // sessionStorage indisponível: segue sem rascunho
+    }
+  }, [questaoAtualId, isDiscursiva]);
+
+  const handleMudarTextoDiscursiva = (valor: string) => {
+    setTextoDiscursiva(valor);
+    if (!questaoAtualId) return;
+    try {
+      if (valor) sessionStorage.setItem(chaveRascunhoDiscursiva(questaoAtualId), valor);
+      else sessionStorage.removeItem(chaveRascunhoDiscursiva(questaoAtualId));
+    } catch {
+      // ignora falha ao guardar rascunho
+    }
+  };
 
   // Confirmar Resposta Objetiva
   const handleConfirmar = async () => {
@@ -313,6 +346,7 @@ export const AlunoAtividadePage: React.FC = () => {
       return;
     }
 
+    setConfirmarEnvioDiscursiva(false);
     setConfirmando(true);
     try {
       const resultado = await alunoService.responderDiscursiva(
@@ -320,6 +354,12 @@ export const AlunoAtividadePage: React.FC = () => {
         questaoAtual.id,
         textoDiscursiva.trim()
       );
+
+      try {
+        sessionStorage.removeItem(chaveRascunhoDiscursiva(questaoAtual.id));
+      } catch {
+        // ignora
+      }
 
       setRespostasMap((prev) => ({
         ...prev,
@@ -564,6 +604,7 @@ export const AlunoAtividadePage: React.FC = () => {
                     const comentarioProf = q.comentario_professor ?? questaoBase?.comentario_professor ?? null;
                     const respEsperada = q.resposta_esperada ?? questaoBase?.resposta_esperada ?? null;
                     const imagemUrl = q.imagem_url || questaoBase?.imagem_url;
+                    const nota = q.nota ?? (typeof q.pontuacao === 'number' ? (q.pontuacao <= 1 ? Math.round(q.pontuacao * 100) : Math.round(q.pontuacao)) : null);
 
                     return (
                       <CartaoVidro key={q.questao_id} className="p-5 sm:p-6 space-y-4">
@@ -582,15 +623,15 @@ export const AlunoAtividadePage: React.FC = () => {
                             </ChipInfo>
                           ) : correcao === 'certo' ? (
                             <ChipInfo color="emerald" icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}>
-                              Certo
+                              Certo {nota !== null ? `(${nota}/100)` : ''}
                             </ChipInfo>
                           ) : correcao === 'parcial' ? (
                             <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5 text-amber-600" />}>
-                              Parcial
+                              Parcial {nota !== null ? `(${nota}/100)` : ''}
                             </ChipInfo>
                           ) : (
                             <ChipInfo color="pink" icon={<XCircle className="w-3.5 h-3.5 text-rose-600" />}>
-                              Errado
+                              Errado {nota !== null ? `(${nota}/100)` : ''}
                             </ChipInfo>
                           )}
                         </div>
@@ -827,6 +868,13 @@ export const AlunoAtividadePage: React.FC = () => {
                     const comentarioProf = resp?.comentario_professor ?? q.comentario_professor ?? null;
                     const respEsperada = resp?.resposta_esperada ?? q.resposta_esperada ?? null;
                     const imagemUrl = q.imagem_url;
+                    const nota = resp?.nota ?? q.nota ?? (
+                      typeof resp?.pontuacao === 'number'
+                        ? (resp.pontuacao <= 1 ? Math.round(resp.pontuacao * 100) : Math.round(resp.pontuacao))
+                        : (typeof q.pontuacao === 'number'
+                            ? (q.pontuacao <= 1 ? Math.round(q.pontuacao * 100) : Math.round(q.pontuacao))
+                            : null)
+                    );
 
                     return (
                       <CartaoVidro key={q.id} className="p-5 sm:p-6 space-y-4">
@@ -845,15 +893,15 @@ export const AlunoAtividadePage: React.FC = () => {
                             </ChipInfo>
                           ) : correcao === 'certo' ? (
                             <ChipInfo color="emerald" icon={<CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}>
-                              Certo
+                              Certo {nota !== null ? `(${nota}/100)` : ''}
                             </ChipInfo>
                           ) : correcao === 'parcial' ? (
                             <ChipInfo color="amber" icon={<AlertCircle className="w-3.5 h-3.5 text-amber-600" />}>
-                              Parcial
+                              Parcial {nota !== null ? `(${nota}/100)` : ''}
                             </ChipInfo>
                           ) : (
                             <ChipInfo color="pink" icon={<XCircle className="w-3.5 h-3.5 text-rose-600" />}>
-                              Errado
+                              Errado {nota !== null ? `(${nota}/100)` : ''}
                             </ChipInfo>
                           )}
                         </div>
@@ -1153,7 +1201,7 @@ export const AlunoAtividadePage: React.FC = () => {
                     rows={6}
                     maxLength={2000}
                     value={textoDiscursiva}
-                    onChange={(e) => setTextoDiscursiva(e.target.value)}
+                    onChange={(e) => handleMudarTextoDiscursiva(e.target.value)}
                     disabled={confirmando || isEncerrada}
                     placeholder="Escreva sua resposta detalhada aqui..."
                     className="w-full p-4 rounded-2xl border-2 border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 transition-all font-sans text-sm sm:text-base text-slate-900 placeholder:text-slate-400 resize-y min-h-[140px] outline-none"
@@ -1161,6 +1209,16 @@ export const AlunoAtividadePage: React.FC = () => {
                   <div className="flex items-center justify-end text-xs font-medium text-slate-500">
                     <span>{textoDiscursiva.length}/2000</span>
                   </div>
+                  <ConfirmDialog
+                    isOpen={confirmarEnvioDiscursiva}
+                    onClose={() => setConfirmarEnvioDiscursiva(false)}
+                    onConfirm={handleEnviarDiscursiva}
+                    title="Enviar minha resposta?"
+                    message="Depois de enviar, você não poderá mudar esta resposta. O professor vai corrigir."
+                    confirmText="Enviar"
+                    cancelText="Voltar e revisar"
+                    isLoading={confirmando}
+                  />
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1325,7 +1383,7 @@ export const AlunoAtividadePage: React.FC = () => {
                 variant="primary"
                 disabled={isDiscursiva ? !textoDiscursiva.trim() || confirmando : !selecionadaId || confirmando}
                 isLoading={confirmando}
-                onClick={isDiscursiva ? handleEnviarDiscursiva : handleConfirmar}
+                onClick={isDiscursiva ? () => setConfirmarEnvioDiscursiva(true) : handleConfirmar}
                 className="w-full sm:w-auto px-8 min-h-[50px] text-base"
               >
                 {isDiscursiva ? 'Enviar resposta' : 'Confirmar resposta'}
