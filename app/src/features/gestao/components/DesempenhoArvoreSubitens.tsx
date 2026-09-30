@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { pluralizar } from '@/lib/formatar';
 import {
   ChevronRight,
   GraduationCap,
@@ -28,38 +29,10 @@ export const DesempenhoArvoreSubitens: React.FC<DesempenhoArvoreSubitensProps> =
   turmas,
   nomePeriodo,
 }) => {
-  // Controle de expansão
-  const [turmasAbertas, setTurmasAbertas] = useState<Set<string>>(() => {
-    // Abre a primeira turma por padrão
-    const setInicial = new Set<string>();
-    if (turmas.length > 0) {
-      setInicial.add(turmas[0].turma_id);
-    }
-    return setInicial;
-  });
-
-  const [materiasAbertas, setMateriasAbertas] = useState<Set<string>>(() => {
-    const setInicial = new Set<string>();
-    if (turmas.length > 0 && turmas[0].materias.length > 0) {
-      setInicial.add(`${turmas[0].turma_id}-${turmas[0].materias[0].disciplina_id}`);
-    }
-    return setInicial;
-  });
-
-  const [conteudosAbertos, setConteudosAbertos] = useState<Set<string>>(() => {
-    const setInicial = new Set<string>();
-    if (
-      turmas.length > 0 &&
-      turmas[0].materias.length > 0 &&
-      turmas[0].materias[0].conteudos.length > 0
-    ) {
-      const t = turmas[0];
-      const m = t.materias[0];
-      const c = m.conteudos[0];
-      setInicial.add(`${t.turma_id}-${m.disciplina_id}-${c.conteudo_id}`);
-    }
-    return setInicial;
-  });
+  // Controle de expansão (todas as séries/turmas fechadas por padrão)
+  const [turmasAbertas, setTurmasAbertas] = useState<Set<string>>(new Set());
+  const [materiasAbertas, setMateriasAbertas] = useState<Set<string>>(new Set());
+  const [conteudosAbertos, setConteudosAbertos] = useState<Set<string>>(new Set());
 
   const [questoesAbertas, setQuestoesAbertas] = useState<Set<string>>(new Set());
 
@@ -265,9 +238,9 @@ export const DesempenhoArvoreSubitens: React.FC<DesempenhoArvoreSubitensProps> =
   // Copiar Pauta resumida da matéria para Reunião Pedagógica
   const copiarPautaMateria = (turma: DesempenhoTurmaHierarquico, materia: DesempenhoMateriaItem) => {
     let texto = `Período: ${nomePeriodo}\n`;
-    texto += `Turma: ${turma.turma_nome} (${turma.total_alunos} alunos)\n`;
+    texto += `Turma: ${turma.turma_nome} (${pluralizar(turma.total_alunos, 'aluno', 'alunos')})\n`;
     texto += `Disciplina: ${materia.disciplina_nome} — Prof(a): ${materia.professor_nome}\n`;
-    texto += `Taxa Geral de Rendimento: ${materia.porcentagem_acerto}% acertos (${materia.porcentagem_erro}% erros em ${materia.total_respostas} respostas avaliadas)`;
+    texto += `Taxa Geral de Rendimento: ${String(materia.porcentagem_acerto).replace('.', ',')}% acertos (${String(materia.porcentagem_erro).replace('.', ',')}% erros em ${materia.total_respostas} respostas avaliadas)`;
 
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard
@@ -589,7 +562,7 @@ export const DesempenhoArvoreSubitens: React.FC<DesempenhoArvoreSubitensProps> =
                       <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
                         <span className="flex items-center gap-1">
                           <Users className="w-3 h-3 text-slate-400" />
-                          {turma.total_alunos} alunos
+                          {pluralizar(turma.total_alunos, 'aluno', 'alunos')}
                         </span>
                         <span>•</span>
                         <span>{turma.total_materias_avaliadas} matérias avaliadas</span>

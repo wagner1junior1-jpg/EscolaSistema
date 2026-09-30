@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { DesempenhoQuestaoItem } from '@/lib/types';
 import { MathText } from '@/components/ui/MathText';
+import { pluralizar } from '@/lib/formatar';
 
 interface DesempenhoQuestaoLinhaProps {
   questao: DesempenhoQuestaoItem;
@@ -157,7 +158,7 @@ export const DesempenhoQuestaoLinha: React.FC<DesempenhoQuestaoLinhaProps> = ({
               <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
-                  Erro mais comum na turma: Alternativa {questao.distrator_mais_escolhido.letra} ({questao.distrator_mais_escolhido.porcentagem_escolhas}% dos alunos — {questao.distrator_mais_escolhido.total_escolhas} votos)
+                  Erro mais comum na turma: Alternativa {questao.distrator_mais_escolhido.letra} ({String(questao.distrator_mais_escolhido.porcentagem_escolhas).replace('.', ',')}% dos alunos — {pluralizar(questao.distrator_mais_escolhido.total_escolhas, 'voto', 'votos')})
                 </span>
               </div>
               {questao.distrator_mais_escolhido.por_que_errou && (
@@ -228,7 +229,7 @@ export const DesempenhoQuestaoLinha: React.FC<DesempenhoQuestaoLinhaProps> = ({
                         {/* Estatística de Escolha dos Alunos */}
                         <div className="text-right shrink-0">
                           <span className="font-bold text-xs">
-                            {alt.porcentagem_escolhas}%
+                            {String(alt.porcentagem_escolhas).replace('.', ',')}%
                           </span>
                           <span className="text-[11px] text-slate-400 block">
                             {alt.total_escolhas} {alt.total_escolhas === 1 ? 'voto' : 'votos'}

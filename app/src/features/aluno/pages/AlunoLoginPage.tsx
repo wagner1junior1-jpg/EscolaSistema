@@ -4,6 +4,7 @@ import { AlunoLayout, CartaoVidro, BotaoGrande, ChipInfo } from '@/components/al
 import { alunoService } from '@/services';
 import { AlunoResumido } from '@/lib/types';
 import { useToast } from '@/components/ui';
+import { pluralizar } from '@/lib/formatar';
 import {
   GraduationCap,
   ArrowLeft,
@@ -270,7 +271,7 @@ export const AlunoLoginPage: React.FC = () => {
                     Quem é você?
                   </h1>
                   <p className="text-xs text-slate-500 font-sans mt-0.5">
-                    {alunos.length} alunos na turma
+                    {pluralizar(alunos.length, 'aluno', 'alunos')} na turma
                   </p>
                 </div>
                 <button

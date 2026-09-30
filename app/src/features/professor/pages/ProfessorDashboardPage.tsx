@@ -16,6 +16,7 @@ import {
   assinarMudancas,
 } from '@/services';
 import { IA_SEM_LIMITE } from '@/services/mock/ia.mock';
+import { pluralizar } from '@/lib/formatar';
 import {
   GraduationCap,
   Users,
@@ -509,7 +510,7 @@ export const ProfessorDashboardPage: React.FC = () => {
                 </span>
                 <span className="text-[11px] text-slate-500 truncate block mt-0.5">
                   {totalAlunosGeral > 0
-                    ? `${totalAlunosGeral} alunos acompanhados`
+                    ? `${pluralizar(totalAlunosGeral, 'aluno', 'alunos')} acompanhados`
                     : `${seriesDisponiveis.length} séries vinculadas`}
                 </span>
               </div>
@@ -528,7 +529,7 @@ export const ProfessorDashboardPage: React.FC = () => {
                   {totalPublicadasGeral} {totalPublicadasGeral === 1 ? 'Publicada' : 'Publicadas'}
                 </span>
                 <span className="text-[11px] text-slate-500 truncate block mt-0.5">
-                  {totalRascunhosGeral} rascunhos · {totalEncerradasGeral} encerradas
+                  {pluralizar(totalRascunhosGeral, 'rascunho', 'rascunhos')} · {pluralizar(totalEncerradasGeral, 'encerrada', 'encerradas')}
                 </span>
               </div>
             </div>
