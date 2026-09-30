@@ -25,6 +25,9 @@ import { AreaConhecimento, ajustarQuestoesIA } from './iaValidacao';
 export type { AreaConhecimento };
 export { ajustarQuestoesIA };
 
+// TEMPORÁRIO: uso livre da IA. Voltar para false para exigir a cota mensal definida pela escola.
+export const IA_SEM_LIMITE = true;
+
 export const GEMINI_KEY_STORAGE = 'saberpontual_gemini_api_key';
 
 export function obterGeminiApiKey(): string {
@@ -922,7 +925,7 @@ export class MockIAService implements ServicoIA {
 
     // 1. Verificação de cota
     const cota = await this.consultarCota();
-    if (cota.uso_mes >= cota.limite_mes) {
+    if (!IA_SEM_LIMITE && cota.uso_mes >= cota.limite_mes) {
       throw new Error('Limite de gerações do mês atingido. Fale com a direção.');
     }
 
