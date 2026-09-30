@@ -12,7 +12,30 @@ import {
 } from '@/components/ui';
 import { gestaoService, Perfil } from '@/services';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { Users, UserPlus, UserX, Loader2, AlertCircle, Search, Mail, Key } from 'lucide-react';
+import {
+  Users,
+  UserPlus,
+  UserX,
+  Loader2,
+  AlertCircle,
+  Search,
+  Mail,
+  Key,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Copy,
+  Check,
+} from 'lucide-react';
+
+function gerarSenhaAleatoria(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let pass = 'Prof@';
+  for (let i = 0; i < 4; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
 
 export const GestaoProfessoresSecao: React.FC = () => {
   const toast = useToast();
@@ -25,13 +48,28 @@ export const GestaoProfessoresSecao: React.FC = () => {
   // Busca
   const [busca, setBusca] = useState('');
 
-  // Modal Convidar
+  // Modal Convidar / Cadastrar
   const [modalConvidarAberto, setModalConvidarAberto] = useState(false);
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroForm, setErroForm] = useState<string | null>(null);
-  const [conviteSucesso, setConviteSucesso] = useState<{ nome: string; email: string } | null>(null);
+  const [conviteSucesso, setConviteSucesso] = useState<{
+    nome: string;
+    email: string;
+    senha: string;
+  } | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
+  // Redefinir Senha (apenas direção)
+  const [modalRedefinirAberto, setModalRedefinirAberto] = useState(false);
+  const [professorParaRedefinir, setProfessorParaRedefinir] = useState<Perfil | null>(null);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false);
+  const [redefinindo, setRedefinindo] = useState(false);
+  const [erroRedefinir, setErroRedefinir] = useState<string | null>(null);
 
   // Desativar Professor (apenas direção)
   const [professorParaDesativar, setProfessorParaDesativar] = useState<Perfil | null>(null);
@@ -57,8 +95,11 @@ export const GestaoProfessoresSecao: React.FC = () => {
   const abrirModalConvidar = () => {
     setNome('');
     setEmail('');
+    setSenha('');
+    setMostrarSenha(false);
     setErroForm(null);
     setConviteSucesso(null);
+    setCopiado(false);
     setModalConvidarAberto(true);
   };
 
@@ -68,20 +109,68 @@ export const GestaoProfessoresSecao: React.FC = () => {
       setErroForm('Informe o nome e o e-mail do professor.');
       return;
     }
+    const senhaLimpa = senha.trim();
+    if (senhaLimpa.length > 0 && senhaLimpa.length < 4) {
+      setErroForm('A senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
 
     setSalvando(true);
     setErroForm(null);
     try {
-      await gestaoService.convidarProfessor(email.trim(), nome.trim());
-      toast.success('Professor convidado com sucesso! Senha de demonstração: demo123');
-      setConviteSucesso({ nome: nome.trim(), email: email.trim() });
+      const senhaFinal = senhaLimpa || 'demo123';
+      await gestaoService.convidarProfessor(email.trim(), nome.trim(), senhaLimpa || undefined);
+      toast.success('Professor cadastrado com sucesso!');
+      setConviteSucesso({ nome: nome.trim(), email: email.trim(), senha: senhaFinal });
       await carregarDados();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro ao convidar professor.';
+      const msg = err instanceof Error ? err.message : 'Erro ao cadastrar professor.';
       setErroForm(msg);
       toast.error(msg);
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const handleCopiarAcesso = () => {
+    if (!conviteSucesso) return;
+    const texto = `Olá, ${conviteSucesso.nome}!\nSeu acesso à plataforma SaberPontual foi criado:\n\nE-mail: ${conviteSucesso.email}\nSenha: ${conviteSucesso.senha}\n\nAcesse pelo link da escola no sistema.`;
+    navigator.clipboard.writeText(texto);
+    setCopiado(true);
+    toast.success('Dados de acesso copiados para a área de transferência!');
+    setTimeout(() => setCopiado(false), 3000);
+  };
+
+  const abrirModalRedefinir = (prof: Perfil) => {
+    setProfessorParaRedefinir(prof);
+    setNovaSenha('');
+    setMostrarNovaSenha(false);
+    setErroRedefinir(null);
+    setModalRedefinirAberto(true);
+  };
+
+  const handleConfirmarRedefinicao = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!professorParaRedefinir) return;
+    const senhaLimpa = novaSenha.trim();
+    if (!senhaLimpa || senhaLimpa.length < 4) {
+      setErroRedefinir('A nova senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
+
+    setRedefinindo(true);
+    setErroRedefinir(null);
+    try {
+      await gestaoService.redefinirSenhaProfessor(professorParaRedefinir.id, senhaLimpa);
+      toast.success(`Senha do professor ${professorParaRedefinir.nome} atualizada com sucesso!`);
+      setModalRedefinirAberto(false);
+      setProfessorParaRedefinir(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Não foi possível redefinir a senha.';
+      setErroRedefinir(msg);
+      toast.error(msg);
+    } finally {
+      setRedefinindo(false);
     }
   };
 
@@ -125,7 +214,7 @@ export const GestaoProfessoresSecao: React.FC = () => {
 
         <Button onClick={abrirModalConvidar} className="flex items-center gap-2 self-start sm:self-auto">
           <UserPlus className="w-4 h-4" />
-          Convidar Professor
+          Cadastrar Professor
         </Button>
       </div>
 
@@ -203,6 +292,19 @@ export const GestaoProfessoresSecao: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-auto">
+                    {ehDirecao && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => abrirModalRedefinir(prof)}
+                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 flex items-center gap-1.5 text-xs"
+                        title="Redefinir senha de acesso do professor"
+                      >
+                        <Key className="w-4 h-4" />
+                        <span>Redefinir Senha</span>
+                      </Button>
+                    )}
+
                     {ehDirecao ? (
                       <Button
                         variant="ghost"
@@ -216,7 +318,7 @@ export const GestaoProfessoresSecao: React.FC = () => {
                       </Button>
                     ) : (
                       <span className="text-xs text-slate-400 italic">
-                        Desativação restrita à direção
+                        Ações restritas à direção
                       </span>
                     )}
                   </div>
@@ -227,29 +329,41 @@ export const GestaoProfessoresSecao: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Modal Convidar Professor */}
+      {/* Modal Cadastrar Professor */}
       <Modal
         isOpen={modalConvidarAberto}
         onClose={() => !salvando && setModalConvidarAberto(false)}
-        title="Convidar Novo Professor"
+        title="Cadastrar Novo Professor"
       >
         {conviteSucesso ? (
           <div className="space-y-4 py-2">
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 space-y-2">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 space-y-3">
               <p className="font-bold flex items-center gap-2">
                 <Users className="w-5 h-5 text-emerald-600" />
-                Convite enviado com sucesso!
+                Professor cadastrado com sucesso!
               </p>
               <p className="text-xs">
-                O professor <strong>{conviteSucesso.nome}</strong> (
-                {conviteSucesso.email}) já pode acessar o sistema com os dados:
+                O professor <strong>{conviteSucesso.nome}</strong> já pode acessar a plataforma com as credenciais abaixo:
               </p>
-              <div className="p-2.5 bg-white rounded-lg border border-emerald-200 text-xs font-mono space-y-1">
+              <div className="p-3 bg-white rounded-lg border border-emerald-200 text-xs font-mono space-y-1.5">
                 <div>E-mail: <strong>{conviteSucesso.email}</strong></div>
                 <div className="flex items-center gap-1.5 text-indigo-700 font-bold">
                   <Key className="w-3.5 h-3.5" />
-                  <span>Senha de demonstração: demo123</span>
+                  <span>Senha: <strong>{conviteSucesso.senha}</strong></span>
                 </div>
+              </div>
+
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopiarAcesso}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs bg-white hover:bg-emerald-100/50 border-emerald-300 text-emerald-800 font-semibold"
+                >
+                  {copiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                  {copiado ? 'Dados de acesso copiados!' : 'Copiar dados para enviar ao professor'}
+                </Button>
               </div>
             </div>
 
@@ -281,13 +395,46 @@ export const GestaoProfessoresSecao: React.FC = () => {
               disabled={salvando}
             />
 
-            {/* Aviso da senha de demonstração */}
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs flex items-start gap-2">
-              <Key className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Aviso sobre o primeiro acesso:</p>
-                <p>Senha de demonstração: <strong>demo123</strong></p>
+            {/* Campo de Senha de Acesso Inicial */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-700">
+                  Senha de Acesso Inicial
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSenha(gerarSenhaAleatoria())}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 hover:underline"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Gerar senha automática
+                </button>
               </div>
+
+              <Input
+                type={mostrarSenha ? 'text' : 'password'}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder="Ex: demo123 (ou digite uma senha própria)"
+                disabled={salvando}
+                rightIcon={
+                  <button
+                    type="button"
+                    onClick={() => setMostrarSenha(!mostrarSenha)}
+                    className="text-slate-400 hover:text-slate-600 focus:outline-none"
+                    title={mostrarSenha ? 'Ocultar senha' : 'Ver senha'}
+                  >
+                    {mostrarSenha ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                }
+              />
+              <p className="text-[11px] text-slate-500 mt-1">
+                Deixe em branco para usar a senha padrão (<strong>demo123</strong>) ou informe uma senha (mínimo de 4 caracteres).
+              </p>
             </div>
 
             {erroForm && (
@@ -307,11 +454,78 @@ export const GestaoProfessoresSecao: React.FC = () => {
               </Button>
               <Button type="submit" disabled={salvando} className="flex items-center gap-2">
                 {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-                {salvando ? 'Convidando...' : 'Enviar Convite'}
+                {salvando ? 'Cadastrando...' : 'Cadastrar Professor'}
               </Button>
             </div>
           </form>
         )}
+      </Modal>
+
+      {/* Modal Redefinir Senha do Professor */}
+      <Modal
+        isOpen={modalRedefinirAberto}
+        onClose={() => !redefinindo && setModalRedefinirAberto(false)}
+        title={`Redefinir Senha: ${professorParaRedefinir?.nome || ''}`}
+      >
+        <form onSubmit={handleConfirmarRedefinicao} className="space-y-4">
+          <p className="text-xs text-slate-600">
+            Defina uma nova senha de acesso para o professor <strong>{professorParaRedefinir?.nome}</strong> ({professorParaRedefinir?.email}).
+          </p>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-semibold text-slate-700">Nova Senha</label>
+              <button
+                type="button"
+                onClick={() => setNovaSenha(gerarSenhaAleatoria())}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 hover:underline"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Gerar senha automática
+              </button>
+            </div>
+
+            <Input
+              type={mostrarNovaSenha ? 'text' : 'password'}
+              value={novaSenha}
+              onChange={(e) => setNovaSenha(e.target.value)}
+              placeholder="Digite a nova senha (mínimo 4 caracteres)"
+              required
+              disabled={redefinindo}
+              rightIcon={
+                <button
+                  type="button"
+                  onClick={() => setMostrarNovaSenha(!mostrarNovaSenha)}
+                  className="text-slate-400 hover:text-slate-600 focus:outline-none"
+                  title={mostrarNovaSenha ? 'Ocultar senha' : 'Ver senha'}
+                >
+                  {mostrarNovaSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              }
+            />
+          </div>
+
+          {erroRedefinir && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs">
+              {erroRedefinir}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalRedefinirAberto(false)}
+              disabled={redefinindo}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={redefinindo} className="flex items-center gap-2">
+              {redefinindo && <Loader2 className="w-4 h-4 animate-spin" />}
+              {redefinindo ? 'Salvando...' : 'Salvar Nova Senha'}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Diálogo de Confirmação de Desativação */}

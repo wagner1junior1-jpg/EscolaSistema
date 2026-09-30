@@ -17,7 +17,7 @@ import {
   Minimize2,
   Filter,
 } from 'lucide-react';
-import { relatorioService, gestaoService } from '@/services';
+import { relatorioService, gestaoService, assinarMudancas } from '@/services';
 import { AlunoEmAtencaoItem, Periodo } from '@/lib/types';
 import { gerarCsv, baixarCsv } from '../utils/csv';
 import {
@@ -89,17 +89,15 @@ export const GestaoAlunosAtencaoSecao: React.FC = () => {
         const dados = await relatorioService.alunosEmAtencao(periodoSelecionadoId);
         if (ativo) {
           setItens(dados);
-          // Abre a primeira turma por padrão para navegação intuitiva
           const agrupado = agruparAlunosEmAtencao(dados);
-          if (agrupado.turmas.length > 0) {
-            const primeiraTurma = agrupado.turmas[0];
-            setTurmasAbertas(new Set([primeiraTurma.turma_nome]));
-            if (primeiraTurma.materias.length > 0) {
-              setMateriasAbertas(
-                new Set([`${primeiraTurma.turma_nome}-${primeiraTurma.materias[0].disciplina_nome}`])
-              );
-            }
-          }
+          setTurmasAbertas(new Set(agrupado.turmas.map((t) => t.turma_nome)));
+          setMateriasAbertas(
+            new Set(
+              agrupado.turmas.flatMap((t) =>
+                t.materias.map((m) => `${t.turma_nome}-${m.disciplina_nome}`)
+              )
+            )
+          );
         }
       } catch (err) {
         if (ativo) {
@@ -114,8 +112,15 @@ export const GestaoAlunosAtencaoSecao: React.FC = () => {
 
     carregarAlunos();
 
+    const desassinar = assinarMudancas(() => {
+      if (ativo) {
+        carregarAlunos();
+      }
+    });
+
     return () => {
       ativo = false;
+      desassinar();
     };
   }, [periodoSelecionadoId]);
 

@@ -248,7 +248,7 @@ export const GestaoBancoSecao: React.FC = () => {
               />
             </div>
             <div className="text-xs font-semibold text-slate-500">
-              Exibindo <strong>{questoesFiltradas.length}</strong> questão(ões)
+              Total: <strong>{questoesFiltradas.length}</strong> questão(ões)
             </div>
           </div>
         </CardContent>

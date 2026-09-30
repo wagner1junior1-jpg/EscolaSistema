@@ -16,7 +16,7 @@ import {
   FileText,
   Calendar,
 } from 'lucide-react';
-import { relatorioService, gestaoService } from '@/services';
+import { relatorioService, gestaoService, assinarMudancas } from '@/services';
 import {
   DesempenhoTurmaHierarquico,
   AlunoEmAtencaoItem,
@@ -143,8 +143,15 @@ export const GestaoConselhoSecao: React.FC = () => {
 
     carregarDadosPeriodo();
 
+    const desassinar = assinarMudancas(() => {
+      if (ativo) {
+        carregarDadosPeriodo();
+      }
+    });
+
     return () => {
       ativo = false;
+      desassinar();
     };
   }, [periodoSelecionadoId]);
 
@@ -173,6 +180,39 @@ export const GestaoConselhoSecao: React.FC = () => {
 
   const resumoAtencao = useMemo(() => agruparAlunosEmAtencao(alunosAtencao), [alunosAtencao]);
 
+  // Indicadores calculados estritamente com as respostas do período selecionado
+  const mediaGeralPeriodo = useMemo(() => {
+    let somaPontos = 0;
+    let totalRespostas = 0;
+    turmasHierarquicas.forEach((turma) => {
+      turma.materias.forEach((materia) => {
+        if (materia.total_respostas > 0) {
+          somaPontos += (materia.porcentagem_acerto / 100) * materia.total_respostas;
+          totalRespostas += materia.total_respostas;
+        }
+      });
+    });
+    return totalRespostas > 0 ? Math.round((somaPontos / totalRespostas) * 10) / 10 : null;
+  }, [turmasHierarquicas]);
+
+  const totalTurmasAvaliadas = useMemo(() => {
+    return turmasHierarquicas.filter((t) => t.porcentagem_acerto_geral !== null).length;
+  }, [turmasHierarquicas]);
+
+  const totalAtividadesPeriodo = useMemo(() => {
+    const titulos = new Set<string>();
+    turmasHierarquicas.forEach((t) => {
+      t.materias.forEach((m) => {
+        m.conteudos.forEach((c) => {
+          c.questoes.forEach((q) => {
+            if (q.atividade_titulo) titulos.add(q.atividade_titulo);
+          });
+        });
+      });
+    });
+    return titulos.size > 0 ? titulos.size : (visaoGeral?.total_atividades_publicadas ?? 0);
+  }, [turmasHierarquicas, visaoGeral]);
+
   const resumoAtencaoTurmaAtual = useMemo(() => {
     if (!turmaAtual) return null;
     return resumoAtencao.turmas.find((t) => t.turma_nome === turmaAtual.turma_nome) || null;
@@ -200,9 +240,10 @@ export const GestaoConselhoSecao: React.FC = () => {
           const alunosNaMateria = alunosAtencao
             .filter(
               (a) =>
-                (a.turma_nome === turma.turma_nome || (a.turma_id && a.turma_id === turma.turma_id)) &&
-                (a.disciplina_nome.toLowerCase() === materia.disciplina_nome.toLowerCase() ||
-                  (a.disciplina_id && a.disciplina_id === materia.disciplina_id))
+                (a.turma_id ? a.turma_id === turma.turma_id : a.turma_nome === turma.turma_nome) &&
+                (a.disciplina_id
+                  ? a.disciplina_id === materia.disciplina_id
+                  : a.disciplina_nome.toLowerCase() === materia.disciplina_nome.toLowerCase())
             )
             .map(
               (a) =>
@@ -245,6 +286,10 @@ export const GestaoConselhoSecao: React.FC = () => {
     if (modoVisao === 'geral') {
       return formatarPautaConselhoGeral({
         periodoNome: periodoAtual?.nome,
+        mediaGeralPeriodo,
+        totalAtividadesPeriodo,
+        totalTurmasAvaliadas,
+        totalTurmasCadastradas: turmasHierarquicas.length,
         visaoGeral,
         turmasHierarquicas,
         alunosAtencao,
@@ -510,9 +555,11 @@ export const GestaoConselhoSecao: React.FC = () => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase">Média Geral</span>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Média do Período</span>
                         <p className="text-lg font-black text-indigo-700 mt-0.5">
-                          {visaoGeral?.aproveitamento_medio !== null && visaoGeral?.aproveitamento_medio !== undefined
+                          {mediaGeralPeriodo !== null
+                            ? `${mediaGeralPeriodo.toFixed(1).replace('.', ',')}%`
+                            : visaoGeral?.aproveitamento_medio !== null && visaoGeral?.aproveitamento_medio !== undefined
                             ? `${visaoGeral.aproveitamento_medio.toFixed(1).replace('.', ',')}%`
                             : '--'}
                         </p>
@@ -520,7 +567,10 @@ export const GestaoConselhoSecao: React.FC = () => {
 
                       <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
                         <span className="text-[11px] font-bold text-slate-400 uppercase">Turmas Avaliadas</span>
-                        <p className="text-lg font-black text-slate-800 mt-0.5">{turmasHierarquicas.length}</p>
+                        <p className="text-lg font-black text-slate-800 mt-0.5">
+                          {totalTurmasAvaliadas}{' '}
+                          <span className="text-xs font-semibold text-slate-400">/ {turmasHierarquicas.length}</span>
+                        </p>
                       </div>
 
                       <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-center">
@@ -545,12 +595,15 @@ export const GestaoConselhoSecao: React.FC = () => {
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {turmasHierarquicas.map((t) => {
-                          const critico = t.porcentagem_acerto_geral !== null && t.porcentagem_acerto_geral < 60;
+                          const temDados = t.porcentagem_acerto_geral !== null;
+                          const critico = temDados && t.porcentagem_acerto_geral! < 60;
                           return (
                             <div
                               key={t.turma_id}
                               className={`p-3 rounded-xl border flex items-center justify-between ${
-                                critico
+                                !temDados
+                                  ? 'bg-slate-50/80 border-slate-200 text-slate-700'
+                                  : critico
                                   ? 'bg-rose-50/50 border-rose-200 text-rose-900'
                                   : 'bg-emerald-50/40 border-emerald-200 text-emerald-900'
                               }`}
@@ -558,16 +611,22 @@ export const GestaoConselhoSecao: React.FC = () => {
                               <div className="min-w-0">
                                 <p className="font-bold text-xs sm:text-sm">{t.turma_nome}</p>
                                 <p className="text-[11px] text-slate-500 truncate">
-                                  {t.materias.length} {t.materias.length === 1 ? 'matéria' : 'matérias'} avaliadas
+                                  {t.total_materias_avaliadas > 0
+                                    ? `${t.total_materias_avaliadas} ${t.total_materias_avaliadas === 1 ? 'matéria avaliada' : 'matérias avaliadas'}`
+                                    : 'Nenhuma avaliação realizada'}
                                 </p>
                               </div>
                               <div className="text-right shrink-0">
                                 <span
                                   className={`text-xs font-black px-2 py-0.5 rounded-full ${
-                                    critico ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                                    !temDados
+                                      ? 'bg-slate-200 text-slate-600'
+                                      : critico
+                                      ? 'bg-rose-100 text-rose-800'
+                                      : 'bg-emerald-100 text-emerald-800'
                                   }`}
                                 >
-                                  {t.porcentagem_acerto_geral !== null ? `${t.porcentagem_acerto_geral}% acerto` : 'Sem dados'}
+                                  {temDados ? `${t.porcentagem_acerto_geral}% acerto` : 'Sem dados'}
                                 </span>
                               </div>
                             </div>
@@ -681,7 +740,8 @@ export const GestaoConselhoSecao: React.FC = () => {
 
                       <div className="space-y-2">
                         {turmaAtual.materias.map((m) => {
-                          const critico = m.porcentagem_acerto < 60;
+                          const semDados = m.total_respostas === 0;
+                          const critico = !semDados && m.porcentagem_acerto < 60;
                           return (
                             <div
                               key={m.disciplina_id}
@@ -693,15 +753,21 @@ export const GestaoConselhoSecao: React.FC = () => {
                                 </span>
                                 <span className="text-xs text-slate-500 ml-2">Prof(a). {m.professor_nome}</span>
                                 <p className="text-[11px] text-slate-400 mt-0.5">
-                                  {m.total_respostas} respostas avaliadas
+                                  {m.total_respostas > 0
+                                    ? `${m.total_respostas} respostas avaliadas`
+                                    : 'Nenhuma resposta avaliada no período'}
                                 </p>
                               </div>
                               <span
                                 className={`text-xs font-black px-2.5 py-1 rounded-full ${
-                                  critico ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+                                  semDados
+                                    ? 'bg-slate-100 text-slate-600'
+                                    : critico
+                                    ? 'bg-rose-100 text-rose-700'
+                                    : 'bg-emerald-100 text-emerald-700'
                                 }`}
                               >
-                                {m.porcentagem_acerto}% acertos
+                                {semDados ? 'Sem avaliações' : `${m.porcentagem_acerto}% acertos`}
                               </span>
                             </div>
                           );
@@ -752,7 +818,8 @@ export const GestaoConselhoSecao: React.FC = () => {
                         <p className="text-xs text-slate-500">{professorAtual.email}</p>
                       </div>
                       <span className="text-xs font-bold px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full">
-                        {turmasDoProfessorAtual.length} {turmasDoProfessorAtual.length === 1 ? 'turma avaliada' : 'turmas avaliadas'}
+                        {turmasDoProfessorAtual.filter((t) => t.totalRespostas > 0).length} de {turmasDoProfessorAtual.length}{' '}
+                        {turmasDoProfessorAtual.length === 1 ? 'turma avaliada' : 'turmas avaliadas'}
                       </span>
                     </div>
 
@@ -768,25 +835,37 @@ export const GestaoConselhoSecao: React.FC = () => {
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {turmasDoProfessorAtual.map((t) => (
-                            <div
-                              key={`${t.turmaNome}-${t.disciplinaNome}`}
-                              className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-xs sm:text-sm text-slate-900">
-                                  {t.turmaNome} — {t.disciplinaNome}
-                                </span>
-                                <span
-                                  className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
-                                    t.porcentagemAcerto < 60
-                                      ? 'bg-rose-100 text-rose-700'
-                                      : 'bg-emerald-100 text-emerald-700'
-                                  }`}
-                                >
-                                  {t.porcentagemAcerto}% acertos
-                                </span>
-                              </div>
+                          {turmasDoProfessorAtual.map((t) => {
+                            const semDados = t.totalRespostas === 0;
+                            const critico = !semDados && t.porcentagemAcerto < 60;
+                            return (
+                              <div
+                                key={`${t.turmaNome}-${t.disciplinaNome}`}
+                                className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <span className="font-bold text-xs sm:text-sm text-slate-900">
+                                      {t.turmaNome} — {t.disciplinaNome}
+                                    </span>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {t.totalRespostas > 0
+                                        ? `${t.totalRespostas} respostas avaliadas`
+                                        : 'Nenhuma resposta avaliada no período'}
+                                    </p>
+                                  </div>
+                                  <span
+                                    className={`text-xs font-black px-2.5 py-0.5 rounded-full ${
+                                      semDados
+                                        ? 'bg-slate-100 text-slate-600'
+                                        : critico
+                                        ? 'bg-rose-100 text-rose-700'
+                                        : 'bg-emerald-100 text-emerald-700'
+                                    }`}
+                                  >
+                                    {semDados ? 'Sem avaliações' : `${t.porcentagemAcerto}% acertos`}
+                                  </span>
+                                </div>
 
                               {t.conteudosCriticos.length > 0 && (
                                 <p className="text-[11px] text-amber-800">
@@ -801,8 +880,9 @@ export const GestaoConselhoSecao: React.FC = () => {
                                 </p>
                               )}
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })}
+                      </div>
                       )}
                     </div>
                   </div>

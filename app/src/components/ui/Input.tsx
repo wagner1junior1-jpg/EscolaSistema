@@ -47,7 +47,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             disabled={disabled}
-            className={`w-full py-2.5 bg-white border text-sm text-slate-900 placeholder:text-slate-400 rounded-xl transition-all outline-none disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed ${
+            className={`w-full py-2.5 bg-white border text-sm text-slate-900 placeholder:text-slate-400 rounded-xl transition-all outline-none disabled:bg-slate-50 disabled:text-slate-600 disabled:border-slate-200 disabled:cursor-not-allowed ${
               leftIcon ? 'pl-10' : 'pl-3.5'
             } ${rightIcon ? 'pr-10' : 'pr-3.5'} ${
               error

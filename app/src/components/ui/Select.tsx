@@ -47,7 +47,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             disabled={disabled}
-            className={`w-full py-2.5 pl-3.5 pr-10 bg-white border text-sm text-slate-900 rounded-xl transition-all outline-none appearance-none disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer ${
+            className={`w-full py-2.5 pl-3.5 pr-10 bg-white border text-sm text-slate-900 rounded-xl transition-all outline-none appearance-none disabled:bg-slate-50 disabled:text-slate-600 disabled:border-slate-200 disabled:cursor-not-allowed cursor-pointer ${
               error
                 ? 'border-rose-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20'
                 : 'border-slate-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20'

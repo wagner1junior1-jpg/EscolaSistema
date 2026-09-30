@@ -50,6 +50,16 @@ describe('pautaConselhoFormatador', () => {
             },
           ],
         },
+        {
+          disciplina_id: 'disc-hist',
+          disciplina_nome: 'História',
+          professor_nome: 'Mariana Lima',
+          total_alunos: 30,
+          total_respostas: 0,
+          porcentagem_acerto: 0,
+          porcentagem_erro: 0,
+          conteudos: [],
+        },
       ],
     },
     {
@@ -72,6 +82,16 @@ describe('pautaConselhoFormatador', () => {
           conteudos: [],
         },
       ],
+    },
+    {
+      turma_id: 'turma-3',
+      turma_nome: '8º Ano C',
+      turma_serie: '8º Ano',
+      total_alunos: 25,
+      porcentagem_acerto_geral: null,
+      porcentagem_erro_geral: null,
+      total_materias_avaliadas: 0,
+      materias: [],
     },
   ];
 
@@ -121,6 +141,10 @@ describe('pautaConselhoFormatador', () => {
   it('deve gerar a pauta geral do conselho com seções e diagnósticos completos', () => {
     const pauta = formatarPautaConselhoGeral({
       periodoNome: '1º Bimestre',
+      mediaGeralPeriodo: 71.5,
+      totalAtividadesPeriodo: 6,
+      totalTurmasAvaliadas: 2,
+      totalTurmasCadastradas: 3,
       visaoGeral: visaoGeralMock,
       turmasHierarquicas: turmasHierarquicasMock,
       alunosAtencao: alunosAtencaoMock,
@@ -130,15 +154,19 @@ describe('pautaConselhoFormatador', () => {
 
     expect(pauta).toContain('PAUTA GERAL DO CONSELHO DE PROFESSORES');
     expect(pauta).toContain('Período: 1º Bimestre');
-    expect(pauta).toContain('68,5%');
+    expect(pauta).toContain('71,5%');
+    expect(pauta).toContain('Atividades Realizadas no Período: 6');
+    expect(pauta).toContain('Total de Turmas: 3 (2 avaliadas)');
     expect(pauta).toContain('6º Ano A: 54% de acerto geral');
     expect(pauta).toContain('7º Ano B: 78% de rendimento geral');
+    expect(pauta).toContain('TURMAS SEM AVALIAÇÕES REGISTRADAS NO PERÍODO');
+    expect(pauta).toContain('8º Ano C: Nenhuma atividade realizada');
     expect(pauta).toContain('Lucas Silva');
     expect(pauta).toContain('Qual fração representa 0,75?');
     expect(pauta).toContain('Ficou acertado reforço às quintas-feiras.');
   });
 
-  it('deve gerar a pauta específica por turma com matérias e estudantes', () => {
+  it('deve gerar a pauta específica por turma tratando matérias sem avaliação de forma neutra', () => {
     const pautaTurma = formatarPautaConselhoTurma({
       periodoNome: '1º Bimestre',
       turma: turmasHierarquicasMock[0],
@@ -148,10 +176,12 @@ describe('pautaConselhoFormatador', () => {
     expect(pautaTurma).toContain('CONSELHO DE CLASSE — TURMA 6º ANO A');
     expect(pautaTurma).toContain('MATEMÁTICA (Prof(a). Carlos Souza)');
     expect(pautaTurma).toContain('Frações e Decimais (55% erro)');
+    expect(pautaTurma).toContain('⚪ HISTÓRIA (Prof(a). Mariana Lima)');
+    expect(pautaTurma).toContain('Nenhuma avaliação registrada no período');
     expect(pautaTurma).toContain('Reunião com pais agendada.');
   });
 
-  it('deve gerar a pauta do professor com rendimento e turmas lecionadas', () => {
+  it('deve gerar a pauta do professor com rendimento e neutralidade para turmas sem respostas', () => {
     const pautaProf = formatarPautaConselhoProfessor({
       periodoNome: '1º Bimestre',
       professorNome: 'Carlos Souza',
@@ -165,12 +195,24 @@ describe('pautaConselhoFormatador', () => {
           conteudosCriticos: ['Frações e Decimais'],
           alunosEmAtencao: ['Lucas Silva'],
         },
+        {
+          turmaNome: '7º Ano B',
+          disciplinaNome: 'Matemática',
+          porcentagemAcerto: 0,
+          porcentagemErro: 0,
+          totalRespostas: 0,
+          conteudosCriticos: [],
+          alunosEmAtencao: [],
+        },
       ],
       deliberacoes: 'Aplicar lista diagnóstica na próxima semana.',
     });
 
     expect(pautaProf).toContain('PAUTA PEDAGÓGICA INDIVIDUAL — PROF(A). CARLOS SOUZA');
+    expect(pautaProf).toContain('Total de Turmas Avaliadas: 1 (de 2 vinculadas)');
     expect(pautaProf).toContain('6º Ano A — Matemática: 52% acertos');
+    expect(pautaProf).toContain('⚪ 7º Ano B — Matemática: Sem avaliações registradas no período');
+    expect(pautaProf).not.toContain('7º Ano B — Matemática: 0% acertos');
     expect(pautaProf).toContain('Frações e Decimais');
     expect(pautaProf).toContain('Lucas Silva');
     expect(pautaProf).toContain('Aplicar lista diagnóstica na próxima semana.');

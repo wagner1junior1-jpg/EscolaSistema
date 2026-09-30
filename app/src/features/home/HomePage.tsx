@@ -52,7 +52,7 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Mascote no Uniforme Oficial da Escola */}
+          {/* Mascotes no Uniforme Oficial da Escola */}
           <div className="py-1 flex flex-col items-center">
             {/* Balão acolhedor de boas-vindas */}
             <div className="mb-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-heading font-bold flex items-center gap-1.5 shadow-xs">
@@ -60,8 +60,19 @@ export const HomePage: React.FC = () => {
               <span>Vista seu uniforme e venha aprender!</span>
             </div>
 
-            {/* Ilustração vetorial do bonequinho no uniforme oficial */}
-            <MascoteAdaoMendes className="w-32 h-40 sm:w-36 sm:h-44 drop-shadow-sm my-1" waving />
+            {/* Ilustração vetorial da duplinha de alunos no uniforme oficial */}
+            <div className="flex items-end justify-center gap-3 sm:gap-6 my-1">
+              <MascoteAdaoMendes
+                genero="menina"
+                className="w-28 h-36 sm:w-32 sm:h-42 drop-shadow-sm"
+                waving
+              />
+              <MascoteAdaoMendes
+                genero="menino"
+                className="w-28 h-36 sm:w-32 sm:h-42 drop-shadow-sm"
+                waving
+              />
+            </div>
 
             {/* Indicadores das cores oficiais do uniforme */}
             <div className="flex items-center justify-center gap-2 mt-1">

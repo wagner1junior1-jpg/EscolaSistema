@@ -8,6 +8,10 @@ import { agruparAlunosEmAtencao, TurmaAtencaoAgrupada } from './alunosAtencaoAgr
 
 export interface ParametrosPautaGeral {
   periodoNome?: string;
+  mediaGeralPeriodo?: number | null;
+  totalAtividadesPeriodo?: number;
+  totalTurmasAvaliadas?: number;
+  totalTurmasCadastradas?: number;
   visaoGeral?: VisaoGeralEscola | null;
   turmasHierarquicas: DesempenhoTurmaHierarquico[];
   alunosAtencao: AlunoEmAtencaoItem[];
@@ -45,6 +49,10 @@ export interface ParametrosPautaProfessor {
 export function formatarPautaConselhoGeral(params: ParametrosPautaGeral): string {
   const {
     periodoNome = 'Bimestre Atual',
+    mediaGeralPeriodo,
+    totalAtividadesPeriodo,
+    totalTurmasAvaliadas,
+    totalTurmasCadastradas,
     visaoGeral,
     turmasHierarquicas,
     alunosAtencao,
@@ -54,6 +62,21 @@ export function formatarPautaConselhoGeral(params: ParametrosPautaGeral): string
 
   const agrupamentoAtencao = agruparAlunosEmAtencao(alunosAtencao);
 
+  const mediaExibicao =
+    mediaGeralPeriodo !== undefined && mediaGeralPeriodo !== null
+      ? mediaGeralPeriodo
+      : visaoGeral?.aproveitamento_medio ?? null;
+
+  const totalAtivExibicao =
+    totalAtividadesPeriodo !== undefined
+      ? totalAtividadesPeriodo
+      : visaoGeral?.total_atividades_publicadas ?? 0;
+
+  const totalTurmas = totalTurmasCadastradas ?? visaoGeral?.total_turmas ?? turmasHierarquicas.length;
+  const turmasAvaliadasCount =
+    totalTurmasAvaliadas ?? turmasHierarquicas.filter((t) => t.porcentagem_acerto_geral !== null).length;
+  const totalAlunos = visaoGeral?.total_alunos ?? 0;
+
   let texto = `📋 PAUTA GERAL DO CONSELHO DE PROFESSORES\n`;
   texto += `Período: ${periodoNome}\n`;
   texto += `Escola: Gestão e Equipe Pedagógica\n`;
@@ -61,11 +84,13 @@ export function formatarPautaConselhoGeral(params: ParametrosPautaGeral): string
 
   // 1. PANORAMA GERAL DO BIMESTRE
   texto += `1. PANORAMA GERAL DA ESCOLA\n`;
-  if (visaoGeral && visaoGeral.aproveitamento_medio !== null) {
-    texto += `• Média Geral de Rendimento: ${visaoGeral.aproveitamento_medio.toFixed(1).replace('.', ',')}%\n`;
-    texto += `• Total de Turmas: ${visaoGeral.total_turmas} | Total de Estudantes: ${visaoGeral.total_alunos}\n`;
-    texto += `• Atividades Realizadas no Período: ${visaoGeral.total_atividades_publicadas}\n`;
+  if (mediaExibicao !== null) {
+    texto += `• Média Geral de Rendimento no Período: ${mediaExibicao.toFixed(1).replace('.', ',')}%\n`;
+  } else {
+    texto += `• Média Geral de Rendimento no Período: Sem avaliações registradas\n`;
   }
+  texto += `• Total de Turmas: ${totalTurmas} (${turmasAvaliadasCount} avaliadas) | Total de Estudantes: ${totalAlunos}\n`;
+  texto += `• Atividades Realizadas no Período: ${totalAtivExibicao}\n`;
   texto += `• Total de Estudantes em Atenção: ${agrupamentoAtencao.total_alunos_unicos}\n`;
   if (agrupamentoAtencao.total_alunos_multipla_atencao > 0) {
     texto += `• Casos Críticos (Atenção em 2 ou mais matérias): ${agrupamentoAtencao.total_alunos_multipla_atencao} estudantes\n`;
@@ -81,16 +106,21 @@ export function formatarPautaConselhoGeral(params: ParametrosPautaGeral): string
     const criticas = turmasHierarquicas.filter(
       (t) => t.porcentagem_acerto_geral !== null && t.porcentagem_acerto_geral < 60
     );
+    // Turmas dentro da meta (>= 60%)
     const regularesOuBoas = turmasHierarquicas.filter(
-      (t) => t.porcentagem_acerto_geral === null || t.porcentagem_acerto_geral >= 60
+      (t) => t.porcentagem_acerto_geral !== null && t.porcentagem_acerto_geral >= 60
+    );
+    // Turmas sem avaliações
+    const semAvaliacoes = turmasHierarquicas.filter(
+      (t) => t.porcentagem_acerto_geral === null
     );
 
     if (criticas.length > 0) {
       texto += `⚠️ TURMAS QUE EXIGEM ATENÇÃO PRIORITÁRIA (< 60% DE RENDIMENTO):\n`;
       criticas.forEach((t) => {
         texto += `  • ${t.turma_nome}: ${t.porcentagem_acerto_geral ?? 0}% de acerto geral\n`;
-        // Disciplinas mais baixas na turma
-        const disciplinasBaixas = t.materias.filter((m) => m.porcentagem_acerto < 60);
+        // Disciplinas mais baixas na turma que tiveram respostas
+        const disciplinasBaixas = t.materias.filter((m) => m.total_respostas > 0 && m.porcentagem_acerto < 60);
         if (disciplinasBaixas.length > 0) {
           const mats = disciplinasBaixas
             .map((m) => `${m.disciplina_nome} (${m.porcentagem_acerto}%)`)
@@ -104,8 +134,15 @@ export function formatarPautaConselhoGeral(params: ParametrosPautaGeral): string
     if (regularesOuBoas.length > 0) {
       texto += `✅ TURMAS COM RENDIMENTO DENTRO DA META (>= 60%):\n`;
       regularesOuBoas.forEach((t) => {
-        const pct = t.porcentagem_acerto_geral !== null ? `${t.porcentagem_acerto_geral}%` : 'Sem dados';
-        texto += `  • ${t.turma_nome}: ${pct} de rendimento geral\n`;
+        texto += `  • ${t.turma_nome}: ${t.porcentagem_acerto_geral}% de rendimento geral\n`;
+      });
+      texto += `\n`;
+    }
+
+    if (semAvaliacoes.length > 0) {
+      texto += `⚪ TURMAS SEM AVALIAÇÕES REGISTRADAS NO PERÍODO:\n`;
+      semAvaliacoes.forEach((t) => {
+        texto += `  • ${t.turma_nome}: Nenhuma atividade realizada\n`;
       });
       texto += `\n`;
     }
@@ -187,6 +224,11 @@ export function formatarPautaConselhoTurma(params: ParametrosPautaTurma): string
     texto += `• Nenhuma disciplina avaliada nesta turma.\n`;
   } else {
     turma.materias.forEach((m) => {
+      if (m.total_respostas === 0) {
+        texto += `• ⚪ ${m.disciplina_nome.toUpperCase()} (Prof(a). ${m.professor_nome})\n`;
+        texto += `  Rendimento: Nenhuma avaliação registrada no período\n`;
+        return;
+      }
       const statusIcon = m.porcentagem_acerto >= 70 ? '🟢' : m.porcentagem_acerto >= 60 ? '🟡' : '🔴';
       texto += `• ${statusIcon} ${m.disciplina_nome.toUpperCase()} (Prof(a). ${m.professor_nome})\n`;
       texto += `  Rendimento: ${m.porcentagem_acerto}% acertos | ${m.porcentagem_erro}% erros (${m.total_respostas} respostas avaliadas)\n`;
@@ -241,9 +283,11 @@ export function formatarPautaConselhoTurma(params: ParametrosPautaTurma): string
 export function formatarPautaConselhoProfessor(params: ParametrosPautaProfessor): string {
   const { periodoNome = 'Bimestre Atual', professorNome, turmas, deliberacoes } = params;
 
+  const turmasAvaliadasCount = turmas.filter((t) => t.totalRespostas > 0).length;
+
   let texto = `📋 PAUTA PEDAGÓGICA INDIVIDUAL — PROF(A). ${professorNome.toUpperCase()}\n`;
   texto += `Período: ${periodoNome}\n`;
-  texto += `Total de Turmas Avaliadas: ${turmas.length}\n`;
+  texto += `Total de Turmas Avaliadas: ${turmasAvaliadasCount} (de ${turmas.length} vinculadas)\n`;
   texto += `------------------------------------------------------------\n\n`;
 
   texto += `1. QUADRO DE RENDIMENTO POR TURMA\n`;
@@ -251,6 +295,10 @@ export function formatarPautaConselhoProfessor(params: ParametrosPautaProfessor)
     texto += `• Nenhuma atividade com respostas registradas no período para este(a) docente.\n`;
   } else {
     turmas.forEach((t) => {
+      if (t.totalRespostas === 0) {
+        texto += `• ⚪ ${t.turmaNome} — ${t.disciplinaNome}: Sem avaliações registradas no período\n`;
+        return;
+      }
       const statusIcon = t.porcentagemAcerto >= 70 ? '🟢' : t.porcentagemAcerto >= 60 ? '🟡' : '🔴';
       texto += `• ${statusIcon} ${t.turmaNome} — ${t.disciplinaNome}: ${t.porcentagemAcerto}% acertos (${t.porcentagemErro}% erros)\n`;
       

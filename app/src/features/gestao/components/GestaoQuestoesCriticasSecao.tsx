@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Button } from '@/components/ui';
 import { HelpCircle, Download, Loader2, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { relatorioService, gestaoService } from '@/services';
+import { relatorioService, gestaoService, assinarMudancas } from '@/services';
 import { QuestaoCriticaEscolaItem, Periodo } from '@/lib/types';
 import { gerarCsv, baixarCsv } from '../utils/csv';
 
@@ -73,8 +73,15 @@ export const GestaoQuestoesCriticasSecao: React.FC = () => {
 
     carregarQuestoes();
 
+    const desassinar = assinarMudancas(() => {
+      if (ativo) {
+        carregarQuestoes();
+      }
+    });
+
     return () => {
       ativo = false;
+      desassinar();
     };
   }, [periodoSelecionadoId]);
 

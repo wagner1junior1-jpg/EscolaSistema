@@ -8,7 +8,7 @@ import {
   FolderTree,
   Table as TableIcon,
 } from 'lucide-react';
-import { relatorioService, gestaoService } from '@/services';
+import { relatorioService, gestaoService, assinarMudancas } from '@/services';
 import {
   DesempenhoTurmaDisciplinaItem,
   DesempenhoTurmaHierarquico,
@@ -94,8 +94,15 @@ export const GestaoDesempenhoSecao: React.FC = () => {
 
     carregarRelatorio();
 
+    const desassinar = assinarMudancas(() => {
+      if (ativo) {
+        carregarRelatorio();
+      }
+    });
+
     return () => {
       ativo = false;
+      desassinar();
     };
   }, [periodoSelecionadoId]);
 
@@ -296,6 +303,7 @@ export const GestaoDesempenhoSecao: React.FC = () => {
       ) : visao === 'arvore' ? (
         /* 1. VISÃO EM ÁRVORE DE SUBITENS (PADRÃO PRINCIPAL DA DIRETORA) */
         <DesempenhoArvoreSubitens
+          key={periodoSelecionadoId}
           turmas={turmasHierarquicas}
           nomePeriodo={periodoAtual?.nome || 'Período'}
         />

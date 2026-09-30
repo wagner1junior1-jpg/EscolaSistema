@@ -256,7 +256,7 @@ export class MockGestaoService implements GestaoService {
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }
 
-  async convidarProfessor(email: string, nome: string): Promise<Perfil> {
+  async convidarProfessor(email: string, nome: string, senha?: string): Promise<Perfil> {
     const usuario = await exigirUsuario(['direcao', 'coordenacao']);
     const db = await getDatabase();
     const emailLimpo = email.trim().toLowerCase();
@@ -265,6 +265,12 @@ export class MockGestaoService implements GestaoService {
     if (existe) {
       throw new Error('Já existe um usuário cadastrado com este e-mail.');
     }
+
+    const senhaInformada = senha?.trim();
+    if (senhaInformada !== undefined && senhaInformada.length > 0 && senhaInformada.length < 4) {
+      throw new Error('A senha deve ter pelo menos 4 caracteres.');
+    }
+    const senhaFinal = senhaInformada && senhaInformada.length >= 4 ? senhaInformada : 'demo123';
 
     const novo: Perfil = {
       id: gerarId('usr-prof'),
@@ -276,9 +282,25 @@ export class MockGestaoService implements GestaoService {
       email: emailLimpo,
     };
     db.perfis.push(novo);
-    db.credenciais[emailLimpo] = 'demo123';
+    db.credenciais[emailLimpo] = senhaFinal;
     saveDatabase(db);
     return novo;
+  }
+
+  async redefinirSenhaProfessor(id: string, novaSenha: string): Promise<void> {
+    await exigirUsuario(['direcao']); // Apenas direção
+    const senhaLimpa = novaSenha?.trim();
+    if (!senhaLimpa || senhaLimpa.length < 4) {
+      throw new Error('A nova senha deve ter pelo menos 4 caracteres.');
+    }
+
+    const db = await getDatabase();
+    const prof = db.perfis.find((p) => p.id === id && p.papel === 'professor');
+    if (!prof) throw new Error('Professor não encontrado.');
+    if (!prof.email) throw new Error('Professor não possui e-mail cadastrado.');
+
+    db.credenciais[prof.email.toLowerCase()] = senhaLimpa;
+    saveDatabase(db);
   }
 
   async desativarProfessor(id: string): Promise<void> {
