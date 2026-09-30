@@ -28,7 +28,6 @@ import {
   Archive,
   AlertCircle,
   Database,
-  KeyRound,
   Search,
   MessageSquare,
   Eye,
@@ -43,7 +42,6 @@ import {
   Table,
   LayoutGrid,
 } from 'lucide-react';
-import { ModalAlterarSenha } from '@/features/auth/components/ModalAlterarSenha';
 import { ModalObservacaoAluno } from '../components/ModalObservacaoAluno';
 import { ModalNovaAtividadeRapida } from '../components/ModalNovaAtividadeRapida';
 import { ModalGeradorIA } from '../components/ModalGeradorIA';
@@ -100,7 +98,6 @@ export const ProfessorDashboardPage: React.FC = () => {
   const [radarExpandido, setRadarExpandido] = useState<boolean>(false);
 
   // Modais
-  const [modalSenhaAberto, setModalSenhaAberto] = useState(false);
   const [modalNovaAtividadeAberto, setModalNovaAtividadeAberto] = useState(false);
   const [modalGeradorIAAberto, setModalGeradorIAAberto] = useState(false);
   const [combinacoes, setCombinacoes] = useState<CombinacaoProfessor[]>([]);
@@ -486,16 +483,6 @@ export const ProfessorDashboardPage: React.FC = () => {
             >
               Banco de questões
             </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<KeyRound className="w-3.5 h-3.5 text-slate-500" />}
-              onClick={() => setModalSenhaAberto(true)}
-              className="border-slate-300 hover:border-slate-400 font-semibold text-slate-700"
-            >
-              Alterar senha
-            </Button>
           </div>
         </div>
 
@@ -685,7 +672,7 @@ export const ProfessorDashboardPage: React.FC = () => {
               onClick={() => setRadarExpandido((prev) => !prev)}
               className="p-3.5 sm:p-4 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/70 transition-colors"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                     alunosEmAtencao.length > 0
@@ -700,13 +687,13 @@ export const ProfessorDashboardPage: React.FC = () => {
                   )}
                 </div>
 
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-heading font-black text-sm sm:text-base text-slate-900">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h3 className="font-heading font-black text-sm sm:text-base text-slate-900 leading-snug">
                       Radar Pedagógico: Alunos em Atenção
                     </h3>
                     <span
-                      className={`text-2xs sm:text-xs font-bold px-2 py-0.5 rounded-full border ${
+                      className={`inline-flex items-center whitespace-nowrap shrink-0 text-2xs sm:text-xs font-bold px-2 py-0.5 rounded-full border w-fit ${
                         alunosEmAtencao.length > 0
                           ? 'bg-rose-50 text-rose-800 border-rose-200'
                           : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -722,7 +709,7 @@ export const ProfessorDashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-slate-400">
+              <div className="flex items-center gap-2 text-slate-400 shrink-0">
                 <span className="text-xs font-semibold hidden sm:inline">
                   {radarExpandido ? 'Recolher' : 'Expandir lista'}
                 </span>
@@ -1371,12 +1358,6 @@ export const ProfessorDashboardPage: React.FC = () => {
           onSalvo={carregarAlunosDaSerie}
         />
       )}
-
-      {/* Modal de Alteração de Senha */}
-      <ModalAlterarSenha
-        isOpen={modalSenhaAberto}
-        onClose={() => setModalSenhaAberto(false)}
-      />
     </AppShell>
   );
 };
