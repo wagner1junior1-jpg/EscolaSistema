@@ -127,9 +127,6 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
     <div className="space-y-8">
       {/* Topo / Boas-vindas */}
       <div>
-        <h2 className="font-heading font-black text-xl sm:text-2xl text-slate-900 tracking-tight">
-          Painel de Gestão Escolar
-        </h2>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
           Visão consolidada da escola e atalhos rápidos para gerenciamento.
         </p>
@@ -162,9 +159,6 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
               <div className="text-2xl sm:text-3xl font-heading font-black text-slate-900">
                 {visaoGeral.total_alunos}
               </div>
-              <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {pluralizar(visaoGeral.total_alunos, 'aluno', 'alunos')}
-              </div>
             </div>
           </Card>
 
@@ -182,9 +176,6 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
               <div className="text-2xl sm:text-3xl font-heading font-black text-slate-900">
                 {visaoGeral.total_turmas}
               </div>
-              <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {pluralizar(visaoGeral.total_turmas, 'turma', 'turmas')}
-              </div>
             </div>
           </Card>
 
@@ -201,9 +192,6 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
             <div className="mt-2">
               <div className="text-2xl sm:text-3xl font-heading font-black text-slate-900">
                 {visaoGeral.total_professores}
-              </div>
-              <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {pluralizar(visaoGeral.total_professores, 'professor', 'professores')}
               </div>
             </div>
           </Card>

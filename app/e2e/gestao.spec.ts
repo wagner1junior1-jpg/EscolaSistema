@@ -240,9 +240,17 @@ test.describe('Portal de Gestão', () => {
     await loginDemo(page, 'coordenacao@demo.com');
     await expect(page).toHaveURL(/\/gestao/);
 
-    await expect(page.getByText('16 alunos')).toBeVisible();
-    await expect(page.getByText('2 turmas')).toBeVisible();
-    await expect(page.getByText('2 professores')).toBeVisible();
+    const cardAlunos = page.locator('[class*="grid-cols-5"] > div').filter({ hasText: /alunos/i });
+    await expect(cardAlunos.getByText(/alunos/i)).toBeVisible();
+    await expect(cardAlunos.getByText('16', { exact: true })).toBeVisible();
+
+    const cardTurmas = page.locator('[class*="grid-cols-5"] > div').filter({ hasText: /turmas/i });
+    await expect(cardTurmas.getByText(/turmas/i)).toBeVisible();
+    await expect(cardTurmas.getByText('2', { exact: true })).toBeVisible();
+
+    const cardProfessores = page.locator('[class*="grid-cols-5"] > div').filter({ hasText: /professores/i });
+    await expect(cardProfessores.getByText(/professores/i)).toBeVisible();
+    await expect(cardProfessores.getByText('2', { exact: true })).toBeVisible();
 
     await page.screenshot({ path: 'e2e/evidencias/G6.png' });
   });
