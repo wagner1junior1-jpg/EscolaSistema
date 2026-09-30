@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { relatorioService, assinarMudancas } from '@/services';
 import { VisaoGeralEscola } from '@/lib/types';
+import { formatarPercentual, pluralizar } from '@/lib/formatar';
 
 interface GestaoInicioSecaoProps {
   onNavegar: (secao: string) => void;
@@ -162,7 +163,7 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
                 {visaoGeral.total_alunos}
               </div>
               <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {visaoGeral.total_alunos === 1 ? '1 aluno' : `${visaoGeral.total_alunos} alunos`}
+                {pluralizar(visaoGeral.total_alunos, 'aluno', 'alunos')}
               </div>
             </div>
           </Card>
@@ -182,7 +183,7 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
                 {visaoGeral.total_turmas}
               </div>
               <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {visaoGeral.total_turmas === 1 ? '1 turma' : `${visaoGeral.total_turmas} turmas`}
+                {pluralizar(visaoGeral.total_turmas, 'turma', 'turmas')}
               </div>
             </div>
           </Card>
@@ -202,7 +203,7 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
                 {visaoGeral.total_professores}
               </div>
               <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {visaoGeral.total_professores === 1 ? '1 professor' : `${visaoGeral.total_professores} professores`}
+                {pluralizar(visaoGeral.total_professores, 'professor', 'professores')}
               </div>
             </div>
           </Card>
@@ -222,9 +223,7 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
                 {visaoGeral.total_atividades_publicadas}
               </div>
               <div className="text-xs font-semibold text-slate-600 mt-0.5">
-                {visaoGeral.total_atividades_publicadas === 1
-                  ? '1 atividade publicada'
-                  : `${visaoGeral.total_atividades_publicadas} atividades publicadas`}
+                {pluralizar(visaoGeral.total_atividades_publicadas, 'atividade publicada', 'atividades publicadas')}
               </div>
             </div>
           </Card>
@@ -242,7 +241,7 @@ export const GestaoInicioSecao: React.FC<GestaoInicioSecaoProps> = ({
             <div className="mt-2">
               <div className="text-2xl sm:text-3xl font-heading font-black text-slate-900">
                 {visaoGeral.aproveitamento_medio !== null
-                  ? `${visaoGeral.aproveitamento_medio.toString().replace('.', ',')}%`
+                  ? formatarPercentual(visaoGeral.aproveitamento_medio)
                   : '—'}
               </div>
               <div className="text-xs font-semibold text-slate-600 mt-0.5">

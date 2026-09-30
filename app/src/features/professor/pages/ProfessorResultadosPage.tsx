@@ -23,6 +23,7 @@ import {
   LetraAlternativa,
   ItemCorrecaoPendente,
   ItemCorrecaoFeita,
+  assinarMudancas,
 } from '@/services';
 import {
   ArrowLeft,
@@ -40,7 +41,9 @@ import {
   Check,
   Filter,
   HelpCircle,
+  Award,
 } from 'lucide-react';
+import { formatarPercentual, pluralizar } from '@/lib/formatar';
 
 export const ProfessorResultadosPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -66,8 +69,9 @@ export const ProfessorResultadosPage: React.FC = () => {
   const [filtroQuestaoCorrecao, setFiltroQuestaoCorrecao] = useState<string>('todas');
   const [filtroAlunoCorrecao, setFiltroAlunoCorrecao] = useState<string>('');
 
-  // Comentários por resposta_id
+  // Comentários e notas por resposta_id
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  const [notas, setNotas] = useState<Record<string, number | ''>>({});
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
   // Ordenação: 'ordem' (ordem da prova) | 'dificeis' (mais difíceis primeiro)
@@ -110,6 +114,12 @@ export const ProfessorResultadosPage: React.FC = () => {
 
   useEffect(() => {
     carregarDados();
+    const desassinar = assinarMudancas(() => {
+      carregarDados();
+    });
+    return () => {
+      desassinar();
+    };
   }, [carregarDados]);
 
   const mudarAbaPrincipal = (novaAba: 'mapa' | 'correcoes') => {
@@ -127,8 +137,9 @@ export const ProfessorResultadosPage: React.FC = () => {
 
   const handleCorrigir = async (
     respostaId: string,
-    correcao: 'certo' | 'parcial' | 'errado',
-    comentarioManual?: string | null
+    correcaoPadrao: 'certo' | 'parcial' | 'errado',
+    comentarioManual?: string | null,
+    notaManual?: number
   ) => {
     if (!id) return;
     setSalvandoId(respostaId);
@@ -138,8 +149,22 @@ export const ProfessorResultadosPage: React.FC = () => {
           ? (comentarioManual ?? '').trim() || undefined
           : (comentarios[respostaId] ?? '').trim() || undefined;
 
-      await professorService.corrigirResposta(respostaId, correcao, textoComentario);
-      toast.success('Correção salva');
+      const notaInformada =
+        notaManual !== undefined
+          ? notaManual
+          : typeof notas[respostaId] === 'number'
+          ? (notas[respostaId] as number)
+          : undefined;
+
+      let correcaoFinal = correcaoPadrao;
+      if (notaInformada !== undefined) {
+        if (notaInformada === 100) correcaoFinal = 'certo';
+        else if (notaInformada === 0) correcaoFinal = 'errado';
+        else correcaoFinal = 'parcial';
+      }
+
+      await professorService.corrigirResposta(respostaId, correcaoFinal, textoComentario, notaInformada);
+      toast.success('Correção salva com sucesso!');
 
       // Atualiza listas de pendentes e corrigidas e o mapa de calor
       const [novasPendentes, novasCorrigidas, novoMapa] = await Promise.all([
@@ -303,7 +328,7 @@ export const ProfessorResultadosPage: React.FC = () => {
 
                   {pendentes.length > 0 && (
                     <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                      {pendentes.length} {pendentes.length === 1 ? 'correção pendente' : 'correções pendentes'}
+                      {pluralizar(pendentes.length, 'correção pendente', 'correções pendentes')}
                     </span>
                   )}
                 </div>
@@ -476,7 +501,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
                                     <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
                                     <span>
-                                      Pegadinha: Letra {q.distrator_mais_escolhido.letra} ({q.distrator_mais_escolhido.total_escolhas} alunos)
+                                      Pegadinha: Letra {q.distrator_mais_escolhido.letra} ({pluralizar(q.distrator_mais_escolhido.total_escolhas, 'aluno', 'alunos')})
                                     </span>
                                   </span>
                                 )}
@@ -495,15 +520,15 @@ export const ProfessorResultadosPage: React.FC = () => {
                                   </span>
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    <span>Certo: {q.distribuicao_discursiva.certo.porcentagem}% ({q.distribuicao_discursiva.certo.total})</span>
+                                    <span>Certo: {formatarPercentual(q.distribuicao_discursiva.certo.porcentagem)} ({q.distribuicao_discursiva.certo.total})</span>
                                   </span>
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                    <span>Parcial: {q.distribuicao_discursiva.parcial.porcentagem}% ({q.distribuicao_discursiva.parcial.total})</span>
+                                    <span>Parcial: {formatarPercentual(q.distribuicao_discursiva.parcial.porcentagem)} ({q.distribuicao_discursiva.parcial.total})</span>
                                   </span>
                                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">
                                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                    <span>Errado: {q.distribuicao_discursiva.errado.porcentagem}% ({q.distribuicao_discursiva.errado.total})</span>
+                                    <span>Errado: {formatarPercentual(q.distribuicao_discursiva.errado.porcentagem)} ({q.distribuicao_discursiva.errado.total})</span>
                                   </span>
                                 </div>
                               ) : alternativasBase.length > 0 ? (
@@ -556,7 +581,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                                 <span
                                   className={`px-1.5 py-0.5 rounded font-mono font-bold text-xs border ${badgeCor}`}
                                 >
-                                  {pct}%
+                                  {formatarPercentual(pct)}
                                 </span>
                               </div>
 
@@ -568,7 +593,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                               </div>
 
                               <div className="text-[11px] text-slate-500 text-right font-medium">
-                                {q.total_acertos} de {q.total_respostas} alunos
+                                {q.total_acertos} de {pluralizar(q.total_respostas, 'aluno', 'alunos')}
                               </div>
                             </div>
 
@@ -772,44 +797,172 @@ export const ProfessorResultadosPage: React.FC = () => {
                               />
                             </div>
 
-                            {/* Botões de Ação */}
-                            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 flex-wrap">
-                              <span className="text-xs font-semibold text-slate-500 mr-auto">
-                                Avaliar e concluir:
-                              </span>
+                            {/* Avaliação da Nota (0 a 100) e Conclusão */}
+                            <div className="pt-4 border-t border-slate-200/80 space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  <Award className="w-4 h-4 text-indigo-600 shrink-0" />
+                                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                                    Atribuir Nota (0 a 100):
+                                  </span>
+                                </div>
 
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-600 font-bold"
-                                disabled={salvandoId === item.resposta_id}
-                                onClick={() => handleCorrigir(item.resposta_id, 'certo')}
-                              >
-                                <CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-600" />
-                                Certo
-                              </Button>
+                                {/* Atalhos Rápidos */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] font-medium text-slate-400 mr-1">Atalhos:</span>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 100 }))}
+                                    className={`px-2 py-1 text-xs font-bold rounded-lg border transition-all ${
+                                      notas[item.resposta_id] === 100
+                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                    }`}
+                                  >
+                                    100 (Certo)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 75 }))}
+                                    className={`px-2 py-1 text-xs font-bold rounded-lg border transition-all ${
+                                      notas[item.resposta_id] === 75
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                        : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                    }`}
+                                  >
+                                    75 (Bom)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 50 }))}
+                                    className={`px-2 py-1 text-xs font-bold rounded-lg border transition-all ${
+                                      notas[item.resposta_id] === 50
+                                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                                        : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                    }`}
+                                  >
+                                    50 (Médio)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 0 }))}
+                                    className={`px-2 py-1 text-xs font-bold rounded-lg border transition-all ${
+                                      notas[item.resposta_id] === 0
+                                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                        : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                                    }`}
+                                  >
+                                    0 (Errado)
+                                  </button>
+                                </div>
+                              </div>
 
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-amber-500 text-amber-700 hover:bg-amber-50 hover:border-amber-600 font-bold"
-                                disabled={salvandoId === item.resposta_id}
-                                onClick={() => handleCorrigir(item.resposta_id, 'parcial')}
-                              >
-                                <AlertCircle className="w-4 h-4 mr-1.5 text-amber-600" />
-                                Parcial
-                              </Button>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="relative w-28">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      placeholder="0 - 100"
+                                      value={notas[item.resposta_id] ?? ''}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') {
+                                          setNotas((prev) => ({ ...prev, [item.resposta_id]: '' }));
+                                        } else {
+                                          const num = Math.min(100, Math.max(0, parseInt(val, 10) || 0));
+                                          setNotas((prev) => ({ ...prev, [item.resposta_id]: num }));
+                                        }
+                                      }}
+                                      disabled={salvandoId === item.resposta_id}
+                                      className="w-full px-3 py-1.5 text-sm font-black text-slate-900 bg-white border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono text-center shadow-xs"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                                      /100
+                                    </span>
+                                  </div>
 
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-rose-500 text-rose-700 hover:bg-rose-50 hover:border-rose-600 font-bold"
-                                disabled={salvandoId === item.resposta_id}
-                                onClick={() => handleCorrigir(item.resposta_id, 'errado')}
-                              >
-                                <XCircle className="w-4 h-4 mr-1.5 text-rose-600" />
-                                Errado
-                              </Button>
+                                  {typeof notas[item.resposta_id] === 'number' && (
+                                    <span
+                                      className={`text-xs font-black px-2.5 py-1 rounded-full ${
+                                        notas[item.resposta_id] === 100
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : (notas[item.resposta_id] as number) >= 60
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : (notas[item.resposta_id] as number) > 0
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : 'bg-rose-100 text-rose-800'
+                                      }`}
+                                    >
+                                      {notas[item.resposta_id] === 100
+                                        ? 'Totalmente Certo'
+                                        : (notas[item.resposta_id] as number) >= 60
+                                        ? 'Acerto Bom'
+                                        : (notas[item.resposta_id] as number) > 0
+                                        ? 'Acerto Parcial'
+                                        : 'Errado (Zerado)'}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={
+                                      salvandoId === item.resposta_id ||
+                                      notas[item.resposta_id] === '' ||
+                                      notas[item.resposta_id] === undefined
+                                    }
+                                    onClick={() => {
+                                      const n = Number(notas[item.resposta_id]);
+                                      const corr = n === 100 ? 'certo' : n === 0 ? 'errado' : 'parcial';
+                                      handleCorrigir(item.resposta_id, corr, undefined, n);
+                                    }}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xs flex items-center gap-1.5"
+                                  >
+                                    {salvandoId === item.resposta_id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Check className="w-4 h-4" />
+                                    )}
+                                    <span>
+                                      {typeof notas[item.resposta_id] === 'number'
+                                        ? `Salvar Nota (${notas[item.resposta_id]} pts)`
+                                        : 'Salvar Avaliação'}
+                                    </span>
+                                  </Button>
+
+                                  {/* Botões rápidos clássicos caso professor queira 1-clique */}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-emerald-500 text-emerald-700 hover:bg-emerald-50 font-medium text-xs"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => handleCorrigir(item.resposta_id, 'certo', undefined, 100)}
+                                    title="Dar nota máxima 100"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
+                                    100%
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-rose-500 text-rose-700 hover:bg-rose-50 font-medium text-xs"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => handleCorrigir(item.resposta_id, 'errado', undefined, 0)}
+                                    title="Zerar questão (0)"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5 mr-1 text-rose-600" />
+                                    0%
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
@@ -853,24 +1006,37 @@ export const ProfessorResultadosPage: React.FC = () => {
 
                               <div className="flex items-center gap-2">
                                 <span className="text-xs text-slate-500 font-medium">Nota atribuída:</span>
-                                {item.correcao === 'certo' && (
-                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                    Certo
-                                  </span>
-                                )}
-                                {item.correcao === 'parcial' && (
-                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                                    Parcial
-                                  </span>
-                                )}
-                                {item.correcao === 'errado' && (
-                                  <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
-                                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
-                                    Errado
-                                  </span>
-                                )}
+                                {(() => {
+                                  const notaExibida =
+                                    item.nota ??
+                                    (typeof item.pontuacao === 'number'
+                                      ? Math.round(item.pontuacao * 100)
+                                      : item.correcao === 'certo'
+                                      ? 100
+                                      : item.correcao === 'parcial'
+                                      ? 50
+                                      : 0);
+
+                                  return (
+                                    <span
+                                      className={`px-3 py-1 rounded-full text-xs font-black border flex items-center gap-1.5 ${
+                                        notaExibida === 100
+                                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                          : notaExibida >= 60
+                                          ? 'bg-blue-100 text-blue-900 border-blue-300'
+                                          : notaExibida > 0
+                                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                          : 'bg-rose-100 text-rose-900 border-rose-300'
+                                      }`}
+                                    >
+                                      <Award className="w-3.5 h-3.5" />
+                                      <span>{notaExibida} / 100</span>
+                                      <span className="opacity-75 font-semibold text-[11px]">
+                                        ({item.correcao === 'certo' ? 'Certo' : item.correcao === 'parcial' ? 'Parcial' : 'Errado'})
+                                      </span>
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </CardHeader>
@@ -942,80 +1108,182 @@ export const ProfessorResultadosPage: React.FC = () => {
                             </div>
 
                             {/* Opção de Mudar a Nota */}
-                            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2.5 flex-wrap">
-                              <span className="text-xs font-semibold text-slate-600">
-                                Opção de mudar a nota ou salvar comentário:
-                              </span>
+                            <div className="pt-4 border-t border-slate-200/80 space-y-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                  <Award className="w-4 h-4 text-indigo-600 shrink-0" />
+                                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                                    Alterar Nota da Questão (0 a 100):
+                                  </span>
+                                </div>
 
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Button
-                                  variant={item.correcao === 'certo' ? 'primary' : 'outline'}
-                                  size="sm"
-                                  className={
-                                    item.correcao === 'certo'
-                                      ? 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white font-bold'
-                                      : 'border-emerald-500 text-emerald-700 hover:bg-emerald-50 font-medium'
-                                  }
-                                  disabled={salvandoId === item.resposta_id}
-                                  onClick={() =>
-                                    handleCorrigir(
-                                      item.resposta_id,
-                                      'certo',
-                                      comentarios[item.resposta_id] !== undefined
-                                        ? comentarios[item.resposta_id]
-                                        : (item.comentario_professor || undefined)
-                                    )
-                                  }
-                                >
-                                  <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                                  Certo
-                                </Button>
+                                {/* Atalhos Rápidos */}
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] font-medium text-slate-400 mr-1">Atalhos:</span>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 100 }))}
+                                    className="px-2 py-1 text-xs font-bold rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 transition-all"
+                                  >
+                                    100 (Certo)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 75 }))}
+                                    className="px-2 py-1 text-xs font-bold rounded-lg border bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 transition-all"
+                                  >
+                                    75 (Bom)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 50 }))}
+                                    className="px-2 py-1 text-xs font-bold rounded-lg border bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 transition-all"
+                                  >
+                                    50 (Médio)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => setNotas((prev) => ({ ...prev, [item.resposta_id]: 0 }))}
+                                    className="px-2 py-1 text-xs font-bold rounded-lg border bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 transition-all"
+                                  >
+                                    0 (Errado)
+                                  </button>
+                                </div>
+                              </div>
 
-                                <Button
-                                  variant={item.correcao === 'parcial' ? 'primary' : 'outline'}
-                                  size="sm"
-                                  className={
-                                    item.correcao === 'parcial'
-                                      ? 'bg-amber-600 hover:bg-amber-700 border-amber-600 text-white font-bold'
-                                      : 'border-amber-500 text-amber-700 hover:bg-amber-50 font-medium'
-                                  }
-                                  disabled={salvandoId === item.resposta_id}
-                                  onClick={() =>
-                                    handleCorrigir(
-                                      item.resposta_id,
-                                      'parcial',
-                                      comentarios[item.resposta_id] !== undefined
-                                        ? comentarios[item.resposta_id]
-                                        : (item.comentario_professor || undefined)
-                                    )
-                                  }
-                                >
-                                  <AlertCircle className="w-4 h-4 mr-1.5" />
-                                  Parcial
-                                </Button>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="relative w-28">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      placeholder="0 - 100"
+                                      value={
+                                        notas[item.resposta_id] !== undefined
+                                          ? notas[item.resposta_id]
+                                          : item.nota ?? (typeof item.pontuacao === 'number' ? Math.round(item.pontuacao * 100) : item.correcao === 'certo' ? 100 : item.correcao === 'parcial' ? 50 : 0)
+                                      }
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === '') {
+                                          setNotas((prev) => ({ ...prev, [item.resposta_id]: '' }));
+                                        } else {
+                                          const num = Math.min(100, Math.max(0, parseInt(val, 10) || 0));
+                                          setNotas((prev) => ({ ...prev, [item.resposta_id]: num }));
+                                        }
+                                      }}
+                                      disabled={salvandoId === item.resposta_id}
+                                      className="w-full px-3 py-1.5 text-sm font-black text-slate-900 bg-white border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono text-center shadow-xs"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none">
+                                      /100
+                                    </span>
+                                  </div>
 
-                                <Button
-                                  variant={item.correcao === 'errado' ? 'primary' : 'outline'}
-                                  size="sm"
-                                  className={
-                                    item.correcao === 'errado'
-                                      ? 'bg-rose-600 hover:bg-rose-700 border-rose-600 text-white font-bold'
-                                      : 'border-rose-500 text-rose-700 hover:bg-rose-50 font-medium'
-                                  }
-                                  disabled={salvandoId === item.resposta_id}
-                                  onClick={() =>
-                                    handleCorrigir(
-                                      item.resposta_id,
-                                      'errado',
-                                      comentarios[item.resposta_id] !== undefined
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() => {
+                                      const valorNota =
+                                        notas[item.resposta_id] !== undefined && notas[item.resposta_id] !== ''
+                                          ? Number(notas[item.resposta_id])
+                                          : item.nota ?? (typeof item.pontuacao === 'number' ? Math.round(item.pontuacao * 100) : item.correcao === 'certo' ? 100 : item.correcao === 'parcial' ? 50 : 0);
+
+                                      const corr = valorNota === 100 ? 'certo' : valorNota === 0 ? 'errado' : 'parcial';
+                                      const textoCom = comentarios[item.resposta_id] !== undefined
                                         ? comentarios[item.resposta_id]
-                                        : (item.comentario_professor || undefined)
-                                    )
-                                  }
-                                >
-                                  <XCircle className="w-4 h-4 mr-1.5" />
-                                  Errado
-                                </Button>
+                                        : (item.comentario_professor || undefined);
+
+                                      handleCorrigir(item.resposta_id, corr, textoCom, valorNota);
+                                    }}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xs flex items-center gap-1.5"
+                                  >
+                                    {salvandoId === item.resposta_id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Check className="w-4 h-4" />
+                                    )}
+                                    <span>Salvar Alteração</span>
+                                  </Button>
+                                </div>
+
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {/* Botões rápidos clássicos caso professor queira 1-clique */}
+                                  <Button
+                                    variant={item.correcao === 'certo' ? 'primary' : 'outline'}
+                                    size="sm"
+                                    className={
+                                      item.correcao === 'certo'
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold'
+                                        : 'border-emerald-500 text-emerald-700 hover:bg-emerald-50 font-medium text-xs'
+                                    }
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() =>
+                                      handleCorrigir(
+                                        item.resposta_id,
+                                        'certo',
+                                        comentarios[item.resposta_id] !== undefined ? comentarios[item.resposta_id] : (item.comentario_professor || undefined),
+                                        100
+                                      )
+                                    }
+                                    title="Definir como 100% Certo"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                                    100%
+                                  </Button>
+
+                                  <Button
+                                    variant={item.correcao === 'parcial' ? 'primary' : 'outline'}
+                                    size="sm"
+                                    className={
+                                      item.correcao === 'parcial'
+                                        ? 'bg-amber-600 hover:bg-amber-700 text-white font-bold'
+                                        : 'border-amber-500 text-amber-700 hover:bg-amber-50 font-medium text-xs'
+                                    }
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() =>
+                                      handleCorrigir(
+                                        item.resposta_id,
+                                        'parcial',
+                                        comentarios[item.resposta_id] !== undefined ? comentarios[item.resposta_id] : (item.comentario_professor || undefined),
+                                        50
+                                      )
+                                    }
+                                    title="Definir como 50% Parcial"
+                                  >
+                                    <AlertCircle className="w-3.5 h-3.5 mr-1" />
+                                    50%
+                                  </Button>
+
+                                  <Button
+                                    variant={item.correcao === 'errado' ? 'primary' : 'outline'}
+                                    size="sm"
+                                    className={
+                                      item.correcao === 'errado'
+                                        ? 'bg-rose-600 hover:bg-rose-700 text-white font-bold'
+                                        : 'border-rose-500 text-rose-700 hover:bg-rose-50 font-medium text-xs'
+                                    }
+                                    disabled={salvandoId === item.resposta_id}
+                                    onClick={() =>
+                                      handleCorrigir(
+                                        item.resposta_id,
+                                        'errado',
+                                        comentarios[item.resposta_id] !== undefined ? comentarios[item.resposta_id] : (item.comentario_professor || undefined),
+                                        0
+                                      )
+                                    }
+                                    title="Zerar questão (0%)"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5 mr-1" />
+                                    0%
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -1078,7 +1346,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
                   <span>Índice de Acerto (1ª resposta)</span>
                   <span className={`px-2 py-0.5 rounded-md border font-mono font-bold ${textoCorModal}`}>
-                    {pctModal}% ({questaoModal.total_acertos} de {questaoModal.total_respostas} acertos)
+                    {formatarPercentual(pctModal)} ({questaoModal.total_acertos} de {questaoModal.total_respostas} acertos)
                   </span>
                 </div>
 
@@ -1101,7 +1369,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                     <div className="p-3.5 rounded-xl border border-emerald-300 bg-emerald-50/50 space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
                         <span>Certo (100% dos pontos)</span>
-                        <span className="font-mono">{questaoModal.distribuicao_discursiva.certo.total} alunos ({questaoModal.distribuicao_discursiva.certo.porcentagem}%)</span>
+                        <span className="font-mono">{pluralizar(questaoModal.distribuicao_discursiva.certo.total, 'aluno', 'alunos')} ({formatarPercentual(questaoModal.distribuicao_discursiva.certo.porcentagem)})</span>
                       </div>
                       <div className="w-full h-2 bg-emerald-100 rounded-full overflow-hidden">
                         <div className="h-full bg-emerald-500" style={{ width: `${questaoModal.distribuicao_discursiva.certo.porcentagem}%` }} />
@@ -1111,7 +1379,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                     <div className="p-3.5 rounded-xl border border-amber-300 bg-amber-50/50 space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold text-amber-900">
                         <span>Parcial (50% dos pontos)</span>
-                        <span className="font-mono">{questaoModal.distribuicao_discursiva.parcial.total} alunos ({questaoModal.distribuicao_discursiva.parcial.porcentagem}%)</span>
+                        <span className="font-mono">{pluralizar(questaoModal.distribuicao_discursiva.parcial.total, 'aluno', 'alunos')} ({formatarPercentual(questaoModal.distribuicao_discursiva.parcial.porcentagem)})</span>
                       </div>
                       <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden">
                         <div className="h-full bg-amber-500" style={{ width: `${questaoModal.distribuicao_discursiva.parcial.porcentagem}%` }} />
@@ -1121,7 +1389,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                     <div className="p-3.5 rounded-xl border border-rose-300 bg-rose-50/50 space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold text-rose-900">
                         <span>Errado (0% dos pontos)</span>
-                        <span className="font-mono">{questaoModal.distribuicao_discursiva.errado.total} alunos ({questaoModal.distribuicao_discursiva.errado.porcentagem}%)</span>
+                        <span className="font-mono">{pluralizar(questaoModal.distribuicao_discursiva.errado.total, 'aluno', 'alunos')} ({formatarPercentual(questaoModal.distribuicao_discursiva.errado.porcentagem)})</span>
                       </div>
                       <div className="w-full h-2 bg-rose-100 rounded-full overflow-hidden">
                         <div className="h-full bg-rose-500" style={{ width: `${questaoModal.distribuicao_discursiva.errado.porcentagem}%` }} />
@@ -1179,8 +1447,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                             </div>
 
                             <div className="text-right shrink-0 font-semibold text-slate-600 font-mono">
-                              <strong>{totalVotos}</strong>{' '}
-                              {totalVotos === 1 ? 'aluno' : 'alunos'} ({porcentagem}%)
+                              {pluralizar(totalVotos, 'aluno', 'alunos')} ({formatarPercentual(porcentagem)})
                             </div>
                           </div>
 
@@ -1213,8 +1480,7 @@ export const ProfessorResultadosPage: React.FC = () => {
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                     <span>
                       Pegadinha mais escolhida: Letra {questaoModal.distrator_mais_escolhido.letra} (
-                      {questaoModal.distrator_mais_escolhido.total_escolhas}{' '}
-                      {questaoModal.distrator_mais_escolhido.total_escolhas === 1 ? 'aluno' : 'alunos'})
+                      {pluralizar(questaoModal.distrator_mais_escolhido.total_escolhas, 'aluno', 'alunos')})
                     </span>
                   </div>
                   <p className="text-xs text-rose-800 leading-relaxed pl-6">
