@@ -17,6 +17,7 @@ import {
   QuestaoSugeridaIA,
 } from '@/services';
 import { obterGeminiApiKey, salvarGeminiApiKeyLocal } from '@/services/mock/ia.mock';
+import { reduzirImagem } from '@/lib/imagem';
 import {
   Sparkles,
   Upload,
@@ -156,8 +157,9 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
   const qtdObjetivas = Math.max(0, qtdTotal - qtdSubjetivas);
 
   // Upload simulado/local de imagens
-  const handleSelecionarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const handleSelecionarFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const files = input.files;
     if (!files || files.length === 0) return;
 
     if (fotos.length + files.length > 5) {
@@ -165,18 +167,17 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
       return;
     }
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result as string;
-        if (result) {
-          setFotos((prev) => [...prev, result]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    for (const file of Array.from(files)) {
+      try {
+        const fotoReduzida = await reduzirImagem(file);
+        setFotos((prev) => [...prev, fotoReduzida]);
+      } catch (err) {
+        const mensagem = err instanceof Error ? err.message : 'Erro ao processar imagem.';
+        toast.warning(mensagem);
+      }
+    }
 
-    e.target.value = '';
+    input.value = '';
   };
 
   const handleRemoverFoto = (index: number) => {
@@ -369,9 +370,9 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
           ? 'Cadastrar Questões por IA'
           : `Revisão das Questões Geradas (${questoesSugeridas.length})`
       }
-      maxWidth="2xl"
+      maxWidth="3xl"
     >
-      <div className="space-y-6 max-h-[80vh] overflow-y-auto pr-1">
+      <div className="space-y-6">
         {/* =================================================================== */}
         {/* ETAPA 1: FORMULÁRIO DE ENTRADA E CONFIGURAÇÃO                       */}
         {/* =================================================================== */}
@@ -438,8 +439,8 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
               </div>
             )}
 
-            {/* Hierarquia em Cascata: 1. Série -> 2. Matéria -> 3. Assunto -> 4. Dificuldade */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* Hierarquia em Cascata: 1. Série e 2. Matéria (Linha 1) -> 3. Submatéria e 4. Dificuldade (Linha 2) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* 1. Série */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
@@ -481,14 +482,14 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
 
               {/* 3. Submatéria */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 whitespace-nowrap">
                     3. Submatéria *
                   </label>
                   <button
                     type="button"
                     onClick={() => setMostrarNovoAssunto(!mostrarNovoAssunto)}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap transition-colors"
                   >
                     <FolderPlus className="w-3.5 h-3.5" />
                     <span>{mostrarNovoAssunto ? 'Cancelar' : '+ Nova submatéria'}</span>
@@ -496,18 +497,20 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                 </div>
 
                 {mostrarNovoAssunto ? (
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
                     <Input
                       placeholder="Ex: Porcentagem, Adição..."
                       value={novoAssuntoNome}
                       onChange={(e) => setNovoAssuntoNome(e.target.value)}
-                      className="text-sm"
+                      className="text-sm flex-1"
+                      autoFocus
                     />
                     <Button
                       size="sm"
                       variant="primary"
                       onClick={handleSalvarNovoAssunto}
                       isLoading={criandoAssunto}
+                      className="shrink-0"
                     >
                       Salvar
                     </Button>
@@ -556,7 +559,7 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="font-heading font-black text-sm text-slate-800">
-                    Quantidade de Questões
+                    Quantidade de Questões (Limite de 20 por vez)
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
                     Escolha o total (máx. 20) e quantas serão discursivas/subjetivas.
@@ -636,31 +639,6 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                     {qtdTotal}
                   </span>
                 </div>
-              </div>
-
-              {/* Dificuldade */}
-              <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center gap-3">
-                <span className="text-xs font-bold text-slate-700">Dificuldade desejada:</span>
-                {(['misturada', 'facil', 'medio', 'dificil'] as const).map((dif) => (
-                  <label
-                    key={dif}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold cursor-pointer transition-all ${
-                      dificuldade === dif
-                        ? 'bg-indigo-50 border-indigo-300 text-indigo-700 ring-2 ring-indigo-500/20'
-                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="dificuldade_ia"
-                      value={dif}
-                      checked={dificuldade === dif}
-                      onChange={() => setDificuldade(dif)}
-                      className="sr-only"
-                    />
-                    <span className="capitalize">{dif === 'misturada' ? 'Misturada' : dif}</span>
-                  </label>
-                ))}
               </div>
             </div>
 

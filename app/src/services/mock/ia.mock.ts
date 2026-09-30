@@ -567,7 +567,7 @@ function criarQuestaoObjetivaExemplo(
   serie: string,
   nomeAssunto: string,
   dificuldade: DificuldadeQuestao,
-  fotoAnexada: string | null,
+  _fotoAnexada: string | null,
   area: AreaConhecimento
 ): QuestaoSugeridaIA {
   const idTemp = `ia-sug-obj-${Date.now()}-${indice}-${gerarId('tmp')}`;
@@ -583,7 +583,7 @@ function criarQuestaoObjetivaExemplo(
       dica: item.dica,
       explicacao: item.explicacao,
       resposta_esperada: null,
-      imagem_url: fotoAnexada,
+      imagem_url: null,
       alternativas: item.alternativas,
       avisos: ['Questão de exemplo (modo demonstração). Revise antes de usar.'],
     };
@@ -599,7 +599,7 @@ function criarQuestaoObjetivaExemplo(
       dica: item.dica,
       explicacao: item.explicacao,
       resposta_esperada: null,
-      imagem_url: fotoAnexada,
+      imagem_url: null,
       alternativas: item.alternativas,
       avisos: ['Questão de exemplo (modo demonstração). Revise antes de usar.'],
     };
@@ -618,7 +618,7 @@ function criarQuestaoObjetivaExemplo(
     dica: `Revise os conceitos centrais de ${nomeAssunto} apresentados nas aulas.`,
     explicacao: `A resposta correta reflete a fundamentação teórica de ${nomeAssunto} indicada na BNCC.`,
     resposta_esperada: null,
-    imagem_url: fotoAnexada,
+    imagem_url: null,
     alternativas: [
       {
         letra: 'A',
@@ -655,7 +655,7 @@ function criarQuestaoDiscursivaExemplo(
   serie: string,
   nomeAssunto: string,
   dificuldade: DificuldadeQuestao,
-  fotoAnexada: string | null,
+  _fotoAnexada: string | null,
   area: AreaConhecimento
 ): QuestaoSugeridaIA {
   const idTemp = `ia-sug-disc-${Date.now()}-${indice}-${gerarId('tmp')}`;
@@ -679,7 +679,7 @@ function criarQuestaoDiscursivaExemplo(
       dica: item.dica,
       explicacao: item.explicacao,
       resposta_esperada: item.resposta_esperada,
-      imagem_url: fotoAnexada,
+      imagem_url: null,
       alternativas: undefined,
       avisos: ['Questão de exemplo (modo demonstração). Revise antes de usar.'],
     };
@@ -709,7 +709,7 @@ function criarQuestaoDiscursivaExemplo(
       dica: item.dica,
       explicacao: item.explicacao,
       resposta_esperada: item.resposta_esperada,
-      imagem_url: fotoAnexada,
+      imagem_url: null,
       alternativas: undefined,
       avisos: ['Questão de exemplo (modo demonstração). Revise antes de usar.'],
     };
@@ -727,7 +727,7 @@ function criarQuestaoDiscursivaExemplo(
     dica: `Apresente a definição principal de ${nomeAssunto} antes de detalhar o exemplo.`,
     explicacao: `Espera-se clareza conceitual sobre ${nomeAssunto} e argumentação adequada para o ${serieBase}.`,
     resposta_esperada: `Resposta modelo: O aluno conceitua ${nomeAssunto} de forma precisa e desenvolve um exemplo contextualizado coerente.\nCerto: Conceitua o tema e apresenta exemplo fundamentado.\nParcial: Apenas conceitua sem exemplificar ou exemplifica sem embasamento.\nErrado: Resposta desconexa ou sem relação com o conteúdo.`,
-    imagem_url: fotoAnexada,
+    imagem_url: null,
     alternativas: undefined,
     avisos: ['Questão de exemplo (modo demonstração). Revise antes de usar.'],
   };
@@ -1030,7 +1030,7 @@ export class MockIAService implements ServicoIA {
                     q.explicacao ||
                     `Resposta modelo: Explicação conceitual de ${nomeAssunto}.\nCerto: Responde com fundamentação completa.\nParcial: Responde parcialmente.\nErrado: Resposta incorreta.`
                   : null,
-              imagem_url: fotoAnexada,
+              imagem_url: null,
               alternativas:
                 tipo === 'objetiva' && Array.isArray(q.alternativas) && q.alternativas.length >= 2
                   ? q.alternativas.slice(0, 4).map((alt, aIdx) => ({
