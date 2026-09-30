@@ -66,6 +66,14 @@ export const AppRoutes: React.FC = () => {
         }
       />
       <Route
+        path="/professor/aluno/:alunoId"
+        element={
+          <RotaProtegida papeis={['professor']}>
+            <ProfessorFichaAlunoPage />
+          </RotaProtegida>
+        }
+      />
+      <Route
         path="/professor/atividade/:id"
         element={
           <RotaProtegida papeis={['professor']}>

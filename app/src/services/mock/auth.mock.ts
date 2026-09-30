@@ -6,7 +6,7 @@
 
 import { AuthService } from '../contracts';
 import { Perfil } from '@/lib/types';
-import { getDatabase } from './db';
+import { getDatabase, saveDatabase } from './db';
 
 const MOCK_AUTH_USER_KEY = 'saberpontual_mock_current_user_id';
 let memoryCurrentUserId: string | null = null;
@@ -67,5 +67,35 @@ export class MockAuthService implements AuthService {
 
     const db = await getDatabase();
     return db.perfis.find((p) => p.id === userId && p.ativo) || null;
+  }
+
+  async alterarSenha(senhaAtual: string, novaSenha: string): Promise<void> {
+    const usuario = await this.usuarioAtual();
+    if (!usuario || !usuario.email) {
+      throw new Error('Usuário não autenticado.');
+    }
+
+    if (!senhaAtual) {
+      throw new Error('Informe a senha atual.');
+    }
+
+    if (!novaSenha || novaSenha.trim().length < 6) {
+      throw new Error('A nova senha deve ter no mínimo 6 caracteres.');
+    }
+
+    if (senhaAtual === novaSenha) {
+      throw new Error('A nova senha não pode ser igual à senha atual.');
+    }
+
+    const db = await getDatabase();
+    const emailLimpo = usuario.email.trim().toLowerCase();
+    const senhaCorreta = db.credenciais[emailLimpo];
+
+    if (!senhaCorreta || senhaCorreta !== senhaAtual) {
+      throw new Error('A senha atual informada está incorreta.');
+    }
+
+    db.credenciais[emailLimpo] = novaSenha;
+    saveDatabase(db);
   }
 }

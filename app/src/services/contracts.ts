@@ -44,13 +44,25 @@ import {
   QuestaoSugeridaIA,
   RespostaGeracaoIA,
   ItemCorrecaoPendente,
+  AlunoObservacao,
+  DesempenhoAlunoMateriaItem,
+  AlunoComDesempenhoResumo,
 } from '@/lib/types';
 
-export type { GerarQuestoesIAParams, QuestaoSugeridaIA, RespostaGeracaoIA, ItemCorrecaoPendente };
+export type {
+  GerarQuestoesIAParams,
+  QuestaoSugeridaIA,
+  RespostaGeracaoIA,
+  ItemCorrecaoPendente,
+  AlunoObservacao,
+  DesempenhoAlunoMateriaItem,
+  AlunoComDesempenhoResumo,
+};
 
 export interface ItemCorrecaoFeita extends ItemCorrecaoPendente {
   correcao: 'certo' | 'parcial' | 'errado';
   pontuacao: number | null;
+  nota?: number | null;
   comentario_professor: string | null;
   corrigido_em?: string | null;
 }
@@ -123,6 +135,7 @@ export interface AuthService {
   login(email: string, senha: string): Promise<Perfil>;
   logout(): Promise<void>;
   usuarioAtual(): Promise<Perfil | null>;
+  alterarSenha(senhaAtual: string, novaSenha: string): Promise<void>;
 }
 
 // 2. GestaoService (Direção e Coordenação)
@@ -143,7 +156,8 @@ export interface GestaoService {
   criarOferta(dados: Omit<Oferta, 'id' | 'created_at'>): Promise<Oferta>;
   excluirOferta(id: string): Promise<void>;
   listarProfessores(): Promise<Perfil[]>;
-  convidarProfessor(email: string, nome: string): Promise<Perfil>;
+  convidarProfessor(email: string, nome: string, senha?: string): Promise<Perfil>;
+  redefinirSenhaProfessor(id: string, novaSenha: string): Promise<void>;
   desativarProfessor(id: string): Promise<void>;
   listarAlunos(turmaId?: string): Promise<AlunoPublico[]>;
   cadastrarAluno(
@@ -184,13 +198,19 @@ export interface ProfessorService {
   ): Promise<Aviso>;
   mapaDeCalor(atividadeId: string): Promise<MapaDeCalorAtividade>;
   desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta>;
-  fichaAluno(ofertaId: string, alunoId: string): Promise<FichaAluno>;
+  fichaAluno(ofertaIdOuAlunoId: string, alunoId?: string): Promise<FichaAluno>;
+  listarAlunosPorSerie(serie: string): Promise<AlunoComDesempenhoResumo[]>;
+  desempenhoAlunoPorMaterias(alunoId: string, periodoId?: string): Promise<DesempenhoAlunoMateriaItem[]>;
+  listarObservacoesAluno(alunoId: string): Promise<AlunoObservacao[]>;
+  salvarObservacaoAluno(alunoId: string, texto: string): Promise<AlunoObservacao>;
+  excluirObservacaoAluno(observacaoId: string): Promise<void>;
   listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]>;
   listarCorrecoesFeitas(atividadeId: string): Promise<ItemCorrecaoFeita[]>;
   corrigirResposta(
     respostaId: string,
     correcao: 'certo' | 'parcial' | 'errado',
-    comentario?: string
+    comentario?: string,
+    nota?: number
   ): Promise<void>;
 }
 

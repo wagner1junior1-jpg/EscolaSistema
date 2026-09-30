@@ -122,6 +122,7 @@ export interface Questao {
   banco_questao_id?: string | null;
   assunto_id?: string | null;
   tipo?: TipoQuestao;
+  dificuldade?: DificuldadeQuestao;
   imagem_url?: string | null;
   resposta_esperada?: string | null;
 }
@@ -324,6 +325,8 @@ export interface QuestaoParaAluno {
   imagem_url?: string | null;
   texto_respondido?: string | null;
   correcao?: StatusCorrecao | null;
+  pontuacao?: number | null;
+  nota?: number | null;
   comentario_professor?: string | null;
   resposta_esperada?: string | null;
   // Feedback pedagógico (no modo prova só é exposto após concluir todas as questões)
@@ -388,6 +391,8 @@ export interface ResultadoProvaQuestao {
   imagem_url?: string | null;
   texto_respondido?: string | null;
   correcao?: StatusCorrecao | null;
+  pontuacao?: number | null;
+  nota?: number | null;
   comentario_professor?: string | null;
   resposta_esperada?: string | null;
 }
@@ -425,6 +430,7 @@ export interface AtividadeResumoAluno {
   questoes_respondidas: number;
   concluida: boolean;
   aproveitamento?: number;
+  aguardando_correcao?: boolean;
 }
 
 // Questão com todas as alternativas (para professor/gestão)
@@ -547,6 +553,41 @@ export interface FichaAlunoAtividadeItem {
   questoes: FichaAlunoQuestaoItem[];
 }
 
+export interface AlunoObservacao {
+  id: string;
+  aluno_id: string;
+  professor_id: string;
+  professor_nome: string;
+  texto: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DesempenhoAlunoMateriaItem {
+  disciplina_id: string;
+  disciplina_nome: string;
+  professor_nome: string;
+  oferta_id: string;
+  media: number | null;
+  faixa: FaixaDesempenho;
+  total_atividades: number;
+  atividades_concluidas: number;
+  soma_acertos: number;
+  soma_questoes: number;
+}
+
+export interface AlunoComDesempenhoResumo {
+  aluno: AlunoPublico;
+  turma_id: string;
+  turma_nome: string;
+  turma_serie: string;
+  materias: DesempenhoAlunoMateriaItem[];
+  media_geral: number | null;
+  faixa_geral: FaixaDesempenho;
+  ultima_observacao?: AlunoObservacao | null;
+  total_observacoes: number;
+}
+
 export interface FichaAluno {
   aluno: AlunoPublico;
   turma_nome: string;
@@ -554,6 +595,8 @@ export interface FichaAluno {
   atividades: FichaAlunoAtividadeItem[];
   media_periodo: number | null;
   faixa: FaixaDesempenho;
+  desempenho_materias?: DesempenhoAlunoMateriaItem[];
+  observacoes?: AlunoObservacao[];
 }
 
 /* =========================================================================

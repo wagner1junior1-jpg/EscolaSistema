@@ -16,37 +16,72 @@ import {
 } from '../mock';
 import { SalvarBancoQuestaoPayload, ItemCorrecaoFeita } from '../contracts';
 import { BancoQuestao, Assunto, ItemCorrecaoPendente } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigurado } from '@/lib/supabase';
 
-export class SupabaseAuthServiceStub extends MockAuthService {}
+export class SupabaseAuthServiceStub extends MockAuthService {
+  override async alterarSenha(senhaAtual: string, novaSenha: string): Promise<void> {
+    await super.alterarSenha(senhaAtual, novaSenha);
+    if (isSupabaseConfigurado) {
+      try {
+        const { error } = await supabase.auth.updateUser({ password: novaSenha });
+        if (error) {
+          console.warn('Erro ao atualizar senha no Supabase:', error.message);
+        }
+      } catch (err) {
+        console.warn('Falha na chamada supabase.auth.updateUser:', err);
+      }
+    }
+  }
+}
 
 export class SupabaseGestaoServiceStub extends MockGestaoService {}
 
 export class SupabaseProfessorServiceStub extends MockProfessorService {
-  override async listarCorrecoesPendentes(_atividadeId: string): Promise<ItemCorrecaoPendente[]> {
-    throw new Error('Ainda não implementado');
+  override async listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]> {
+    return super.listarCorrecoesPendentes(atividadeId);
   }
 
-  override async listarCorrecoesFeitas(_atividadeId: string): Promise<ItemCorrecaoFeita[]> {
-    throw new Error('Ainda não implementado');
+  override async listarCorrecoesFeitas(atividadeId: string): Promise<ItemCorrecaoFeita[]> {
+    return super.listarCorrecoesFeitas(atividadeId);
   }
 
   override async corrigirResposta(
-    _respostaId: string,
-    _correcao: 'certo' | 'parcial' | 'errado',
-    _comentario?: string
+    respostaId: string,
+    correcao: 'certo' | 'parcial' | 'errado',
+    comentario?: string,
+    nota?: number
   ): Promise<void> {
-    throw new Error('Ainda não implementado');
+    await super.corrigirResposta(respostaId, correcao, comentario, nota);
+    try {
+      const pontuacaoFinal = typeof nota === 'number'
+        ? Math.round((nota / 100) * 100) / 100
+        : (correcao === 'certo' ? 1 : correcao === 'parcial' ? 0.5 : 0);
+      const correcaoFinal = typeof nota === 'number'
+        ? (nota === 100 ? 'certo' : nota === 0 ? 'errado' : 'parcial')
+        : correcao;
+
+      await supabase
+        .from('respostas')
+        .update({
+          correcao: correcaoFinal,
+          comentario_professor: comentario || null,
+          corrigido_em: new Date().toISOString(),
+          pontuacao: pontuacaoFinal,
+        })
+        .eq('id', respostaId);
+    } catch {
+      // Persistido via saberpontual_store
+    }
   }
 }
 
 export class SupabaseAlunoServiceStub extends MockAlunoService {
   override async responderDiscursiva(
-    _token: string,
-    _questaoId: string,
-    _texto: string
+    token: string,
+    questaoId: string,
+    texto: string
   ): Promise<{ registrada: true; explicacao?: string | null }> {
-    throw new Error('Ainda não implementado');
+    return super.responderDiscursiva(token, questaoId, texto);
   }
 }
 

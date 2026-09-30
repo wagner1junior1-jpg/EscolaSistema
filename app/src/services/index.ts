@@ -74,6 +74,13 @@ export async function restaurarDadosDemo(): Promise<void> {
   await resetDatabase();
 }
 
-export { assinarMudancas } from './mock/db';
+export {
+  assinarMudancas,
+  assinarStatusSincronizacao,
+  obterStatusSincronizacao,
+  forcarSincronizacao,
+  resetDatabase,
+  type InfoSincronizacao,
+} from './mock/db';
 
 

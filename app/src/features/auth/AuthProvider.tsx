@@ -9,6 +9,7 @@ interface AuthContextType {
   carregando: boolean;
   entrar: (email: string, senha: string) => Promise<Perfil>;
   sair: () => Promise<void>;
+  alterarSenha: (senhaAtual: string, novaSenha: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,8 +55,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUsuario(null);
   }, []);
 
+  const alterarSenha = useCallback(async (senhaAtual: string, novaSenha: string): Promise<void> => {
+    await authService.alterarSenha(senhaAtual, novaSenha);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ usuario, carregando, entrar, sair }}>
+    <AuthContext.Provider value={{ usuario, carregando, entrar, sair, alterarSenha }}>
       {children}
     </AuthContext.Provider>
   );
