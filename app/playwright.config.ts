@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+process.env.VITE_DATA_SOURCE = 'mock';
+
 export default defineConfig({
   testDir: './e2e',
   workers: 1,
@@ -19,5 +21,8 @@ export default defineConfig({
     port: 4173,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: {
+      VITE_DATA_SOURCE: 'mock',
+    },
   },
 });
