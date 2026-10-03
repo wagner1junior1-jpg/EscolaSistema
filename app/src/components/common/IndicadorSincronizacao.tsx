@@ -5,7 +5,7 @@ import {
   forcarSincronizacao,
   InfoSincronizacao,
 } from '@/services';
-import { CloudOff, RefreshCw } from 'lucide-react';
+import { HardDrive, RefreshCw } from 'lucide-react';
 
 interface IndicadorSincronizacaoProps {
   variante?: 'padrao' | 'compacto' | 'aluno';
@@ -52,9 +52,17 @@ export const IndicadorSincronizacao: React.FC<IndicadorSincronizacaoProps> = ({
 
   const isCarregando = info.status === 'sincronizando' || sincronizandoManual;
 
+  const descricaoStatus = isCarregando
+    ? 'Sincronização em andamento'
+    : info.status === 'conectado'
+    ? `Sincronizado com o banco de dados${horaFormatada ? ` às ${horaFormatada}` : ''}`
+    : 'Salvo localmente neste aparelho';
+
   if (variante === 'aluno') {
     return (
       <div
+        role="status"
+        aria-label={descricaoStatus}
         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
           info.status === 'conectado'
             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
@@ -65,11 +73,11 @@ export const IndicadorSincronizacao: React.FC<IndicadorSincronizacaoProps> = ({
         title={horaFormatada ? `Sincronizado às ${horaFormatada}` : 'Status de sincronização'}
       >
         {isCarregando ? (
-          <RefreshCw className="w-3 h-3 animate-spin text-indigo-600" />
+          <RefreshCw className="w-3 h-3 animate-spin text-indigo-600" aria-hidden="true" />
         ) : info.status === 'conectado' ? (
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
         ) : (
-          <CloudOff className="w-3 h-3 text-amber-500" />
+          <HardDrive className="w-3 h-3 text-amber-500" aria-hidden="true" />
         )}
         <span>
           {isCarregando
@@ -84,40 +92,49 @@ export const IndicadorSincronizacao: React.FC<IndicadorSincronizacaoProps> = ({
 
   return (
     <div
-      className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-xl text-xs border transition-all ${
+      role="status"
+      aria-label={descricaoStatus}
+      className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 rounded-xl text-xs border transition-all ${
         info.status === 'conectado'
           ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
           : isCarregando
           ? 'bg-indigo-50/80 border-indigo-200 text-indigo-800'
-          : 'bg-slate-50 border-slate-200 text-slate-600'
+          : 'bg-amber-50/60 border-amber-200/80 text-amber-800'
       } ${className}`}
       title={
         info.origem === 'supabase'
           ? `Banco Supabase ativo${horaFormatada ? ` • Última atualização: ${horaFormatada}` : ''}`
-          : 'Armazenamento local'
+          : 'Armazenamento local neste aparelho'
       }
     >
       <div className="flex items-center gap-1.5">
         {isCarregando ? (
-          <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600 shrink-0" aria-hidden="true" />
         ) : info.status === 'conectado' ? (
-          <span className="relative flex h-2 w-2">
+          <span
+            className="relative flex h-2 w-2 shrink-0"
+            title="Conectado e sincronizado com o banco"
+            aria-label="Conectado e sincronizado"
+          >
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
         ) : (
-          <CloudOff className="w-3.5 h-3.5 text-slate-400" />
+          <HardDrive className="w-3.5 h-3.5 text-amber-600/80 shrink-0" aria-hidden="true" />
         )}
 
-        <span className="font-medium hidden sm:inline">
-          {isCarregando
-            ? 'Sincronizando...'
-            : info.status === 'conectado'
-            ? 'Sincronizado com o BD'
-            : 'Salvo neste aparelho'}
-        </span>
+        {isCarregando ? (
+          <span className="font-medium hidden sm:inline">Sincronizando...</span>
+        ) : info.status === 'conectado' ? (
+          <span className="font-medium hidden sm:inline">Sincronizado com o BD</span>
+        ) : (
+          <span className="font-medium text-[11px] sm:text-xs">
+            <span className="sm:hidden">Neste aparelho</span>
+            <span className="hidden sm:inline">Salvo neste aparelho</span>
+          </span>
+        )}
 
-        {horaFormatada && !isCarregando && (
+        {horaFormatada && !isCarregando && info.status === 'conectado' && (
           <span className="text-[10px] text-emerald-600/80 font-mono hidden md:inline">
             ({horaFormatada})
           </span>
@@ -130,8 +147,9 @@ export const IndicadorSincronizacao: React.FC<IndicadorSincronizacaoProps> = ({
         disabled={isCarregando}
         className="p-1 -mr-1 rounded-lg hover:bg-black/5 text-slate-500 hover:text-slate-800 transition-colors disabled:opacity-50 cursor-pointer"
         title="Atualizar dados do banco agora"
+        aria-label="Atualizar dados do banco agora"
       >
-        <RefreshCw className={`w-3 h-3 ${isCarregando ? 'animate-spin' : ''}`} />
+        <RefreshCw className={`w-3 h-3 ${isCarregando ? 'animate-spin' : ''}`} aria-hidden="true" />
       </button>
     </div>
   );

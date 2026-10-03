@@ -492,23 +492,23 @@ export const ProfessorDashboardPage: React.FC = () => {
            ========================================================================= */}
         {!carregando && !erro && ofertas.length > 0 && (
           <div
-            className={`grid grid-cols-1 sm:grid-cols-2 ${
+            className={`grid grid-cols-2 ${
               IA_SEM_LIMITE ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
-            } gap-3.5`}
+            } gap-2.5 sm:gap-3.5`}
           >
             {/* KPI 1: Turmas e Alunos */}
-            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
-                <Users className="w-5 h-5" />
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-xs flex items-center gap-2 sm:gap-3.5">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block truncate">
                   Regência
                 </span>
-                <span className="font-heading font-black text-lg text-slate-900 leading-tight block">
+                <span className="font-heading font-black text-sm sm:text-lg text-slate-900 leading-tight block truncate">
                   {ofertas.length} {ofertas.length === 1 ? 'Turma' : 'Turmas'}
                 </span>
-                <span className="text-[11px] text-slate-500 truncate block mt-0.5">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 truncate block mt-0.5">
                   {totalAlunosGeral > 0
                     ? `${pluralizar(totalAlunosGeral, 'aluno', 'alunos')} acompanhados`
                     : `${seriesDisponiveis.length} séries vinculadas`}
@@ -517,18 +517,18 @@ export const ProfessorDashboardPage: React.FC = () => {
             </div>
 
             {/* KPI 2: Atividades Publicadas */}
-            <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                <Send className="w-5 h-5" />
+            <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-xs flex items-center gap-2 sm:gap-3.5">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <Send className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block truncate">
                   Atividades Ativas
                 </span>
-                <span className="font-heading font-black text-lg text-emerald-900 leading-tight block">
+                <span className="font-heading font-black text-sm sm:text-lg text-emerald-900 leading-tight block truncate">
                   {totalPublicadasGeral} {totalPublicadasGeral === 1 ? 'Publicada' : 'Publicadas'}
                 </span>
-                <span className="text-[11px] text-slate-500 truncate block mt-0.5">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 truncate block mt-0.5">
                   {pluralizar(totalRascunhosGeral, 'rascunho', 'rascunhos')} · {pluralizar(totalEncerradasGeral, 'encerrada', 'encerradas')}
                 </span>
               </div>
@@ -543,39 +543,39 @@ export const ProfessorDashboardPage: React.FC = () => {
                   );
                 }
               }}
-              className={`bg-white border rounded-2xl p-3.5 sm:p-4 shadow-xs flex items-center justify-between gap-3 transition-all ${
+              className={`bg-white border rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-3 transition-all ${
                 totalGeralPendentesCorrecao > 0
                   ? 'border-purple-300 bg-purple-50/40 hover:bg-purple-50/70 hover:border-purple-400 cursor-pointer group'
                   : 'border-slate-200/90'
               }`}
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 w-full sm:w-auto">
                 <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${
                     totalGeralPendentesCorrecao > 0
                       ? 'bg-purple-100 text-purple-700 border border-purple-200'
                       : 'bg-slate-100 text-slate-500 border border-slate-200'
                   }`}
                 >
-                  <ClipboardList className="w-5 h-5" />
+                  <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div className="min-w-0">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block truncate">
                     Correções Pendentes
                   </span>
                   <div className="flex items-center gap-1.5">
                     <span
-                      className={`font-heading font-black text-lg leading-tight block ${
+                      className={`font-heading font-black text-sm sm:text-lg leading-tight block truncate ${
                         totalGeralPendentesCorrecao > 0 ? 'text-purple-900' : 'text-slate-900'
                       }`}
                     >
                       {totalGeralPendentesCorrecao}
                     </span>
                     {totalGeralPendentesCorrecao > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
+                      <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-purple-600 animate-pulse shrink-0" />
                     )}
                   </div>
-                  <span className="text-[11px] text-slate-500 truncate block mt-0.5">
+                  <span className="text-[10px] sm:text-[11px] text-slate-500 truncate block mt-0.5">
                     {totalGeralPendentesCorrecao > 0
                       ? `${totalGeralPendentesCorrecao} discursiva${totalGeralPendentesCorrecao > 1 ? 's' : ''}`
                       : 'Notas em dia'}
@@ -584,7 +584,7 @@ export const ProfessorDashboardPage: React.FC = () => {
               </div>
 
               {totalGeralPendentesCorrecao > 0 && (
-                <span className="text-2xs font-bold text-purple-700 bg-white border border-purple-200 px-2 py-1 rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors shrink-0 shadow-2xs">
+                <span className="text-[10px] sm:text-2xs font-bold text-purple-700 bg-white border border-purple-200 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors shrink-0 shadow-2xs self-end sm:self-auto">
                   Corrigir →
                 </span>
               )}
@@ -592,18 +592,18 @@ export const ProfessorDashboardPage: React.FC = () => {
 
             {/* KPI 4: Cota de IA do Mês */}
             {!IA_SEM_LIMITE && (
-              <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5" />
+              <div className="bg-white border border-slate-200/90 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-xs flex items-center gap-2 sm:gap-3.5">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-amber-50 border border-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                  <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block truncate">
                     Cota IA (Mês)
                   </span>
-                  <span className="font-heading font-black text-lg text-amber-900 leading-tight block">
+                  <span className="font-heading font-black text-sm sm:text-lg text-amber-900 leading-tight block truncate">
                     {cotaIA ? `${cotaIA.uso_mes} / ${cotaIA.limite_mes}` : '200'}
                   </span>
-                  <span className="text-[11px] text-slate-500 truncate block mt-0.5">
+                  <span className="text-[10px] sm:text-[11px] text-slate-500 truncate block mt-0.5">
                     {cotaIA
                       ? `${Math.max(0, cotaIA.limite_mes - cotaIA.uso_mes)} restantes`
                       : 'Gerações com IA'}
