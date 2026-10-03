@@ -495,4 +495,25 @@ export function estaAguardandoCorrecao(
   return false;
 }
 
+/**
+ * Verifica se o prazo de uma atividade está vencido.
+ * Compara apenas a data (parte antes do 'T'):
+ * - vencido quando a data do prazo é anterior ao dia de hoje.
+ * - vencer hoje ainda é válido (retorna false).
+ * - sem prazo (null ou undefined) retorna false.
+ */
+export function prazoVencido(prazo: string | null | undefined, hoje = new Date()): boolean {
+  if (!prazo) return false;
+  const parteData = prazo.split('T')[0];
+  const partes = parteData.split('-');
+  if (partes.length !== 3) return false;
+  const [ano, mes, dia] = partes.map(Number);
+  if (!ano || !mes || !dia) return false;
+
+  const dataPrazo = new Date(ano, mes - 1, dia);
+  const dataHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+
+  return dataPrazo.getTime() < dataHoje.getTime();
+}
+
 

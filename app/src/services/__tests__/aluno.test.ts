@@ -181,5 +181,136 @@ describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICA
       expect(resultado.aproveitamento).toBe(67);
     });
   });
+
+  describe('Prazo vencido no portal do aluno', () => {
+    it('deve recusar resposta quando o prazo estiver vencido e a atividade não foi concluída', async () => {
+      const db = await (await import('../mock/db')).getDatabase();
+      const { token } = await alunoService.login('aluno-7a-1', '1420');
+
+      const ativId = 'ativ-teste-prazo-vencido-incompleta';
+      db.atividades.push({
+        id: ativId,
+        titulo: 'Exercício com Prazo Vencido',
+        descricao: 'Teste de prazo expirado',
+        oferta_id: 'oferta-mat-7a',
+        periodo_id: 'per-3bim',
+        criado_por: 'usr-prof-ana',
+        modo: 'exercicio',
+        status: 'publicada',
+        prazo: '2020-01-01',
+        created_at: new Date().toISOString(),
+      });
+
+      db.questoes.push(
+        {
+          id: 'q-venc-1',
+          atividade_id: ativId,
+          ordem: 1,
+          enunciado: 'Questão com prazo vencido',
+          tipo: 'objetiva',
+          dica: null,
+          explicacao: null,
+          created_at: '',
+        },
+        {
+          id: 'q-venc-disc',
+          atividade_id: ativId,
+          ordem: 2,
+          enunciado: 'Questão discursiva prazo vencido',
+          tipo: 'discursiva',
+          dica: null,
+          explicacao: null,
+          created_at: '',
+        }
+      );
+
+      db.alternativas.push({
+        id: 'alt-venc-1',
+        questao_id: 'q-venc-1',
+        letra: 'A',
+        texto: 'Opção A',
+        correta: true,
+        por_que_errou: null,
+        created_at: '',
+      });
+
+      // Tentativa de responder objetiva deve ser rejeitada
+      await expect(
+        alunoService.responder(token, 'q-venc-1', 'alt-venc-1')
+      ).rejects.toThrow('O prazo desta atividade terminou.');
+
+      // Tentativa de responder discursiva deve ser rejeitada
+      await expect(
+        alunoService.responderDiscursiva(token, 'q-venc-disc', 'Minha resposta atrasada')
+      ).rejects.toThrow('O prazo desta atividade terminou.');
+    });
+
+    it('atividade concluída com prazo vencido continua em Concluídas normalmente', async () => {
+      const db = await (await import('../mock/db')).getDatabase();
+      const { token } = await alunoService.login('aluno-7a-1', '1420');
+
+      const ativId = 'ativ-teste-prazo-vencido-concluida';
+      db.atividades.push({
+        id: ativId,
+        titulo: 'Atividade Concluída com Prazo Vencido',
+        descricao: 'Feita antes de vencer',
+        oferta_id: 'oferta-mat-7a',
+        periodo_id: 'per-3bim',
+        criado_por: 'usr-prof-ana',
+        modo: 'exercicio',
+        status: 'publicada',
+        prazo: '2020-01-01',
+        created_at: new Date().toISOString(),
+      });
+
+      db.questoes.push({
+        id: 'q-venc-conc-1',
+        atividade_id: ativId,
+        ordem: 1,
+        enunciado: 'Questão já concluída',
+        tipo: 'objetiva',
+        dica: null,
+        explicacao: null,
+        created_at: '',
+      });
+
+      db.alternativas.push({
+        id: 'alt-venc-conc-1',
+        questao_id: 'q-venc-conc-1',
+        letra: 'A',
+        texto: 'Opção Correta',
+        correta: true,
+        por_que_errou: null,
+        created_at: '',
+      });
+
+      db.respostas.push({
+        id: 'r-venc-conc-1',
+        aluno_id: 'aluno-7a-1',
+        questao_id: 'q-venc-conc-1',
+        alternativa_id: 'alt-venc-conc-1',
+        acertou: true,
+        acertou_final: true,
+        tentativas: 1,
+        respondida_em: '2019-12-31T20:00:00Z',
+        created_at: '2019-12-31T20:00:00Z',
+      });
+
+      const lista = await alunoService.atividadesPendentes(token);
+      const ativ = lista.find((a) => a.id === ativId);
+
+      expect(ativ).toBeDefined();
+      expect(ativ?.concluida).toBe(true);
+      expect(ativ?.prazo_vencido).toBe(true);
+
+      // Regra do painel: para_fazer = !concluida && status !== 'encerrada' && !prazo_vencido
+      // concluidas = concluida || status === 'encerrada' || prazo_vencido
+      const paraFazer = !ativ!.concluida && ativ!.status !== 'encerrada' && !ativ!.prazo_vencido;
+      const concluida = ativ!.concluida || ativ!.status === 'encerrada' || ativ!.prazo_vencido;
+
+      expect(paraFazer).toBe(false);
+      expect(concluida).toBe(true);
+    });
+  });
 });
 

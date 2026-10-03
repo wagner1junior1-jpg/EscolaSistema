@@ -11,6 +11,7 @@ import {
   calcularTaxaAcerto,
   classificarSemaforoPedagogico,
   estaAguardandoCorrecao,
+  prazoVencido,
 } from '../calculos';
 import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao, Atividade } from '@/lib/types';
 
@@ -449,6 +450,30 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
         aluno_nome: 'João',
       };
       expect(estaAguardandoCorrecao(itemPendente)).toBe(true);
+    });
+  });
+
+  describe('9. prazoVencido', () => {
+    const hoje = new Date(2026, 9, 3); // 2026-10-03
+
+    it('deve retornar true quando a data for ontem (ontem=true)', () => {
+      expect(prazoVencido('2026-10-02', hoje)).toBe(true);
+      expect(prazoVencido('2026-10-02T23:59:59', hoje)).toBe(true);
+    });
+
+    it('deve retornar false quando a data for hoje (hoje=false)', () => {
+      expect(prazoVencido('2026-10-03', hoje)).toBe(false);
+      expect(prazoVencido('2026-10-03T12:00:00', hoje)).toBe(false);
+    });
+
+    it('deve retornar false quando a data for amanhã (amanhã=false)', () => {
+      expect(prazoVencido('2026-10-04', hoje)).toBe(false);
+      expect(prazoVencido('2026-10-04T08:00:00', hoje)).toBe(false);
+    });
+
+    it('deve retornar false quando prazo for nulo ou indefinido (null=false)', () => {
+      expect(prazoVencido(null, hoje)).toBe(false);
+      expect(prazoVencido(undefined, hoje)).toBe(false);
     });
   });
 });

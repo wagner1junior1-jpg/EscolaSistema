@@ -24,6 +24,7 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  Eye,
   EyeOff,
   Clock,
   BarChart3,
@@ -32,6 +33,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { AtividadeResumoAluno, Aviso, MeuDesempenhoAluno } from '@/lib/types';
+import { prazoVencido } from '@/services/calculos';
 import { isSomHabilitado, setSomHabilitado, tocarSomAcerto } from '../utils/audio';
 import { dispararConfeteFim } from '../utils/confetti';
 
@@ -124,15 +126,16 @@ function obterStatusPrazo(prazoStr: string | null): {
 
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
+
+  if (prazoVencido(prazoStr, hoje)) {
+    return { label: `Venceu em ${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}`, tipo: 'expirado' };
+  }
+
   const dataPrazo = new Date(ano, mes - 1, dia);
   dataPrazo.setHours(0, 0, 0, 0);
 
   const diffMs = dataPrazo.getTime() - hoje.getTime();
   const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDias < 0) {
-    return { label: `Venceu em ${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}`, tipo: 'expirado' };
-  }
   if (diffDias === 0) {
     return { label: 'Vence hoje!', tipo: 'urgente' };
   }
@@ -255,12 +258,12 @@ export const AlunoPainelPage: React.FC = () => {
 
   // Separação oficial: "Para fazer" vs "Concluídas"
   const atividadesParaFazer = useMemo(
-    () => atividades.filter((a) => !a.concluida && a.status !== 'encerrada'),
+    () => atividades.filter((a) => !a.concluida && a.status !== 'encerrada' && !a.prazo_vencido),
     [atividades]
   );
 
   const atividadesConcluidas = useMemo(
-    () => atividades.filter((a) => a.concluida || a.status === 'encerrada'),
+    () => atividades.filter((a) => a.concluida || a.status === 'encerrada' || a.prazo_vencido),
     [atividades]
   );
 
@@ -1088,6 +1091,10 @@ export const AlunoPainelPage: React.FC = () => {
                               <ChipInfo color="slate">Encerrada</ChipInfo>
                             )}
 
+                            {ativ.prazo_vencido && !ativ.concluida && !isEncerrada && (
+                              <ChipInfo color="slate">Prazo encerrado</ChipInfo>
+                            )}
+
                             {ativ.aguardando_correcao && (
                               <span className="inline-flex items-center gap-1 py-0.5 px-2 rounded-full text-[11px] font-heading font-bold bg-amber-50 border border-amber-300 text-amber-800 shadow-2xs">
                                 <Clock className="w-3 h-3 text-amber-600" />
@@ -1190,7 +1197,16 @@ export const AlunoPainelPage: React.FC = () => {
 
                       {/* Botão de Ação (Mobile-First: min-h 48px e largura total) */}
                       <div className="pt-3.5 mt-2">
-                        {abaAtiva === 'para_fazer' ? (
+                        {ativ.prazo_vencido && !ativ.concluida ? (
+                          <BotaoGrande
+                            variant="outline"
+                            onClick={() => navigate(`/aluno/atividade/${ativ.id}`)}
+                            leftIcon={<Eye className="w-4 h-4 text-slate-600" />}
+                            className="w-full text-sm sm:text-base min-h-[48px]"
+                          >
+                            Ver
+                          </BotaoGrande>
+                        ) : abaAtiva === 'para_fazer' ? (
                           ativ.questoes_respondidas === 0 ? (
                             <BotaoGrande
                               variant="primary"

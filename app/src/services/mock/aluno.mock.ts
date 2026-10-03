@@ -37,6 +37,7 @@ import {
   faixaDesempenho,
   mediaDoAlunoNasAtividades,
   pontuacaoDaResposta,
+  prazoVencido,
 } from '../calculos';
 
 function toAlunoPublico(aluno: Aluno): AlunoPublico {
@@ -236,6 +237,7 @@ export class MockAlunoService implements AlunoService {
         titulo: ativ.titulo,
         descricao: ativ.descricao,
         prazo: ativ.prazo,
+        prazo_vencido: prazoVencido(ativ.prazo),
         modo: ativ.modo,
         status: ativ.status,
         disciplina_id: disciplina?.id || '',
@@ -432,6 +434,16 @@ export class MockAlunoService implements AlunoService {
       throw new Error('Atividade indisponível para resposta.');
     }
 
+    const questoesDaAtiv = db.questoes.filter((q) => q.atividade_id === atividade.id);
+    const respondidas = db.respostas.filter(
+      (r) => r.aluno_id === aluno.id && questoesDaAtiv.some((q) => q.id === r.questao_id)
+    ).length;
+    const concluida = questoesDaAtiv.length > 0 && respondidas === questoesDaAtiv.length;
+
+    if (prazoVencido(atividade.prazo) && !concluida) {
+      throw new Error('O prazo desta atividade terminou.');
+    }
+
     // Resposta definitiva da 1ª tentativa: unique(aluno_id, questao_id)
     const jaRespondida = db.respostas.some(
       (r) => r.aluno_id === aluno.id && r.questao_id === questaoId
@@ -506,6 +518,10 @@ export class MockAlunoService implements AlunoService {
 
     if (atividade.status !== 'publicada') {
       throw new Error('Atividade não está aberta para respostas.');
+    }
+
+    if (prazoVencido(atividade.prazo)) {
+      throw new Error('O prazo desta atividade terminou.');
     }
 
     const resposta = db.respostas.find(
@@ -764,6 +780,16 @@ export class MockAlunoService implements AlunoService {
     }
     if (atividade.status !== 'publicada') {
       throw new Error('Atividade indisponível para resposta.');
+    }
+
+    const questoesDaAtiv = db.questoes.filter((q) => q.atividade_id === atividade.id);
+    const respondidas = db.respostas.filter(
+      (r) => r.aluno_id === aluno.id && questoesDaAtiv.some((q) => q.id === r.questao_id)
+    ).length;
+    const concluida = questoesDaAtiv.length > 0 && respondidas === questoesDaAtiv.length;
+
+    if (prazoVencido(atividade.prazo) && !concluida) {
+      throw new Error('O prazo desta atividade terminou.');
     }
 
     if (questao.tipo !== 'discursiva') {

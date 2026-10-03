@@ -422,6 +422,7 @@ export interface AtividadeResumoAluno {
   titulo: string;
   descricao: string;
   prazo: string | null;
+  prazo_vencido: boolean;
   modo: ModoAtividade;
   status: StatusAtividade;
   disciplina_id: string;

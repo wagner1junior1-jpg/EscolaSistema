@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Clock,
   Loader2,
   Trophy,
   ArrowRight,
@@ -32,7 +33,7 @@ import { isSomHabilitado, setSomHabilitado, tocarSomAcerto, tocarSomErro, tocarS
 import { dispararConfeteAcerto, dispararConfeteFim } from '../utils/confetti';
 import { isSpeechSupported, falarQuestao, pararFala } from '../utils/speech';
 import { calcularPlacar, QuestaoPlacarItem, PlacarCalculado } from '../utils/placar';
-import { estaAguardandoCorrecao } from '@/services/calculos';
+import { estaAguardandoCorrecao, prazoVencido } from '@/services/calculos';
 
 interface RespostaLocalState {
   acertou?: boolean; // 1ª tentativa
@@ -480,6 +481,34 @@ export const AlunoAtividadePage: React.FC = () => {
                 Atividade indisponível
               </h1>
               <p className="text-sm text-slate-600 font-sans">{erro || 'Não foi possível carregar a atividade.'}</p>
+            </div>
+            <BotaoGrande variant="primary" onClick={() => navigate('/aluno/painel')} className="w-full">
+              Voltar ao painel
+            </BotaoGrande>
+          </CartaoVidro>
+        </main>
+      </AlunoLayout>
+    );
+  }
+
+  /* =========================================================================
+   * AVISO DE PRAZO VENCIDO (Quando aluno não concluiu a atividade)
+   * ========================================================================= */
+  if (prazoVencido(atividade.prazo) && !exibirTelaFinal) {
+    return (
+      <AlunoLayout containerClassName="items-center justify-center p-4 py-12">
+        <main className="w-full max-w-lg space-y-4">
+          <CartaoVidro className="p-6 sm:p-10 space-y-6 text-center">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200">
+              <Clock className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="font-heading font-black text-2xl text-slate-900">
+                Prazo encerrado
+              </h1>
+              <p className="text-sm text-slate-600 font-sans">
+                O prazo desta atividade terminou. Fale com seu professor.
+              </p>
             </div>
             <BotaoGrande variant="primary" onClick={() => navigate('/aluno/painel')} className="w-full">
               Voltar ao painel
