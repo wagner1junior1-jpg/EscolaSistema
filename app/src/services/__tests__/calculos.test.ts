@@ -10,6 +10,7 @@ import {
   calcularTaxaErro,
   calcularTaxaAcerto,
   classificarSemaforoPedagogico,
+  estaAguardandoCorrecao,
 } from '../calculos';
 import { Questao, Alternativa, Resposta, ItemMapaDeCalorQuestao, Atividade } from '@/lib/types';
 
@@ -415,6 +416,39 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
       expect(classificarSemaforoPedagogico(45)).toBe('ambar');
       expect(classificarSemaforoPedagogico(45.1)).toBe('vermelho');
       expect(classificarSemaforoPedagogico(70)).toBe('vermelho');
+    });
+  });
+
+  describe('8. estaAguardandoCorrecao', () => {
+    it('deve retornar true para discursiva com correcao pendente', () => {
+      const q = { tipo: 'discursiva' as const };
+      expect(estaAguardandoCorrecao(q, { correcao: 'pendente' as const })).toBe(true);
+      expect(estaAguardandoCorrecao({ correcao: 'pendente' as const })).toBe(true);
+      expect(estaAguardandoCorrecao('pendente')).toBe(true);
+    });
+
+    it('deve retornar false para discursiva corrigida (certo, parcial ou errado)', () => {
+      const q = { tipo: 'discursiva' as const };
+      expect(estaAguardandoCorrecao(q, { correcao: 'certo' as const, pontuacao: 1 })).toBe(false);
+      expect(estaAguardandoCorrecao(q, { correcao: 'parcial' as const, pontuacao: 0.5 })).toBe(false);
+      expect(estaAguardandoCorrecao(q, { correcao: 'errado' as const, pontuacao: 0 })).toBe(false);
+      expect(estaAguardandoCorrecao('certo')).toBe(false);
+    });
+
+    it('deve retornar false para questao objetiva ou quando nao ha resposta', () => {
+      expect(estaAguardandoCorrecao({ tipo: 'objetiva' as const }, { correcao: 'pendente' as const })).toBe(false);
+      expect(estaAguardandoCorrecao({ tipo: 'discursiva' as const }, null)).toBe(false);
+      expect(estaAguardandoCorrecao(null)).toBe(false);
+    });
+
+    it('deve retornar true para item de correcao pendente da fila do professor', () => {
+      const itemPendente = {
+        resposta_id: 'resp-1',
+        questao_id: 'q-1',
+        aluno_id: 'aluno-1',
+        aluno_nome: 'João',
+      };
+      expect(estaAguardandoCorrecao(itemPendente)).toBe(true);
     });
   });
 });

@@ -133,7 +133,7 @@ export function mediaDoAlunoNasAtividades(
     for (const q of questoes) {
       if (q.tipo === 'discursiva') {
         const r = respostasDaAtividade.find((resp) => resp.questao_id === q.id);
-        if (r && (r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null)) {
+        if (estaAguardandoCorrecao(q, r)) {
           temDiscursivaPendente = true;
           break;
         }
@@ -418,6 +418,81 @@ export function classificarSemaforoPedagogico(porcentagemErro: number | null): S
   if (porcentagemErro < 25) return 'verde';
   if (porcentagemErro <= 45) return 'ambar';
   return 'vermelho';
+}
+
+/**
+ * 8. Identifica se uma resposta discursiva está aguardando correção (docs/ESPECIFICACAO.md 9.3)
+ * Retorna true quando:
+ * - Passado (questao, resposta): questão é discursiva, há resposta e ela não foi corrigida (status 'pendente' ou pontuação nula)
+ * - Passado apenas um item/resposta: tem status 'pendente' ou é um registro de resposta pendente não avaliado
+ * - Passado apenas status: status === 'pendente'
+ */
+export function estaAguardandoCorrecao(
+  questaoOuItem?:
+    | { tipo?: TipoQuestao | null }
+    | { correcao?: StatusCorrecao | null; pontuacao?: number | null; tipo?: TipoQuestao | null; resposta_id?: string }
+    | StatusCorrecao
+    | null,
+  resposta?:
+    | { correcao?: StatusCorrecao | null; pontuacao?: number | null }
+    | null
+): boolean {
+  if (resposta !== undefined) {
+    const questao = questaoOuItem as { tipo?: TipoQuestao | null } | null | undefined;
+    if (questao?.tipo && questao.tipo !== 'discursiva') {
+      return false;
+    }
+    if (!resposta) {
+      return false;
+    }
+    if (resposta.correcao === 'pendente') {
+      return true;
+    }
+    if (
+      resposta.correcao === 'certo' ||
+      resposta.correcao === 'parcial' ||
+      resposta.correcao === 'errado'
+    ) {
+      return false;
+    }
+    return pontuacaoDaResposta(questao, resposta) === null;
+  }
+
+  if (!questaoOuItem) {
+    return false;
+  }
+
+  if (typeof questaoOuItem === 'string') {
+    return questaoOuItem === 'pendente';
+  }
+
+  if (typeof questaoOuItem === 'object') {
+    const item = questaoOuItem as {
+      tipo?: TipoQuestao | null;
+      correcao?: StatusCorrecao | null;
+      pontuacao?: number | null;
+      resposta_id?: string;
+    };
+    if (item.tipo && item.tipo !== 'discursiva') {
+      return false;
+    }
+    if ('correcao' in item) {
+      if (item.correcao === 'pendente') return true;
+      if (
+        item.correcao === 'certo' ||
+        item.correcao === 'parcial' ||
+        item.correcao === 'errado'
+      ) {
+        return false;
+      }
+      return item.pontuacao === null || item.pontuacao === undefined;
+    }
+    if ('resposta_id' in item) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 

@@ -62,7 +62,8 @@ export const bancoService: BancoService =
 export const iaService: ServicoIA =
   dataSource === 'supabase' ? new SupabaseIAServiceStub() : new MockIAService();
 
-if (typeof window !== 'undefined') {
+// Exposição no window restrita a desenvolvimento/base mock para testes E2E
+if (typeof window !== 'undefined' && (import.meta.env.DEV || dataSource === 'mock')) {
   (window as unknown as { bancoService?: BancoService; iaService?: ServicoIA }).bancoService =
     bancoService;
   (window as unknown as { bancoService?: BancoService; iaService?: ServicoIA }).iaService =

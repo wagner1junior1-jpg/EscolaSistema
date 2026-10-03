@@ -24,6 +24,7 @@ import {
   ItemCorrecaoPendente,
   ItemCorrecaoFeita,
   assinarMudancas,
+  estaAguardandoCorrecao,
 } from '@/services';
 import {
   ArrowLeft,
@@ -220,6 +221,9 @@ export const ProfessorResultadosPage: React.FC = () => {
   });
 
   const pendentesFiltrados = pendentes.filter((item) => {
+    if (!estaAguardandoCorrecao(item)) {
+      return false;
+    }
     if (filtroQuestaoCorrecao !== 'todas' && item.questao_id !== filtroQuestaoCorrecao) {
       return false;
     }
@@ -725,9 +729,11 @@ export const ProfessorResultadosPage: React.FC = () => {
                                 </div>
                               </div>
 
-                              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                                Aguardando correção
-                              </span>
+                              {estaAguardandoCorrecao(item) && (
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                  Aguardando correção
+                                </span>
+                              )}
                             </div>
                           </CardHeader>
 
