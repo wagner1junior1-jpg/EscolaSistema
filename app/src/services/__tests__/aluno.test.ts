@@ -131,5 +131,55 @@ describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICA
       }
     });
   });
+
+  describe('Resultado com discursiva aguardando correção (resultadoProva)', () => {
+    it('4 questões, 1 pendente => acertos 2, erros 1, pendentes 1, aproveitamento 67%', async () => {
+      const db = await (await import('../mock/db')).getDatabase();
+      const { token } = await alunoService.login('aluno-7a-1', '1420');
+
+      const provaId = 'ativ-teste-discursiva-pendente';
+      db.atividades.push({
+        id: provaId,
+        titulo: 'Prova Teste Pendente',
+        descricao: '',
+        oferta_id: 'oferta-mat-7a',
+        periodo_id: 'per-3bim',
+        criado_por: 'usr-prof-ana',
+        modo: 'prova',
+        status: 'encerrada',
+        prazo: null,
+        created_at: new Date().toISOString(),
+      });
+
+      db.questoes.push(
+        { id: 'q-p-1', atividade_id: provaId, ordem: 1, enunciado: 'Q1', tipo: 'objetiva', dica: null, explicacao: null, created_at: '' },
+        { id: 'q-p-2', atividade_id: provaId, ordem: 2, enunciado: 'Q2', tipo: 'objetiva', dica: null, explicacao: null, created_at: '' },
+        { id: 'q-p-3', atividade_id: provaId, ordem: 3, enunciado: 'Q3', tipo: 'objetiva', dica: null, explicacao: null, created_at: '' },
+        { id: 'q-p-4', atividade_id: provaId, ordem: 4, enunciado: 'Q4', tipo: 'discursiva', dica: null, explicacao: null, created_at: '' },
+      );
+
+      db.alternativas.push(
+        { id: 'alt-p-1a', questao_id: 'q-p-1', letra: 'A', texto: 'A', correta: true, por_que_errou: null, created_at: '' },
+        { id: 'alt-p-2a', questao_id: 'q-p-2', letra: 'A', texto: 'A', correta: true, por_que_errou: null, created_at: '' },
+        { id: 'alt-p-2b', questao_id: 'q-p-2', letra: 'B', texto: 'B', correta: false, por_que_errou: 'Erro', created_at: '' },
+        { id: 'alt-p-3a', questao_id: 'q-p-3', letra: 'A', texto: 'A', correta: true, por_que_errou: null, created_at: '' },
+      );
+
+      db.respostas.push(
+        { id: 'r-p-1', aluno_id: 'aluno-7a-1', questao_id: 'q-p-1', alternativa_id: 'alt-p-1a', acertou: true, acertou_final: true, tentativas: 1, respondida_em: '', created_at: '' },
+        { id: 'r-p-2', aluno_id: 'aluno-7a-1', questao_id: 'q-p-2', alternativa_id: 'alt-p-2b', acertou: false, acertou_final: false, tentativas: 1, respondida_em: '', created_at: '' },
+        { id: 'r-p-3', aluno_id: 'aluno-7a-1', questao_id: 'q-p-3', alternativa_id: 'alt-p-3a', acertou: true, acertou_final: true, tentativas: 1, respondida_em: '', created_at: '' },
+        { id: 'r-p-4', aluno_id: 'aluno-7a-1', questao_id: 'q-p-4', alternativa_id: null, acertou: null, acertou_final: null, tentativas: 1, texto_resposta: 'Texto aluno', correcao: 'pendente', pontuacao: null, respondida_em: '', created_at: '' },
+      );
+
+      const resultado = (await alunoService.resultadoProva(token, provaId)) as any;
+
+      expect(resultado.total_questoes).toBe(4);
+      expect(resultado.acertos).toBe(2);
+      expect(resultado.erros).toBe(1);
+      expect(resultado.pendentes).toBe(1);
+      expect(resultado.aproveitamento).toBe(67);
+    });
+  });
 });
 

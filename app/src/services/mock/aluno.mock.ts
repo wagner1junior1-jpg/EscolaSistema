@@ -33,6 +33,7 @@ import { hashPin, hashToken, gerarTokenAleatorio } from './crypto';
 import { gerarId } from './ids';
 import {
   calcularAproveitamentoAtividade,
+  estaAguardandoCorrecao,
   faixaDesempenho,
   mediaDoAlunoNasAtividades,
   pontuacaoDaResposta,
@@ -653,8 +654,14 @@ export class MockAlunoService implements AlunoService {
     });
 
     const total = questoes.length;
-    const erros = total - Math.floor(totalPontos);
-    const aproveitamento = calcularAproveitamentoAtividade(totalPontos, total);
+    const pendentes = questoesResultado.filter((qr) => estaAguardandoCorrecao(qr)).length;
+    const avaliadas = total - pendentes;
+    const erros = Math.max(0, avaliadas - Math.floor(totalPontos));
+    const aproveitamento = avaliadas > 0
+      ? (pendentes > 0
+          ? Math.round((totalPontos / avaliadas) * 100)
+          : calcularAproveitamentoAtividade(totalPontos, total))
+      : 0;
 
     return {
       atividade_id: atividadeId,
@@ -662,9 +669,11 @@ export class MockAlunoService implements AlunoService {
       total_questoes: total,
       acertos: totalPontos,
       erros,
+      pendentes,
+      aguardando_correcao: pendentes,
       aproveitamento,
       questoes: questoesResultado,
-    };
+    } as ResultadoProva;
   }
 
   async meuDesempenho(token: string): Promise<MeuDesempenhoAluno> {

@@ -32,6 +32,7 @@ import { isSomHabilitado, setSomHabilitado, tocarSomAcerto, tocarSomErro, tocarS
 import { dispararConfeteAcerto, dispararConfeteFim } from '../utils/confetti';
 import { isSpeechSupported, falarQuestao, pararFala } from '../utils/speech';
 import { calcularPlacar, QuestaoPlacarItem, PlacarCalculado } from '../utils/placar';
+import { estaAguardandoCorrecao } from '@/services/calculos';
 
 interface RespostaLocalState {
   acertou?: boolean; // 1ª tentativa
@@ -435,15 +436,25 @@ export const AlunoAtividadePage: React.FC = () => {
 
     tocarSomFim();
 
+    const isProva = atividade?.modo === 'prova';
+    const totalQ = isProva && resultadoProvaFinal ? resultadoProvaFinal.total_questoes : (atividade?.questoes?.length ?? 0);
+    const pendentes = isProva && resultadoProvaFinal
+      ? resultadoProvaFinal.questoes.filter((q) => estaAguardandoCorrecao(q)).length
+      : (atividade?.questoes?.filter((q) => {
+          const r = respostasMap[q.id];
+          return estaAguardandoCorrecao(q, r);
+        }).length ?? 0);
+    const todasPendentes = totalQ > 0 && pendentes === totalQ;
+
     const aproveitamento =
-      atividade?.modo === 'prova' && resultadoProvaFinal
+      isProva && resultadoProvaFinal
         ? resultadoProvaFinal.aproveitamento
         : placarExercicio.aproveitamento;
 
-    if (aproveitamento >= 70) {
+    if (!todasPendentes && aproveitamento >= 70) {
       dispararConfeteFim();
     }
-  }, [exibirTelaFinal, atividade?.modo, resultadoProvaFinal, placarExercicio.aproveitamento]);
+  }, [exibirTelaFinal, atividade, resultadoProvaFinal, placarExercicio.aproveitamento, respostasMap]);
 
   if (carregando) {
     return (
@@ -484,10 +495,25 @@ export const AlunoAtividadePage: React.FC = () => {
    * ========================================================================= */
   if (exibirTelaFinal) {
     const isProva = atividade.modo === 'prova';
-    const totalQ = isProva && resultadoProvaFinal ? resultadoProvaFinal.total_questoes : placarExercicio.total_questoes;
+    const totalQ = isProva && resultadoProvaFinal ? resultadoProvaFinal.total_questoes : (atividade.questoes?.length || placarExercicio.total_questoes);
+
+    const pendentes = isProva && resultadoProvaFinal
+      ? resultadoProvaFinal.questoes.filter((q) => estaAguardandoCorrecao(q)).length
+      : (atividade.questoes?.filter((q) => {
+          const r = respostasMap[q.id];
+          return estaAguardandoCorrecao(q, r);
+        }).length ?? 0);
+
     const acertos = isProva && resultadoProvaFinal ? resultadoProvaFinal.acertos : placarExercicio.acertos;
-    const erros = isProva && resultadoProvaFinal ? resultadoProvaFinal.erros : placarExercicio.erros;
-    const aproveitamento = isProva && resultadoProvaFinal ? resultadoProvaFinal.aproveitamento : placarExercicio.aproveitamento;
+    const avaliadas = totalQ - pendentes;
+    const erros = isProva && resultadoProvaFinal
+      ? resultadoProvaFinal.erros
+      : Math.max(0, avaliadas - Math.floor(acertos));
+
+    const todasPendentes = totalQ > 0 && pendentes === totalQ;
+    const aproveitamento = isProva && resultadoProvaFinal
+      ? resultadoProvaFinal.aproveitamento
+      : (avaliadas > 0 ? (pendentes > 0 ? Math.round((acertos / avaliadas) * 100) : placarExercicio.aproveitamento) : 0);
 
     return (
       <AlunoLayout containerClassName="p-3 sm:p-6 lg:p-8">
@@ -529,24 +555,39 @@ export const AlunoAtividadePage: React.FC = () => {
                 {atividade.titulo}
               </h1>
               <p className="text-xs sm:text-sm text-slate-600 font-sans">
-                {aproveitamento >= 70
+                {todasPendentes
+                  ? 'Atividade finalizada! Suas respostas foram enviadas e estão aguardando correção pelo professor.'
+                  : aproveitamento >= 70
                   ? 'Excelente resultado! Você foi muito bem.'
                   : 'Atividade finalizada! Revise as questões para continuar aprendendo.'}
               </p>
             </div>
 
-            {/* Placar em Destaque (Grid 2x2 equilibrado em telas pequenas) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 pt-1">
-              <div className="p-3 sm:p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex flex-col items-center">
+            {/* Placar em Destaque */}
+            <div className={`grid gap-2 sm:gap-3 pt-1 ${pendentes > 0 ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
+              <div className="p-3 sm:p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex flex-col items-center justify-center text-center">
                 <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-indigo-700 tracking-wider">
                   Aproveitamento
                 </span>
-                <span className="font-heading font-black text-2xl sm:text-3xl text-indigo-900 mt-0.5 sm:mt-1">
-                  {aproveitamento}%
-                </span>
+                {todasPendentes ? (
+                  <span className="font-heading font-bold text-sm sm:text-base text-indigo-900 mt-1 leading-snug">
+                    Aguardando correção
+                  </span>
+                ) : (
+                  <>
+                    <span className="font-heading font-black text-2xl sm:text-3xl text-indigo-900 mt-0.5 sm:mt-1">
+                      {aproveitamento}%
+                    </span>
+                    {pendentes > 0 && (
+                      <span className="text-[10px] sm:text-xs text-indigo-600 font-medium mt-0.5">
+                        {pendentes} aguardando correção
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
 
-              <div className="p-3 sm:p-4 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex flex-col items-center">
+              <div className="p-3 sm:p-4 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex flex-col items-center justify-center">
                 <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-emerald-700 tracking-wider">
                   Acertos (1ª resp)
                 </span>
@@ -555,7 +596,7 @@ export const AlunoAtividadePage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="p-3 sm:p-4 rounded-2xl bg-rose-50/80 border border-rose-100 flex flex-col items-center">
+              <div className="p-3 sm:p-4 rounded-2xl bg-rose-50/80 border border-rose-100 flex flex-col items-center justify-center">
                 <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-rose-700 tracking-wider">
                   Erros
                 </span>
@@ -564,7 +605,18 @@ export const AlunoAtividadePage: React.FC = () => {
                 </span>
               </div>
 
-              <div className="p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col items-center">
+              {pendentes > 0 && (
+                <div className="p-3 sm:p-4 rounded-2xl bg-amber-50/80 border border-amber-200 flex flex-col items-center justify-center text-center">
+                  <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-amber-800 tracking-wider">
+                    Aguardando Correção
+                  </span>
+                  <span className="font-heading font-black text-2xl sm:text-3xl text-amber-900 mt-0.5 sm:mt-1">
+                    {pendentes}
+                  </span>
+                </div>
+              )}
+
+              <div className={`p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col items-center justify-center ${pendentes > 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
                 <span className="text-[10px] sm:text-[11px] font-heading font-bold uppercase text-slate-600 tracking-wider">
                   Total
                 </span>
