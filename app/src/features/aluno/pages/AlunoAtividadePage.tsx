@@ -426,6 +426,9 @@ export const AlunoAtividadePage: React.FC = () => {
         acertou: r?.acertou ?? null,
         tentativas: r?.tentativas ?? 1,
         acertou_final: r?.acertou_final ?? null,
+        tipo: r?.tipo ?? q.tipo,
+        pontuacao: r?.pontuacao ?? q.pontuacao ?? null,
+        correcao: r?.correcao ?? q.correcao ?? null,
       };
     });
     return calcularPlacar(questoesPlacar);
@@ -534,15 +537,14 @@ export const AlunoAtividadePage: React.FC = () => {
         }).length ?? 0);
 
     const acertos = isProva && resultadoProvaFinal ? resultadoProvaFinal.acertos : placarExercicio.acertos;
-    const avaliadas = totalQ - pendentes;
     const erros = isProva && resultadoProvaFinal
       ? resultadoProvaFinal.erros
-      : Math.max(0, avaliadas - Math.floor(acertos));
+      : placarExercicio.erros;
 
     const todasPendentes = totalQ > 0 && pendentes === totalQ;
     const aproveitamento = isProva && resultadoProvaFinal
       ? resultadoProvaFinal.aproveitamento
-      : (avaliadas > 0 ? (pendentes > 0 ? Math.round((acertos / avaliadas) * 100) : placarExercicio.aproveitamento) : 0);
+      : placarExercicio.aproveitamento;
 
     return (
       <AlunoLayout containerClassName="p-3 sm:p-6 lg:p-8">
@@ -621,7 +623,7 @@ export const AlunoAtividadePage: React.FC = () => {
                   Acertos (1ª resp)
                 </span>
                 <span className="font-heading font-black text-2xl sm:text-3xl text-emerald-900 mt-0.5 sm:mt-1">
-                  {acertos}
+                  {typeof acertos === 'number' ? String(acertos).replace('.', ',') : acertos}
                 </span>
               </div>
 

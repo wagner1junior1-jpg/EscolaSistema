@@ -23,7 +23,8 @@ describe('Cálculos Pedagógicos Oficiais (docs/ESPECIFICACAO.md Seção 6)', ()
 
     it('deve calcular corretamente acertos parciais com arredondamento', () => {
       expect(calcularAproveitamentoAtividade(3, 4)).toBe(75);
-      expect(calcularAproveitamentoAtividade(1, 3)).toBe(33.3);
+      expect(calcularAproveitamentoAtividade(1, 3)).toBe(33);
+      expect(calcularAproveitamentoAtividade(2.75, 4)).toBe(69);
     });
 
     it('deve retornar 0 quando o total de questões for zero', () => {

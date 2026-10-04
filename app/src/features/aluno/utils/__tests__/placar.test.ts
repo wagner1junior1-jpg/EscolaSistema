@@ -44,7 +44,7 @@ describe('calcularPlacar (features/aluno/utils/placar.ts)', () => {
     });
   });
 
-  it('arredonda o aproveitamento com precisão decimal', () => {
+  it('arredonda o aproveitamento para inteiro (sem decimal)', () => {
     const questoes: QuestaoPlacarItem[] = [
       { id: 'q1', acertou: true },
       { id: 'q2', acertou: false },
@@ -56,7 +56,7 @@ describe('calcularPlacar (features/aluno/utils/placar.ts)', () => {
       total_questoes: 3,
       acertos: 1,
       erros: 2,
-      aproveitamento: 33.3,
+      aproveitamento: 33,
     });
   });
 
@@ -75,6 +75,59 @@ describe('calcularPlacar (features/aluno/utils/placar.ts)', () => {
     expect(resultado.total_questoes).toBe(3);
     expect(resultado.acertos).toBe(2);
     expect(resultado.erros).toBe(1);
-    expect(resultado.aproveitamento).toBe(66.7);
+    expect(resultado.aproveitamento).toBe(67);
+  });
+
+  it('3 objetivas (2 certas) + discursiva 75 => 69', () => {
+    const questoes: QuestaoPlacarItem[] = [
+      { id: 'q1', acertou: true, tipo: 'objetiva' },
+      { id: 'q2', acertou: true, tipo: 'objetiva' },
+      { id: 'q3', acertou: false, tipo: 'objetiva' },
+      { id: 'q4', tipo: 'discursiva', pontuacao: 75, correcao: 'parcial' },
+    ];
+
+    const resultado = calcularPlacar(questoes);
+    expect(resultado.total_questoes).toBe(4);
+    expect(resultado.acertos).toBe(2.75);
+    expect(resultado.erros).toBe(1);
+    expect(resultado.aproveitamento).toBe(69);
+  });
+
+  it('mesma atividade com a discursiva pendente => 67', () => {
+    const questoes: QuestaoPlacarItem[] = [
+      { id: 'q1', acertou: true, tipo: 'objetiva' },
+      { id: 'q2', acertou: true, tipo: 'objetiva' },
+      { id: 'q3', acertou: false, tipo: 'objetiva' },
+      { id: 'q4', tipo: 'discursiva', correcao: 'pendente' },
+    ];
+
+    const resultado = calcularPlacar(questoes);
+    expect(resultado.total_questoes).toBe(4);
+    expect(resultado.acertos).toBe(2);
+    expect(resultado.erros).toBe(1);
+    expect(resultado.aproveitamento).toBe(67);
+  });
+
+  it('sem discursiva => igual ao de antes', () => {
+    const questoes: QuestaoPlacarItem[] = [
+      { id: 'q1', acertou: true, tipo: 'objetiva' },
+      { id: 'q2', acertou: true, tipo: 'objetiva' },
+      { id: 'q3', acertou: false, tipo: 'objetiva' },
+    ];
+
+    const resultado = calcularPlacar(questoes);
+    expect(resultado.total_questoes).toBe(3);
+    expect(resultado.acertos).toBe(2);
+    expect(resultado.erros).toBe(1);
+    expect(resultado.aproveitamento).toBe(67);
+  });
+
+  it('discursiva com pontuacao 1 conta 0,01 (não 1)', () => {
+    const questoes: QuestaoPlacarItem[] = [
+      { id: 'q1', tipo: 'discursiva', pontuacao: 1 },
+    ];
+
+    const resultado = calcularPlacar(questoes);
+    expect(resultado.acertos).toBe(0.01);
   });
 });

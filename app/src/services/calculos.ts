@@ -72,7 +72,7 @@ export function calcularAproveitamentoAtividade(
 ): number {
   if (totalQuestoes <= 0) return 0;
   const valor = (acertos / totalQuestoes) * 100;
-  return Math.round(valor * 10) / 10;
+  return Math.round(valor);
 }
 
 /**

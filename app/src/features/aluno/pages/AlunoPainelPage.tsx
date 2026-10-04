@@ -1189,7 +1189,7 @@ export const AlunoPainelPage: React.FC = () => {
                                 Aproveitamento:
                               </span>
                               <span className="font-heading font-black text-base text-emerald-700">
-                                {ativ.aproveitamento}%
+                                {Math.round(ativ.aproveitamento)}%
                               </span>
                             </div>
                           )}
