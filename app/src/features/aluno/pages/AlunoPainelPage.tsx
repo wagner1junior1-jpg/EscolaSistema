@@ -36,6 +36,7 @@ import { AtividadeResumoAluno, Aviso, MeuDesempenhoAluno } from '@/lib/types';
 import { prazoVencido } from '@/services/calculos';
 import { isSomHabilitado, setSomHabilitado, tocarSomAcerto } from '../utils/audio';
 import { dispararConfeteFim } from '../utils/confetti';
+import { calcularProgressoGeral, calcularXpAcumulado } from '../utils/gamificacao';
 
 export interface ConfigAvatar {
   id: string;
@@ -267,6 +268,11 @@ export const AlunoPainelPage: React.FC = () => {
     [atividades]
   );
 
+  const atividadesFeitas = useMemo(
+    () => atividades.filter((a) => a.concluida),
+    [atividades]
+  );
+
   // Agrupamento por disciplina da aba atual
   const listaExibicao = abaAtiva === 'para_fazer' ? atividadesParaFazer : atividadesConcluidas;
 
@@ -294,12 +300,12 @@ export const AlunoPainelPage: React.FC = () => {
     return { [disciplinaFiltro]: gruposPorDisciplina[disciplinaFiltro] };
   }, [gruposPorDisciplina, disciplinaFiltro]);
 
-  // Progresso geral do bimestre
+  // Progresso geral do bimestre:
+  // As atividades vencidas e não feitas permanecem no total Y (totalGeralAtividades),
+  // porque contam como pendência perdida na meta do bimestre.
   const totalGeralAtividades = atividades.length;
-  const totalConcluidasGeral = atividadesConcluidas.length;
-  const pctGeral = totalGeralAtividades > 0
-    ? Math.round((totalConcluidasGeral / totalGeralAtividades) * 100)
-    : 0;
+  const totalConcluidasGeral = atividadesFeitas.length;
+  const pctGeral = calcularProgressoGeral(totalConcluidasGeral, totalGeralAtividades);
 
   // Avatar atual selecionado
   const avatarAtual = useMemo(() => {
@@ -321,19 +327,8 @@ export const AlunoPainelPage: React.FC = () => {
 
   // Gamificação: Cálculo de XP acumulado pelo aluno
   const xpAcumulado = useMemo(() => {
-    let xp = 0;
-    // Cada atividade concluída confere 50 XP
-    xp += totalConcluidasGeral * 50;
-    // Aproveitamento de cada atividade soma XP proporcional
-    for (const ativ of atividadesConcluidas) {
-      if (ativ.aproveitamento !== undefined && ativ.aproveitamento !== null) {
-        xp += Math.round(ativ.aproveitamento * 0.5);
-      }
-    }
-    // Bônus de streak de frequência diária: 15 XP por dia
-    xp += diasStreak * 15;
-    return xp;
-  }, [totalConcluidasGeral, atividadesConcluidas, diasStreak]);
+    return calcularXpAcumulado(atividadesFeitas, diasStreak);
+  }, [atividadesFeitas, diasStreak]);
 
   // Nível pedagógico do aluno baseado em XP
   const nivelAluno = useMemo(() => {
