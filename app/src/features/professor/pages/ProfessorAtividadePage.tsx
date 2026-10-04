@@ -976,8 +976,14 @@ export const ProfessorAtividadePage: React.FC = () => {
                       setPrazo(e.target.value);
                       setTemAlteracoesNaoSalvas(true);
                     }}
-                    disabled={!isRascunho}
-                    helperText="Data limite opcional para envio das respostas."
+                    disabled={isEncerrada}
+                    helperText={
+                      isEncerrada
+                        ? 'Atividade encerrada: o prazo não pode ser alterado.'
+                        : isPublicada
+                        ? 'Ampliar o prazo reabre a atividade para os alunos que ainda não concluíram.'
+                        : 'Data limite opcional para envio das respostas.'
+                    }
                   />
                 </div>
               </CardContent>

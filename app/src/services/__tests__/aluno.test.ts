@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MockAlunoService } from '../mock/aluno.mock';
+import { MockAuthService } from '../mock/auth.mock';
+import { MockProfessorService } from '../mock/professor.mock';
 import { resetDatabase } from '../mock/db';
+import { prazoVencido } from '../calculos';
 
 describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICACAO.md Seções 5 e 7.1)', () => {
   let alunoService: MockAlunoService;
@@ -310,6 +313,92 @@ describe('AlunoService Mock — Segurança e Regras de Negócio (docs/ESPECIFICA
 
       expect(paraFazer).toBe(false);
       expect(concluida).toBe(true);
+    });
+
+    it('atualizarAtividade muda o prazo de uma atividade publicada', async () => {
+      const authService = new MockAuthService();
+      const professorService = new MockProfessorService();
+      await authService.login('ana@demo.com', 'demo123');
+
+      const ativId = 'ativ-mat-01'; // atividade publicada
+      const novoPrazo = '2026-11-15';
+
+      const atualizada = await professorService.atualizarAtividade(ativId, { prazo: novoPrazo });
+      expect(atualizada.prazo).toBe(novoPrazo);
+
+      const obtida = await professorService.obterAtividade(ativId);
+      expect(obtida?.prazo).toBe(novoPrazo);
+    });
+
+    it('depois de ampliar o prazo para uma data futura, prazoVencido devolve false e o aluno que não concluiu volta a aparecer em "Para fazer"', async () => {
+      const authService = new MockAuthService();
+      const professorService = new MockProfessorService();
+      const db = await (await import('../mock/db')).getDatabase();
+      const { token } = await alunoService.login('aluno-7a-1', '1420');
+
+      const ativId = 'ativ-teste-ampliar-prazo';
+      db.atividades.push({
+        id: ativId,
+        titulo: 'Atividade Publicada com Prazo Expirado',
+        descricao: 'Teste de reabertura após ampliar prazo',
+        oferta_id: 'oferta-mat-7a',
+        periodo_id: 'per-3bim',
+        criado_por: 'usr-prof-ana',
+        modo: 'exercicio',
+        status: 'publicada',
+        prazo: '2020-01-01',
+        created_at: new Date().toISOString(),
+      });
+      db.questoes.push({
+        id: 'q-ampliar-1',
+        atividade_id: ativId,
+        ordem: 1,
+        enunciado: 'Questão teste',
+        tipo: 'objetiva',
+        dica: null,
+        explicacao: null,
+        created_at: '',
+      });
+      db.alternativas.push({
+        id: 'alt-ampliar-1',
+        questao_id: 'q-ampliar-1',
+        letra: 'A',
+        texto: 'Opção A',
+        correta: true,
+        por_que_errou: null,
+        created_at: '',
+      });
+
+      // 1. Antes de ampliar: prazo vencido, aluno incompleto não aparece em "Para fazer"
+      let lista = await alunoService.atividadesPendentes(token);
+      let ativ = lista.find((a) => a.id === ativId);
+      expect(ativ).toBeDefined();
+      expect(prazoVencido(ativ?.prazo)).toBe(true);
+      expect(ativ?.prazo_vencido).toBe(true);
+      expect(ativ?.concluida).toBe(false);
+
+      // Regra do painel: para_fazer = !concluida && status !== 'encerrada' && !prazo_vencido
+      let paraFazer = !ativ!.concluida && ativ!.status !== 'encerrada' && !ativ!.prazo_vencido;
+      expect(paraFazer).toBe(false);
+
+      // 2. Professora atualiza o prazo da atividade publicada para uma data futura
+      await authService.login('ana@demo.com', 'demo123');
+      const prazoFuturo = '2030-12-31';
+      await professorService.atualizarAtividade(ativId, { prazo: prazoFuturo });
+
+      // 3. Depois de ampliar: prazoVencido devolve false e o aluno volta a aparecer em "Para fazer"
+      expect(prazoVencido(prazoFuturo)).toBe(false);
+
+      lista = await alunoService.atividadesPendentes(token);
+      ativ = lista.find((a) => a.id === ativId);
+      expect(ativ).toBeDefined();
+      expect(ativ?.prazo).toBe(prazoFuturo);
+      expect(prazoVencido(ativ?.prazo)).toBe(false);
+      expect(ativ?.prazo_vencido).toBe(false);
+      expect(ativ?.concluida).toBe(false);
+
+      paraFazer = !ativ!.concluida && ativ!.status !== 'encerrada' && !ativ!.prazo_vencido;
+      expect(paraFazer).toBe(true);
     });
   });
 });
