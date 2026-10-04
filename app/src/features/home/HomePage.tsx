@@ -4,6 +4,7 @@ import { AlunoLayout, CartaoVidro, BotaoGrande } from '@/components/aluno';
 import { Sparkles, GraduationCap, ArrowRight, UserCheck } from 'lucide-react';
 import logoEscola from '@/assets/logo-escola.png';
 import { MascoteAdaoMendes } from './components/MascoteAdaoMendes';
+import { AssinaturaWtj } from '@/components/common/AssinaturaWtj';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -109,6 +110,8 @@ export const HomePage: React.FC = () => {
               Sou professor ou da gestão
             </BotaoGrande>
           </div>
+
+          <AssinaturaWtj />
         </CartaoVidro>
 
         <p className="text-xs text-slate-500">
