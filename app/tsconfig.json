@@ -21,9 +21,8 @@
     "noFallthroughCasesInSwitch": true,
 
     /* Paths & Build info */
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     },
     "tsBuildInfoFile": "./node_modules/.cache/tsconfig.app.tsbuildinfo"
   },
