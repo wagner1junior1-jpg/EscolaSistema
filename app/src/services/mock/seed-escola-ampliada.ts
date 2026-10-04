@@ -10,7 +10,7 @@
  * - Calibração precisa de percentuais reais da escola brasileira de Ensino Fundamental
  */
 
-import { MockDatabaseSchema } from './seed';
+import { MockDatabaseSchema, dataRelativa } from './seed';
 import {
   DificuldadeQuestao,
   LetraAlternativa,
@@ -275,8 +275,8 @@ export async function enriquecerEscolaReal3a6Ano(db: MockDatabaseSchema): Promis
   if (ativMat1) {
     ativMat1.oferta_id = 'oferta-mat-7a';
     ativMat1.criado_por = 'usr-prof-ana';
-    ativMat1.status = 'encerrada';
-    ativMat1.prazo = '2026-09-18';
+    ativMat1.status = 'publicada';
+    ativMat1.prazo = dataRelativa(11);
   }
 
   const ativMatFrac = db.atividades.find((a) => a.id === 'ativ-demo-mat-frac');
@@ -284,7 +284,7 @@ export async function enriquecerEscolaReal3a6Ano(db: MockDatabaseSchema): Promis
     ativMatFrac.oferta_id = 'oferta-mat-7a';
     ativMatFrac.criado_por = 'usr-prof-ana';
     ativMatFrac.status = 'publicada';
-    ativMatFrac.prazo = '2026-10-02';
+    ativMatFrac.prazo = dataRelativa(5);
   }
 
   const ativCien1 = db.atividades.find((a) => a.id === 'ativ-cien-01');
@@ -299,8 +299,8 @@ export async function enriquecerEscolaReal3a6Ano(db: MockDatabaseSchema): Promis
   if (ativCienProva) {
     ativCienProva.oferta_id = 'oferta-cien-7a';
     ativCienProva.criado_por = 'usr-prof-carlos';
-    ativCienProva.status = 'encerrada';
-    ativCienProva.prazo = '2026-09-22';
+    ativCienProva.status = 'publicada';
+    ativCienProva.prazo = dataRelativa(7);
   }
 
   const pacoteAtividades: Array<{

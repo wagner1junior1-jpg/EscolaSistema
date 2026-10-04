@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { criarBancoDemonstracao } from '../mock/seed';
+import { criarBancoDemonstracao, dataRelativa } from '../mock/seed';
 import { enriquecerEscolaReal3a6Ano } from '../mock/seed-escola-ampliada';
 
 describe('Validação da Escola Direcionada aos 2 Professores (1 Mês de Funcionamento)', () => {
@@ -62,5 +62,20 @@ describe('Validação da Escola Direcionada aos 2 Professores (1 Mês de Funcion
 
     // Avisos cadastrados no mural
     expect(db.avisos.length).toBeGreaterThanOrEqual(5);
+  });
+
+  describe('dataRelativa', () => {
+    it('deve retornar data no formato YYYY-MM-DD calculada a partir de hoje', () => {
+      const hojeStr = dataRelativa(0);
+      expect(hojeStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      const futuroStr = dataRelativa(5);
+      expect(futuroStr).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      const dHoje = new Date(hojeStr + 'T00:00:00');
+      const dFuturo = new Date(futuroStr + 'T00:00:00');
+      const diffDias = Math.round((dFuturo.getTime() - dHoje.getTime()) / (1000 * 60 * 60 * 24));
+      expect(diffDias).toBe(5);
+    });
   });
 });

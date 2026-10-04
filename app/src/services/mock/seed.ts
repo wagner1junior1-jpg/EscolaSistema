@@ -46,6 +46,19 @@ export function getVersaoSeedAtiva(): number {
   return isTestEnvironment() ? dadosDemo.versao_seed : dadosDemo.versao_seed + 318;
 }
 
+/**
+ * Retorna a data no formato YYYY-MM-DD somando `dias` à data local de hoje.
+ * Não utiliza toISOString() para evitar divergências de fuso horário UTC à noite.
+ */
+export function dataRelativa(dias: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dias);
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
 export interface MockDatabaseSchema {
   versao: number;
   versao_seed: number;
@@ -288,7 +301,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       titulo: 'Equações do 1º Grau & Raciocínio Algébrico',
       descricao:
         'Descubra o valor da incógnita em situações práticas do dia a dia e treine as regras de isolamento.',
-      prazo: '2026-10-15',
+      prazo: dataRelativa(11),
       modo: 'exercicio',
       status: 'publicada',
       criado_por: 'usr-prof-ana',
@@ -928,6 +941,15 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
   }
 
   for (const ativ of dadosDemo.atividades) {
+    let prazo = ativ.prazo;
+    if (ativ.id === 'ativ-demo-mat-frac') {
+      prazo = dataRelativa(5);
+    } else if (ativ.id === 'ativ-demo-cien-prova') {
+      prazo = dataRelativa(7);
+    } else if (ativ.id === 'ativ-demo-port-leitura') {
+      prazo = dataRelativa(14);
+    }
+
     atividades.push({
       id: ativ.id,
       created_at: agora,
@@ -935,7 +957,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       periodo_id: ativ.periodo_id,
       titulo: ativ.titulo,
       descricao: ativ.descricao,
-      prazo: ativ.prazo,
+      prazo,
       modo: ativ.modo as ModoAtividade,
       status: ativ.status as StatusAtividade,
       criado_por: ativ.criado_por,

@@ -1192,7 +1192,7 @@ export const AlunoPainelPage: React.FC = () => {
 
                       {/* Botão de Ação (Mobile-First: min-h 48px e largura total) */}
                       <div className="pt-3.5 mt-2">
-                        {ativ.prazo_vencido && !ativ.concluida ? (
+                        {ativ.prazo_vencido && !ativ.concluida && !isEncerrada ? (
                           <BotaoGrande
                             variant="outline"
                             onClick={() => navigate(`/aluno/atividade/${ativ.id}`)}

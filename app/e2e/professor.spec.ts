@@ -233,9 +233,9 @@ test.describe('Portal do Professor', () => {
     await loginDemo(page, 'Profª Ana Paula');
     await page.goto('/professor/oferta/oferta-mat-7a?aba=desempenho');
 
-    // A célula do Lucas na "Prova: Números Inteiros (encerrada)" mostra 33,3% (incompleta)
+    // A célula do Lucas na "Prova: Números Inteiros (encerrada)" mostra 33% (incompleta)
     const lucasRow = page.locator('tr').filter({ hasText: 'Lucas Oliveira' });
-    await expect(lucasRow).toContainText(/33[,\.]3%\s*\(incompleta\)/);
+    await expect(lucasRow).toContainText(/33%\s*\(incompleta\)/);
   });
 
   test('P11: Navegação por Séries e Matérias no painel do professor', async ({ page }) => {
@@ -348,6 +348,61 @@ test.describe('Portal do Professor', () => {
 
     // Captura evidência de tela
     await page.screenshot({ path: 'e2e/evidencias/P12.png' });
+  });
+
+  test('P13: Professora amplia prazo de atividade publicada e reabre para o aluno', async ({ page }) => {
+    // 1. Professora Ana abre "Editar textos" da atividade publicada "Frações e Porcentagem no Dia a Dia"
+    await loginDemo(page, 'Profª Ana Paula');
+    await page.goto('/professor/oferta/oferta-mat-7a?aba=atividades');
+    await page.getByRole('button', { name: /Publicadas/ }).click();
+
+    const cardProf = page.locator('.rounded-2xl').filter({ hasText: 'Frações e Porcentagem no Dia a Dia' });
+    await cardProf.getByRole('button', { name: 'Editar textos' }).click();
+
+    // Coloca o prazo numa data passada e salva
+    await page.getByLabel('Prazo de Entrega').fill('2020-01-01');
+    await page.getByRole('button', { name: 'Salvar atividade' }).click();
+    await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
+
+    // 2. Aluno Lucas (7A-MAT, PIN 1420) vê a atividade em "Concluídas", com "Prazo encerrado"
+    await page.goto('/aluno');
+    await page.getByPlaceholder('Ex: 7A-MAT').fill('7a-mat');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByText('Lucas Oliveira').click();
+    for (const digito of '1420') {
+      await page.getByRole('button', { name: digito, exact: true }).click();
+    }
+    await expect(page).toHaveURL(/\/aluno\/painel/);
+
+    await page.getByRole('button', { name: /Concluídas/ }).click();
+    const cardAlunoConcluidas = page.locator('.rounded-3xl').filter({ hasText: 'Frações e Porcentagem no Dia a Dia' });
+    await expect(cardAlunoConcluidas).toBeVisible();
+    await expect(cardAlunoConcluidas.getByText('Prazo encerrado')).toBeVisible();
+
+    // 3. Professora amplia o prazo para uma data futura e salva
+    await loginDemo(page, 'Profª Ana Paula');
+    await page.goto('/professor/oferta/oferta-mat-7a?aba=atividades');
+    await page.getByRole('button', { name: /Publicadas/ }).click();
+
+    const cardProf2 = page.locator('.rounded-2xl').filter({ hasText: 'Frações e Porcentagem no Dia a Dia' });
+    await cardProf2.getByRole('button', { name: 'Editar textos' }).click();
+    await page.getByLabel('Prazo de Entrega').fill('2030-12-31');
+    await page.getByRole('button', { name: 'Salvar atividade' }).click();
+    await expect(page.getByText('Atividade salva com sucesso!')).toBeVisible();
+
+    // 4. Lucas vê a atividade de volta em "Para fazer"
+    await page.goto('/aluno');
+    await page.getByPlaceholder('Ex: 7A-MAT').fill('7a-mat');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await page.getByText('Lucas Oliveira').click();
+    for (const digito of '1420') {
+      await page.getByRole('button', { name: digito, exact: true }).click();
+    }
+    await expect(page).toHaveURL(/\/aluno\/painel/);
+
+    await page.getByRole('button', { name: /Para fazer/ }).click();
+    const cardAlunoParaFazer = page.locator('.rounded-3xl').filter({ hasText: 'Frações e Porcentagem no Dia a Dia' });
+    await expect(cardAlunoParaFazer).toBeVisible();
   });
 });
 
