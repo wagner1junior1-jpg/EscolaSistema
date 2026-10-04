@@ -55,7 +55,10 @@ export function calcularPlacar(questoes: QuestaoPlacarItem[]): PlacarCalculado {
 
       let pontos = 0;
       if (typeof q.pontuacao === 'number' && !isNaN(q.pontuacao)) {
-        pontos = Math.min(1, Math.max(0, q.pontuacao / 100));
+        pontos =
+          q.pontuacao > 1
+            ? Math.min(1, Math.max(0, q.pontuacao / 100))
+            : Math.min(1, Math.max(0, q.pontuacao));
       } else if (q.correcao === 'certo') {
         pontos = 1;
       } else if (q.correcao === 'parcial') {

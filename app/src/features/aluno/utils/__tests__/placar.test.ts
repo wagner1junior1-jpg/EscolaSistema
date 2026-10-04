@@ -122,12 +122,27 @@ describe('calcularPlacar (features/aluno/utils/placar.ts)', () => {
     expect(resultado.aproveitamento).toBe(67);
   });
 
-  it('discursiva com pontuacao 1 conta 0,01 (não 1)', () => {
+  it('discursiva com pontuacao 0.75 => 0,75 de acerto (aproveitamento 69 com 3 objetivas, 2 certas)', () => {
     const questoes: QuestaoPlacarItem[] = [
-      { id: 'q1', tipo: 'discursiva', pontuacao: 1 },
+      { id: 'q1', acertou: true, tipo: 'objetiva' },
+      { id: 'q2', acertou: true, tipo: 'objetiva' },
+      { id: 'q3', acertou: false, tipo: 'objetiva' },
+      { id: 'q4', tipo: 'discursiva', pontuacao: 0.75, correcao: 'parcial' },
     ];
 
     const resultado = calcularPlacar(questoes);
-    expect(resultado.acertos).toBe(0.01);
+    expect(resultado.total_questoes).toBe(4);
+    expect(resultado.acertos).toBe(2.75);
+    expect(resultado.erros).toBe(1);
+    expect(resultado.aproveitamento).toBe(69);
+  });
+
+  it('discursiva com pontuacao 75 => também 0,75', () => {
+    const questoes: QuestaoPlacarItem[] = [
+      { id: 'q1', tipo: 'discursiva', pontuacao: 75 },
+    ];
+
+    const resultado = calcularPlacar(questoes);
+    expect(resultado.acertos).toBe(0.75);
   });
 });
