@@ -28,6 +28,7 @@ import {
   questoesCriticas,
   mediaDoAlunoNasAtividades,
   pontuacaoDaResposta,
+  discursivaPendente,
 } from '../calculos';
 
 export class MockRelatorioService implements RelatorioService {
@@ -128,7 +129,7 @@ export class MockRelatorioService implements RelatorioService {
             const qs = db.questoes.filter((q) => q.atividade_id === ativ.id && q.tipo === 'discursiva');
             for (const q of qs) {
               const respostas = db.respostas.filter((r) => r.questao_id === q.id && alunos.some((a) => a.id === r.aluno_id));
-              if (respostas.some((r) => r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null)) {
+              if (respostas.some((r) => discursivaPendente(q, r))) {
                 temDiscursivaPendenteTurma = true;
                 break;
               }

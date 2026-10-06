@@ -43,6 +43,7 @@ import {
   faixaDesempenho,
   mediaDoAlunoNasAtividades,
   pontuacaoDaResposta,
+  discursivaPendente,
 } from '../calculos';
 
 export class MockProfessorService implements ProfessorService {
@@ -729,12 +730,10 @@ export class MockProfessorService implements ProfessorService {
         // Se o aluno tem discursiva PENDENTE numa atividade, essa atividade fica "aguardando correção" para ele e NÃO entra na média.
         let temDiscursivaPendente = false;
         for (const q of questoes) {
-          if (q.tipo === 'discursiva') {
-            const r = respostas.find((resp) => resp.questao_id === q.id);
-            if (r && (r.correcao === 'pendente' || pontuacaoDaResposta(q, r) === null)) {
-              temDiscursivaPendente = true;
-              break;
-            }
+          const r = respostas.find((resp) => resp.questao_id === q.id);
+          if (discursivaPendente(q, r)) {
+            temDiscursivaPendente = true;
+            break;
           }
         }
 

@@ -395,6 +395,23 @@ export function pontuacaoDaResposta(
 }
 
 /**
+ * Regra única de "discursiva pendente": a resposta de uma questão discursiva ainda sem nota.
+ * Atividade com resposta assim fica "aguardando correção" e fica fora da média.
+ * Questão objetiva ou sem resposta nunca é pendente.
+ */
+export function discursivaPendente(
+  questao: { tipo?: TipoQuestao | null } | null | undefined,
+  resposta?: {
+    acertou?: boolean | null;
+    correcao?: StatusCorrecao | null;
+    pontuacao?: number | null;
+  } | null
+): boolean {
+  if (questao?.tipo !== 'discursiva' || !resposta) return false;
+  return resposta.correcao === 'pendente' || pontuacaoDaResposta(questao, resposta) === null;
+}
+
+/**
  * 7. Funções auxiliares para Desempenho Hierárquico e Semáforo Pedagógico
  */
 
