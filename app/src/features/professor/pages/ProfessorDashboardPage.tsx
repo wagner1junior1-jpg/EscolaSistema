@@ -90,6 +90,8 @@ export const ProfessorDashboardPage: React.FC = () => {
   const [serieSelecionada, setSerieSelecionada] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  // Só considera "sem turma" depois de carregar, para não travar os botões durante o carregamento
+  const semTurmas = !carregando && !erro && ofertas.length === 0;
 
   // Métricas e Painéis Adicionais
   const [cotaIA, setCotaIA] = useState<{ uso_mes: number; limite_mes: number } | null>(null);
@@ -458,6 +460,8 @@ export const ProfessorDashboardPage: React.FC = () => {
               size="sm"
               leftIcon={<Plus className="w-3.5 h-3.5 text-white" />}
               onClick={() => setModalNovaAtividadeAberto(true)}
+              disabled={semTurmas}
+              title={semTurmas ? 'Você ainda não tem turma atribuída' : undefined}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xs shadow-indigo-200"
               data-testid="btn-nova-atividade-rapida"
             >
@@ -469,6 +473,8 @@ export const ProfessorDashboardPage: React.FC = () => {
               size="sm"
               leftIcon={<Sparkles className="w-3.5 h-3.5 text-purple-600" />}
               onClick={handleAbrirGeradorIA}
+              disabled={semTurmas}
+              title={semTurmas ? 'Você ainda não tem turma atribuída' : undefined}
               className="border-purple-200 hover:border-purple-400 bg-purple-50/50 hover:bg-purple-50 text-purple-900 font-bold"
               data-testid="btn-gerar-ia-dashboard"
             >
