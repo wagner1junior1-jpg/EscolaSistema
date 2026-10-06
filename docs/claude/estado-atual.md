@@ -15,7 +15,14 @@ Atualizado em 06/10/2026 (versão 10: teste de uso do prazo vencido/WTJ/69% conc
 - Teste de uso: navegador em http://localhost:5173/ com `npm run dev`; usuários demo abaixo.
 - Ao citar números num comando, não abreviar.
 
-## Onde paramos (06/10/2026)
+## Execução do plano de 06/10 (Claude escreveu o código)
+- Plano: plano-06-10.md. Relatório completo: relatorio-06-10.md. Commits LOCAIS (NÃO enviados; push só com OK do Wagner): 572fe29 (média do período do Conselho estava /100: 0,7% em vez de ~73%), 6f305fd (sem contagem regressiva de prazo em atividade concluída), 471ed31 (função única discursivaPendente), 90bda88 (KPIs do painel do professor no celular). Build OK, 243 testes.
+- Parte 2 do teste de uso (A criar atividade, B aluno responde, C Banco, D Gerar com IA, E "Salvo neste aparelho", F Gestão, G observações): tudo OK. G só pareceu falha porque na base ampliada o Carlos leciona no 7A (turma do Lucas); o bloqueio funciona para outra turma.
+- A4 (fotos) e A5 (localStorage cheio) já estavam resolvidos no código; a auditoria 08 está desatualizada nesses dois pontos.
+- "6º Ano A" com código 7A-MAT é intencional (base ampliada); código é herança do seed antigo.
+- Pasta app/scratch/ (scripts de teste) está fora do git; sugestão: ignorar no .gitignore (decisão do Wagner).
+
+## Onde paramos (06/10/2026, antes do plano)
 - Branch **main**, igual à origin/main. Último commit: **3059220** "fix(aluno): meta do bimestre mostra as atividades não entregues". Commits desta sessão (todos no GitHub): ec85fa8 (professora amplia o prazo e reabre para quem não concluiu), 4a3493e (vencida e não feita não conta na meta nem no XP), 50489f2 (prazos do seed relativos a hoje, E2E atualizados), af07127 (remove baseUrl do tsconfig; paths agora "./src/*"), 3059220 (indicador "N para fazer • M não entregues • T no total"). Build OK e 234 testes.
 - Teste de uso de 06/10 (feito pelo Antigravity, sem editar código): PASSARAM prazo vencido em "Concluídas" com chip "Prazo encerrado" e botão "Ver" (aviso sem campos de resposta); concluída com prazo vencido abre "Ver resultado" sem bloqueio; "Produção e Coesão" 69% inteiro (acertos 2,75); vencida e não feita fora da meta e do XP; assinatura WTJ em desktop e 360px (só na "/"); ampliar o prazo reabre para quem não fez e mantém concluída para quem fez.
 - Regra da meta (conferida): concluídas = só as feitas; "para fazer" = abertas e em dia; "não entregues" = vencidas não feitas + encerradas incompletas (ex.: "Prova: Números Inteiros (encerrada)", 1 de 3); total = todas. Aba "Concluídas" é histórico (feitas + encerradas + vencidas), por isso tem mais itens que a meta.
