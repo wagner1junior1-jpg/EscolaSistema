@@ -4,3 +4,4 @@ dist-ssr
 .env*
 !.env.example
 *.tsbuildinfo
+app/scratch/
