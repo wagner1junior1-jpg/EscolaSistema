@@ -1119,6 +1119,14 @@ export const AlunoPainelPage: React.FC = () => {
                             const status = obterStatusPrazo(ativ.prazo);
                             if (!status) return null;
 
+                            // Atividade já concluída não precisa de contagem regressiva
+                            if (
+                              ativ.concluida &&
+                              (status.tipo === 'urgente' || status.tipo === 'amanha' || status.tipo === 'proximo')
+                            ) {
+                              return null;
+                            }
+
                             if (status.tipo === 'urgente') {
                               return (
                                 <span className="inline-flex items-center gap-1 py-1 px-2.5 rounded-full text-[11px] font-heading font-black bg-rose-50 border border-rose-300 text-rose-700 animate-pulse shadow-xs">
