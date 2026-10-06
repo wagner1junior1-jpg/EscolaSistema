@@ -36,7 +36,11 @@ import { AtividadeResumoAluno, Aviso, MeuDesempenhoAluno } from '@/lib/types';
 import { prazoVencido } from '@/services/calculos';
 import { isSomHabilitado, setSomHabilitado, tocarSomAcerto } from '../utils/audio';
 import { dispararConfeteFim } from '../utils/confetti';
-import { calcularProgressoGeral, calcularXpAcumulado } from '../utils/gamificacao';
+import {
+  calcularProgressoGeral,
+  calcularXpAcumulado,
+  calcularNaoEntregues,
+} from '../utils/gamificacao';
 
 export interface ConfigAvatar {
   id: string;
@@ -306,6 +310,11 @@ export const AlunoPainelPage: React.FC = () => {
   const totalGeralAtividades = atividades.length;
   const totalConcluidasGeral = atividadesFeitas.length;
   const pctGeral = calcularProgressoGeral(totalConcluidasGeral, totalGeralAtividades);
+  const naoEntregues = calcularNaoEntregues(
+    totalGeralAtividades,
+    totalConcluidasGeral,
+    atividadesParaFazer.length
+  );
 
   // Avatar atual selecionado
   const avatarAtual = useMemo(() => {
@@ -911,9 +920,16 @@ export const AlunoPainelPage: React.FC = () => {
                   style={{ width: `${pctGeral}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[11px] font-heading font-bold text-slate-400 px-0.5">
-                <span>{atividadesParaFazer.length} pendentes</span>
-                <span>{totalGeralAtividades} no total</span>
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] font-heading font-bold text-slate-400 px-0.5">
+                <span>
+                  {atividadesParaFazer.length} para fazer
+                  {naoEntregues > 0 && (
+                    <> • {naoEntregues} {naoEntregues === 1 ? 'não entregue' : 'não entregues'}</>
+                  )}
+                </span>
+                <span className="shrink-0 ml-auto">
+                  {totalGeralAtividades} no total
+                </span>
               </div>
             </div>
           </div>

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { calcularProgressoGeral, calcularXpAcumulado } from '../gamificacao';
+import {
+  calcularProgressoGeral,
+  calcularXpAcumulado,
+  calcularNaoEntregues,
+} from '../gamificacao';
 
 describe('Gamificação e Progresso do Aluno (AlunoPainelPage)', () => {
   describe('calcularProgressoGeral', () => {
@@ -63,6 +67,25 @@ describe('Gamificação e Progresso do Aluno (AlunoPainelPage)', () => {
       ];
       // 2 atividades * 50 = 100 XP
       expect(calcularXpAcumulado(atividadesFeitas, 0)).toBe(100);
+    });
+  });
+
+  describe('calcularNaoEntregues', () => {
+    it('calcula 2 não entregues para 9 concluídas, 3 para fazer e 14 no total', () => {
+      // Caso real do Lucas: 14 total - 9 concluídas - 3 para fazer = 2 não entregues
+      expect(calcularNaoEntregues(14, 9, 3)).toBe(2);
+    });
+
+    it('retorna 0 quando nenhuma atividade for não entregue', () => {
+      // 10 total - 7 concluídas - 3 para fazer = 0
+      expect(calcularNaoEntregues(10, 7, 3)).toBe(0);
+      expect(calcularNaoEntregues(0, 0, 0)).toBe(0);
+    });
+
+    it('entrada inconsistente nunca retorna negativo', () => {
+      // Total menor que a soma de concluídas e para fazer
+      expect(calcularNaoEntregues(5, 5, 2)).toBe(0);
+      expect(calcularNaoEntregues(2, 4, 1)).toBe(0);
     });
   });
 });

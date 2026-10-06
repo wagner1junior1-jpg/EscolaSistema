@@ -47,3 +47,15 @@ export function calcularXpAcumulado(
   xp += Math.max(0, diasStreak) * 15;
   return xp;
 }
+
+/**
+ * Calcula a quantidade de atividades não entregues (expiradas ou encerradas sem conclusão).
+ * Nunca retorna valor negativo para entradas inconsistentes.
+ */
+export function calcularNaoEntregues(
+  totalGeral: number,
+  totalConcluidas: number,
+  totalParaFazer: number
+): number {
+  return Math.max(0, totalGeral - totalConcluidas - totalParaFazer);
+}
