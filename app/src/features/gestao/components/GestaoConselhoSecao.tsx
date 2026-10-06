@@ -32,6 +32,7 @@ import {
   TurmaDoProfessorResumo,
 } from '../utils/pautaConselhoFormatador';
 import { agruparAlunosEmAtencao } from '../utils/alunosAtencaoAgrupamento';
+import { calcularMediaGeralPeriodo } from '../utils/mediaPeriodo';
 
 type ModoVisaoConselho = 'geral' | 'turma' | 'professor';
 
@@ -181,19 +182,10 @@ export const GestaoConselhoSecao: React.FC = () => {
   const resumoAtencao = useMemo(() => agruparAlunosEmAtencao(alunosAtencao), [alunosAtencao]);
 
   // Indicadores calculados estritamente com as respostas do período selecionado
-  const mediaGeralPeriodo = useMemo(() => {
-    let somaPontos = 0;
-    let totalRespostas = 0;
-    turmasHierarquicas.forEach((turma) => {
-      turma.materias.forEach((materia) => {
-        if (materia.total_respostas > 0) {
-          somaPontos += (materia.porcentagem_acerto / 100) * materia.total_respostas;
-          totalRespostas += materia.total_respostas;
-        }
-      });
-    });
-    return totalRespostas > 0 ? Math.round((somaPontos / totalRespostas) * 10) / 10 : null;
-  }, [turmasHierarquicas]);
+  const mediaGeralPeriodo = useMemo(
+    () => calcularMediaGeralPeriodo(turmasHierarquicas),
+    [turmasHierarquicas]
+  );
 
   const totalTurmasAvaliadas = useMemo(() => {
     return turmasHierarquicas.filter((t) => t.porcentagem_acerto_geral !== null).length;

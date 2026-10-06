@@ -9,6 +9,7 @@ import {
   formatarPautaConselhoTurma,
   formatarPautaConselhoProfessor,
 } from '../pautaConselhoFormatador';
+import { calcularMediaGeralPeriodo } from '../mediaPeriodo';
 
 describe('Auditoria e Verificação Rigorosa — Conselho de Professores', () => {
   const authService = new MockAuthService();
@@ -81,17 +82,7 @@ describe('Auditoria e Verificação Rigorosa — Conselho de Professores', () =>
     }
 
     // 7. Cálculo Reativo da Média do Período no Conselho
-    let somaPontos = 0;
-    let totalRespostas = 0;
-    turmasHierarquicas.forEach((turma) => {
-      turma.materias.forEach((materia) => {
-        if (materia.total_respostas > 0) {
-          somaPontos += materia.porcentagem_acerto * materia.total_respostas;
-          totalRespostas += materia.total_respostas;
-        }
-      });
-    });
-    const mediaGeralPeriodo = totalRespostas > 0 ? Math.round((somaPontos / totalRespostas) * 10) / 10 : null;
+    const mediaGeralPeriodo = calcularMediaGeralPeriodo(turmasHierarquicas);
     expect(mediaGeralPeriodo).not.toBeNull();
     expect(mediaGeralPeriodo!).toBeGreaterThan(65);
 
