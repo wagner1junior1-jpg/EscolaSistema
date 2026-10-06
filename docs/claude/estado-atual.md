@@ -41,10 +41,20 @@ Atualizado em 06/10/2026 (versão 10: teste de uso do prazo vencido/WTJ/69% conc
 - COMANDO 2: FEITO em 04/10 (commit 48e6a7a). Falta só conferir no navegador: "Produção e Coesão" do Lucas deve mostrar 69% no painel e na tela de resultado. Regras aplicadas: nota da discursiva sempre 0–100 (dividida por 100), pendente fora, aproveitamento inteiro. Texto original do comando, para referência: aproveitamento do exercício com discursiva corrigida. Problemas: painel mostra 68.8% (decimal) em "Produção e Coesão" do Lucas; tela de resultado do exercício mostra 50%, acertos 2, erros 2 (conta a discursiva de 75 como erro). Esperado 69% (2,75 de 4). Causa: calcularPlacar (app/src/features/aluno/utils/placar.ts) só considera `acertou === true`. Correção: pontuação da discursiva corrigida entra, pendente fica fora (aproveitamento sobre as questões já corrigidas), aproveitamento sempre inteiro (Math.round) em calcularPlacar, calcularAproveitamentoAtividade e chip do painel; testes: 69 com 3 objetivas (2 certas) + discursiva 75; 67 com a discursiva pendente; sem discursiva igual ao de antes. Arquivos: features/aluno/utils/placar.ts, AlunoAtividadePage.tsx (useMemo placarExercicio passa tipo/pontuacao/correcao; "Acertos" pode ser decimal com vírgula, ex. 2,75), AlunoPainelPage.tsx, services/calculos.ts, testes.
 
 ## Decisões pendentes do Wagner
-1. (Resolvido em 04/10: push do af2ad3e e 48e6a7a feito.) Falta conferir a identidade WTJ no navegador.
-2. O 8bd092e mexeu nos .gitignore: confirmar que foi intencional.
-3. Destino de conselho de classe/observações na spec.
-4. Landing comercial (mockup separado): entra neste repositório ou num site à parte?
+1. (Resolvido em 04/10: push do af2ad3e e 48e6a7a feito; WTJ conferida no navegador em 06/10.)
+2. (Resolvido em 06/10) .gitignore do 8bd092e: só trocou `.env`/`.env.local`/`.env.production` por `.env*` com `!.env.example`; é mais seguro e fica como está. Nenhum .env está no git.
+3. (Adiado por decisão do Wagner em 06/10) Destino de conselho de classe/observações na spec: decidir quando o sistema estiver em produção com testes reais. A tela do Conselho de Professores já existe.
+4. (Decidido em 06/10) Landing comercial: NÃO haverá site à parte por enquanto. A venda é de escola em escola, apresentando o produto. Pode mudar depois; o mockup (claude.ai) fica guardado.
+
+## Rodada de testes do Claude (06/10, depois do push do 4d58595)
+- Suíte E2E (Playwright, base mock, porta 4173): 56 de 56 passando, antes e depois da última mudança.
+- Fluxos testados por script (servidor próprio em modo mock, porta 5180): correção de discursiva pela professora (painel foi de 1 pendente para 0, notas em dia) e troca de senha (atual errada, curta, confirmação diferente, igual à atual, correta; depois a senha antiga falha e a nova entra). Tudo OK.
+- Varredura de 188 telas em 390 e 1280 px (4 professores, coordenação, direção e 4 alunos): sem erro de console, sem página vazia, sem rolagem horizontal.
+- Achado e corrigido (bee1dfd, local, NÃO enviado): professor sem turma atribuída (Mariana, Fernando) abria "Nova Atividade Rápida" com a lista de turmas vazia; agora "Nova Atividade" e "Gerar com IA" ficam desabilitados com dica. Sem teste E2E (esses professores só existem na base ampliada).
+- Cuidado ao testar com Playwright: mascarar `navigator.webdriver` liga a base ampliada; se o `.env` estiver em `supabase`, passa a gravar no Supabase de teste. Para testar em mock, subir o dev server com `VITE_DATA_SOURCE=mock` (ex.: porta 5180). Cada contexto novo do navegador tem seu próprio localStorage (mesma conta em outro contexto vê a base original).
+
+## Autorizações do Wagner (06/10)
+- O Claude pode fazer os testes de que precisar (build, testes unitários, scripts de navegador e, se necessário, a suíte E2E), sem pedir a cada vez. Continua valendo: commit só com `git add` explícito e push só com OK do Wagner.
 
 ## Decisões já tomadas
 - Identidade WTJ na tela de entrada: opção A, assinatura discreta no fim do cartão (decisao-identidade-wtj.md). Contato só WhatsApp (62) 99254-9588; sem e-mail e sem CNPJ.

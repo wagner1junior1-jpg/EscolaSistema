@@ -51,3 +51,12 @@ Só há um ponto de upload (modal Gerar com IA). `reduzirImagem` limita a 1600 p
 - Decisões: `.gitignore` do 8bd092e, destino do conselho de classe/observações na spec, landing comercial.
 - Back end: sincronização (A1–A3), RLS, senhas, PIN, chave Gemini, cota mensal de IA, LGPD, deploy.
 - Melhoria opcional de uso: controle "Discursivas" do Gerar com IA começar em 0.
+
+## Complemento — rodada de testes autorizada pelo Wagner (06/10, à tarde)
+- **E2E (Playwright, base mock): 56 de 56 passando**, rodado duas vezes (antes e depois da última correção).
+- **Correção de discursiva pela professora:** Ana abre "Corrigir →", dá 100% e o painel passa de "1 pendente" para "0 · Notas em dia". OK.
+- **Troca de senha:** mensagens corretas para senha atual errada, nova senha curta ("mínimo 6 caracteres"), confirmação diferente ("A confirmação de senha não confere."), nova igual à atual e sucesso; depois a senha antiga falha e a nova entra. OK.
+- **Varredura de 188 telas** (Ana, Carlos, Mariana, Fernando, coordenação, direção e os alunos Lucas, Beatriz, Gabriel e Mariana, em 390 e 1280 px): sem erro de console, sem página vazia, sem rolagem horizontal.
+- **Bug achado e corrigido (bee1dfd):** professor sem turma (Mariana, Fernando) conseguia abrir "Nova Atividade Rápida" com a lista de turmas vazia. Agora "Nova Atividade" e "Gerar com IA" ficam desabilitados com a dica "Você ainda não tem turma atribuída". Lacuna: sem E2E para isso, porque esses professores só existem na base ampliada.
+- Build OK e 243 testes unitários passando.
+- Sobre as decisões: `.gitignore` do 8bd092e resolvido (só ficou mais seguro); conselho de classe adiado para a produção; landing: sem site à parte, a venda é de escola em escola.
