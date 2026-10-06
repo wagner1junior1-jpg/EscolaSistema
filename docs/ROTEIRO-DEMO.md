@@ -15,7 +15,7 @@ Foco pedagógico, fluxo real e diagnóstico imediato.
 
 ### 1. Professora Ana cria e publica a atividade (2 min 30s)
 - **Login:** `ana@demo.com` / `demo123` em `/entrar`.
-- **Minhas Turmas:** Abrir a oferta de Matemática do 7º Ano A.
+- **Minhas Turmas:** Abrir a oferta de Matemática do 6º Ano A (o código de acesso dos alunos continua 7A-MAT).
 - **Nova Atividade:** Criar um exercício com 2 questões, preenchendo o enunciado, as alternativas, o motivo do erro de cada alternativa errada e a explicação.
 - **Publicar:** Voltar para as atividades da turma, clicar em "Publicar" e confirmar em "Publicar agora".
 - *Frase-chave:* "Cada alternativa errada já vem com o motivo do erro explicado para o aluno."
@@ -36,7 +36,7 @@ Foco pedagógico, fluxo real e diagnóstico imediato.
 
 ### 4. Direção acompanha a escola (2 min)
 - **Login:** Clicar em "Sair" e entrar com `direcao@demo.com` / `demo123` em `/entrar`.
-- **Desempenho:** Mostrar o 7º Ano A / Matemática já atualizado com a atividade de agora.
+- **Desempenho:** Mostrar o 6º Ano A / Matemática já atualizado com a atividade de agora.
 - **Alunos em Atenção:** Mostrar a lista e a exportação em **"Baixar CSV"**.
 - **Questões Críticas:** Mostrar as questões com menos de 50% de acerto e a alternativa errada mais marcada.
 - *Frase-chave:* "A gestão age antes do fim do bimestre, com dados por turma, por aluno e por questão."
