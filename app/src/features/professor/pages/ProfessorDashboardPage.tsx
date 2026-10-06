@@ -502,13 +502,13 @@ export const ProfessorDashboardPage: React.FC = () => {
                 <Users className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block sm:truncate">
                   Regência
                 </span>
                 <span className="font-heading font-black text-sm sm:text-lg text-slate-900 leading-tight block truncate">
                   {ofertas.length} {ofertas.length === 1 ? 'Turma' : 'Turmas'}
                 </span>
-                <span className="text-[10px] sm:text-[11px] text-slate-500 truncate block mt-0.5">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 sm:truncate block mt-0.5">
                   {totalAlunosGeral > 0
                     ? `${pluralizar(totalAlunosGeral, 'aluno', 'alunos')} acompanhados`
                     : `${seriesDisponiveis.length} séries vinculadas`}
@@ -522,13 +522,13 @@ export const ProfessorDashboardPage: React.FC = () => {
                 <Send className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wider block sm:truncate">
                   Atividades Ativas
                 </span>
                 <span className="font-heading font-black text-sm sm:text-lg text-emerald-900 leading-tight block truncate">
                   {totalPublicadasGeral} {totalPublicadasGeral === 1 ? 'Publicada' : 'Publicadas'}
                 </span>
-                <span className="text-[10px] sm:text-[11px] text-slate-500 truncate block mt-0.5">
+                <span className="text-[10px] sm:text-[11px] text-slate-500 sm:truncate block mt-0.5">
                   {pluralizar(totalRascunhosGeral, 'rascunho', 'rascunhos')} · {pluralizar(totalEncerradasGeral, 'encerrada', 'encerradas')}
                 </span>
               </div>
@@ -544,6 +544,8 @@ export const ProfessorDashboardPage: React.FC = () => {
                 }
               }}
               className={`bg-white border rounded-xl sm:rounded-2xl p-2.5 sm:p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-3 transition-all ${
+                IA_SEM_LIMITE ? 'col-span-2 lg:col-span-1' : ''
+              } ${
                 totalGeralPendentesCorrecao > 0
                   ? 'border-purple-300 bg-purple-50/40 hover:bg-purple-50/70 hover:border-purple-400 cursor-pointer group'
                   : 'border-slate-200/90'
