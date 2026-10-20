@@ -2,6 +2,13 @@
 
 Atualizado em 06/10/2026 (versão 10: teste de uso do prazo vencido/WTJ/69% concluído; meta do bimestre mostra "não entregues"; baseUrl removido do tsconfig).
 
+## PLANO DO BACK END (20/10/2026) — LEIA ANTES DE TUDO
+- Plano: docs/claude/plano-backend.md (ainda não commitado). Decisões 1 a 3 respondidas: uuid, RPCs com token próprio para o aluno, exclusão lógica (deleted_at). Sem Docker/CLI: testes de RLS no projeto Supabase de teste. Produção não será criada agora; anon key não gira agora (só antes de dado real, Fase 8).
+- Fase 0: concluída (decisões registradas).
+- Fase 1: CONCLUÍDA, commit local 04bc315 (NÃO enviado). Mock só localStorage; sincronização em services/sincronizacao.ts; stubs Supabase independentes; VITE_MODO_TESTE controla faixa, login demo e restaurar dados.
+- PRÓXIMO: Fase 2 (esquema v2 e RLS, migration 0003; nunca editar 0001/0002). Pontos de partida: 2.1 uuid, updated_at, deleted_at, aluno_sessoes, pin_tentativas, ajuste de ia_geracoes. Fazer em conversa NOVA com Sonnet em high.
+- Pendências: o Wagner ainda não revisou/commitou plano-backend.md; branch main está 3 commits à frente da origin (push só com OK).
+
 ## LEIA PRIMEIRO (se você é o Claude no VS Code)
 - Estes documentos ficam em docs/claude/ no repositório (cópia dos documentos do projeto do claude.ai). Fonte da verdade do código/escopo: docs/ESPECIFICACAO.md e AGENTS.md.
 - Até 04/10 o fluxo era: Wagner decide; Antigravity escreve código; Claude (no claude.ai) audita, escreve comandos e testa o uso no navegador. No VS Code o Claude pode ler e editar o código, rodar build/testes e usar git DIRETAMENTE, mas só depois de combinar com o Wagner (as regras do AGENTS.md 10 e 13 foram escritas para o Antigravity: não commitar/pushar sem o OK do Wagner, não mexer em AGENTS.md/ESPECIFICACAO sem ele).
