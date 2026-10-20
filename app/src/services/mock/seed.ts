@@ -313,7 +313,7 @@ export async function criarBancoDemonstracao(): Promise<MockDatabaseSchema> {
       periodo_id: 'per-bim-3',
       titulo: 'Ecologia e Cadeias Alimentares',
       descricao: 'Produtores, consumidores e a importância da preservação dos biomas brasileiros.',
-      prazo: '2026-10-18',
+      prazo: dataRelativa(10),
       modo: 'prova',
       status: 'publicada',
       criado_por: 'usr-prof-carlos',

@@ -7,6 +7,7 @@ import { useAuth } from '../AuthProvider';
 import { useToast } from '@/components/ui';
 import { LogIn, School, Mail, Lock, ArrowLeft, AlertCircle, Loader2, Sparkles, RotateCcw, GraduationCap, ArrowRight } from 'lucide-react';
 import { restaurarDadosDemo, alunoService } from '@/services';
+import { MODO_TESTE } from '@/lib/ambiente';
 
 const loginSchema = z.object({
   email: z
@@ -52,7 +53,7 @@ export const LoginPage: React.FC = () => {
   const toast = useToast();
   const [erroGeral, setErroGeral] = useState<string | null>(null);
 
-  const isMock = true;
+  const isMock = MODO_TESTE;
 
   const {
     register,

@@ -19,7 +19,6 @@ import {
 import { getDatabase, saveDatabase } from './db';
 import { exigirUsuario } from './autorizacao';
 import { gerarId } from './ids';
-import { supabase } from '@/lib/supabase';
 import { AreaConhecimento, ajustarQuestoesIA } from './iaValidacao';
 
 export type { AreaConhecimento };
@@ -1131,10 +1130,6 @@ export class MockIAService implements ServicoIA {
 
       dbAny.ia_geracoes.push(registroGeracao);
       saveDatabase(dbAtualizado);
-
-      if (!isTest && import.meta.env.VITE_DATA_SOURCE === 'supabase') {
-        await supabase.from('ia_geracoes').insert(registroGeracao);
-      }
     } catch (err) {
       console.warn('[SaberPontual IA] Aviso ao registrar log de geração:', err);
     }

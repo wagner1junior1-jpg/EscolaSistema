@@ -26,14 +26,15 @@ import {
 } from './mock';
 
 import {
-  SupabaseAuthServiceStub,
-  SupabaseGestaoServiceStub,
-  SupabaseProfessorServiceStub,
-  SupabaseAlunoServiceStub,
-  SupabaseRelatorioServiceStub,
-  SupabaseBancoServiceStub,
-  SupabaseIAServiceStub,
+  criarSupabaseAuthService,
+  criarSupabaseGestaoService,
+  criarSupabaseProfessorService,
+  criarSupabaseAlunoService,
+  criarSupabaseRelatorioService,
+  criarSupabaseBancoService,
+  criarSupabaseIAService,
 } from './supabase/stub';
+import { MODO_TESTE } from '@/lib/ambiente';
 
 export * from './contracts';
 export * from './calculos';
@@ -42,25 +43,25 @@ export * from '@/lib/types';
 const dataSource = import.meta.env.VITE_DATA_SOURCE || 'mock';
 
 export const authService: AuthService =
-  dataSource === 'supabase' ? new SupabaseAuthServiceStub() : new MockAuthService();
+  dataSource === 'supabase' ? criarSupabaseAuthService() : new MockAuthService();
 
 export const gestaoService: GestaoService =
-  dataSource === 'supabase' ? new SupabaseGestaoServiceStub() : new MockGestaoService();
+  dataSource === 'supabase' ? criarSupabaseGestaoService() : new MockGestaoService();
 
 export const professorService: ProfessorService =
-  dataSource === 'supabase' ? new SupabaseProfessorServiceStub() : new MockProfessorService();
+  dataSource === 'supabase' ? criarSupabaseProfessorService() : new MockProfessorService();
 
 export const alunoService: AlunoService =
-  dataSource === 'supabase' ? new SupabaseAlunoServiceStub() : new MockAlunoService();
+  dataSource === 'supabase' ? criarSupabaseAlunoService() : new MockAlunoService();
 
 export const relatorioService: RelatorioService =
-  dataSource === 'supabase' ? new SupabaseRelatorioServiceStub() : new MockRelatorioService();
+  dataSource === 'supabase' ? criarSupabaseRelatorioService() : new MockRelatorioService();
 
 export const bancoService: BancoService =
-  dataSource === 'supabase' ? new SupabaseBancoServiceStub() : new MockBancoService();
+  dataSource === 'supabase' ? criarSupabaseBancoService() : new MockBancoService();
 
 export const iaService: ServicoIA =
-  dataSource === 'supabase' ? new SupabaseIAServiceStub() : new MockIAService();
+  dataSource === 'supabase' ? criarSupabaseIAService() : new MockIAService();
 
 // Exposição no window restrita a desenvolvimento/base mock para testes E2E
 if (typeof window !== 'undefined' && (import.meta.env.DEV || dataSource === 'mock')) {
@@ -71,6 +72,7 @@ if (typeof window !== 'undefined' && (import.meta.env.DEV || dataSource === 'moc
 }
 
 export async function restaurarDadosDemo(): Promise<void> {
+  if (!MODO_TESTE) throw new Error('Restaurar dados de demonstração só existe no ambiente de teste.');
   const { resetDatabase } = await import('./mock/db');
   await resetDatabase();
 }
@@ -80,8 +82,8 @@ export {
   assinarStatusSincronizacao,
   obterStatusSincronizacao,
   forcarSincronizacao,
-  resetDatabase,
   type InfoSincronizacao,
-} from './mock/db';
+} from './sincronizacao';
+export { resetDatabase } from './mock/db';
 
 
