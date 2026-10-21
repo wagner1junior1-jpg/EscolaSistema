@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_MODO_TESTE?: string;
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
+  readonly VITE_FN_ADMIN_USUARIOS?: string;
 }
 
 interface ImportMeta {

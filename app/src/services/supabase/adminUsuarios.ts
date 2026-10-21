@@ -20,6 +20,9 @@ export interface RespostaCriarUsuario {
   senha_provisoria: string;
 }
 
+// O painel do Supabase pode publicar a função com um apelido diferente do nome (ex.: swift-processor).
+const FUNCAO_ADMIN_USUARIOS = import.meta.env.VITE_FN_ADMIN_USUARIOS?.trim() || 'admin-usuarios';
+
 const ERRO_PADRAO = 'Não foi possível concluir a operação. Tente novamente.';
 
 async function extrairMensagem(error: unknown): Promise<string> {
@@ -39,7 +42,7 @@ export async function chamarAdminUsuarios<T = unknown>(
   pedido: AcaoAdminUsuarios,
   cliente: SupabaseClient = clientePadrao
 ): Promise<T> {
-  const { data, error } = await cliente.functions.invoke('admin-usuarios', { body: pedido });
+  const { data, error } = await cliente.functions.invoke(FUNCAO_ADMIN_USUARIOS, { body: pedido });
   if (error) throw new Error(await extrairMensagem(error));
   return data as T;
 }

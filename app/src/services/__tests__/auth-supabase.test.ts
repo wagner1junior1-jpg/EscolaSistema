@@ -166,7 +166,8 @@ describe('chamarAdminUsuarios (Edge Function admin-usuarios)', () => {
       cliente
     );
     expect(r.senha_provisoria).toBe('abc123');
-    expect(invoke).toHaveBeenCalledWith('admin-usuarios', {
+    const esperada = import.meta.env.VITE_FN_ADMIN_USUARIOS?.trim() || 'admin-usuarios';
+    expect(invoke).toHaveBeenCalledWith(esperada, {
       body: { acao: 'redefinir-senha', id: 'u2' },
     });
   });
