@@ -3,11 +3,10 @@
  *
  * Desde a Fase 1 do plano do back end (docs/claude/plano-backend.md) os serviços
  * Supabase NÃO herdam mais do mock. Cada chamada falha com uma mensagem clara até
- * que o serviço real seja escrito (Fases 3 a 5).
+ * que o serviço real seja escrito (Fases 4 e 5). O AuthService já é real (auth.supabase.ts).
  */
 
 import {
-  AuthService,
   GestaoService,
   ProfessorService,
   AlunoService,
@@ -28,8 +27,6 @@ function criarServicoNaoImplementado<T extends object>(nome: string): T {
   });
 }
 
-export const criarSupabaseAuthService = (): AuthService =>
-  criarServicoNaoImplementado<AuthService>('AuthService');
 export const criarSupabaseGestaoService = (): GestaoService =>
   criarServicoNaoImplementado<GestaoService>('GestaoService');
 export const criarSupabaseProfessorService = (): ProfessorService =>

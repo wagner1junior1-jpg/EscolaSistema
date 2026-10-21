@@ -26,10 +26,16 @@ type AlterarSenhaFormData = z.infer<typeof alterarSenhaSchema>;
 export interface ModalAlterarSenhaProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Troca obrigatória (senha provisória): não fecha com Esc/clique fora; o botão vira "Sair". */
+  obrigatorio?: boolean;
 }
 
-export const ModalAlterarSenha: React.FC<ModalAlterarSenhaProps> = ({ isOpen, onClose }) => {
-  const { alterarSenha, usuario } = useAuth();
+export const ModalAlterarSenha: React.FC<ModalAlterarSenhaProps> = ({
+  isOpen,
+  onClose,
+  obrigatorio = false,
+}) => {
+  const { alterarSenha, usuario, sair } = useAuth();
   const toast = useToast();
 
   const [mostrarSenhaAtual, setMostrarSenhaAtual] = useState(false);
@@ -78,18 +84,23 @@ export const ModalAlterarSenha: React.FC<ModalAlterarSenhaProps> = ({ isOpen, on
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleFechar}
+      onClose={obrigatorio ? () => undefined : handleFechar}
+      showCloseButton={!obrigatorio}
       title={
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
             <KeyRound className="w-5 h-5" />
           </div>
           <div>
-            <span>Alterar Senha</span>
+            <span>{obrigatorio ? 'Crie sua nova senha' : 'Alterar Senha'}</span>
           </div>
         </div>
       }
-      description={`Atualize sua senha de acesso ao portal (${usuario?.email || 'usuário conectado'}).`}
+      description={
+        obrigatorio
+          ? `Você entrou com uma senha provisória (${usuario?.email || 'usuário conectado'}). Crie uma senha só sua para continuar.`
+          : `Atualize sua senha de acesso ao portal (${usuario?.email || 'usuário conectado'}).`
+      }
       maxWidth="md"
     >
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-1">
@@ -178,10 +189,10 @@ export const ModalAlterarSenha: React.FC<ModalAlterarSenhaProps> = ({ isOpen, on
           <Button
             type="button"
             variant="ghost"
-            onClick={handleFechar}
+            onClick={obrigatorio ? () => void sair() : handleFechar}
             disabled={isSubmitting}
           >
-            Cancelar
+            {obrigatorio ? 'Sair' : 'Cancelar'}
           </Button>
 
           <Button

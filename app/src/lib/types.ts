@@ -37,6 +37,8 @@ export interface Perfil {
   papel: PapelUsuario;
   ativo: boolean;
   email?: string;
+  /** Senha provisória: o usuário precisa trocá-la no primeiro acesso (só existe no Supabase). */
+  trocar_senha?: boolean;
 }
 
 // 3. periodos

@@ -25,8 +25,8 @@ import {
   MockIAService,
 } from './mock';
 
+import { criarSupabaseAuthService } from './supabase/auth.supabase';
 import {
-  criarSupabaseAuthService,
   criarSupabaseGestaoService,
   criarSupabaseProfessorService,
   criarSupabaseAlunoService,

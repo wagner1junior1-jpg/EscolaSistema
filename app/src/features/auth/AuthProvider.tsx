@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Perfil, PapelUsuario } from '@/lib/types';
 import { authService } from '@/services';
 import { ShieldAlert, ArrowLeft, LogOut, Loader2 } from 'lucide-react';
+import { TrocaSenhaObrigatoria } from './components/TrocaSenhaObrigatoria';
 
 interface AuthContextType {
   usuario: Perfil | null;
@@ -57,6 +58,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const alterarSenha = useCallback(async (senhaAtual: string, novaSenha: string): Promise<void> => {
     await authService.alterarSenha(senhaAtual, novaSenha);
+    // Relê o perfil: encerra a troca obrigatória (trocar_senha) sem exigir novo login.
+    setUsuario(await authService.usuarioAtual());
   }, []);
 
   return (
@@ -95,6 +98,10 @@ export const RotaProtegida: React.FC<RotaProtegidaProps> = ({ papeis, children }
 
   if (!usuario) {
     return <Navigate to="/entrar" state={{ from: location }} replace />;
+  }
+
+  if (usuario.trocar_senha) {
+    return <TrocaSenhaObrigatoria />;
   }
 
   if (papeis && papeis.length > 0 && !papeis.includes(usuario.papel)) {

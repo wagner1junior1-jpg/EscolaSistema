@@ -1,7 +1,7 @@
 -- =============================================================================
 -- SABERPONTUAL — TESTES DE RLS (Fase 2.5)
 --
--- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS da migration 0003.
+-- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 e 0004.
 -- Cola tudo e executa de uma vez. O script cria funções de teste (schema zz_teste),
 -- roda, e a função SE DESFAZ sozinha: ela cria dados fictícios, simula cada
 -- usuário, confere o que cada um enxerga/altera e, no fim, lança um erro de
@@ -216,6 +216,20 @@ BEGIN
   PERFORM zz_teste.confere('prof A não publica aviso para a turma B',
     zz_teste.como(v_pa, format('insert into public.avisos (escola_id, autor_id, turma_id, titulo, mensagem) values (%L, %L, %L, ''t'', ''m'')', v_ex, v_pa, v_tb)), -1);
   PERFORM zz_teste.confere('direção Y não lê avisos da X', zz_teste.como(v_dy, 'select * from public.avisos'), 0);
+
+  -- ---------- 8. Troca obrigatória de senha (migration 0004) ----------
+  -- (precisa da 0004 aplicada; sem ela estes testes falham com "function does not exist")
+  UPDATE public.perfis SET trocar_senha = true WHERE id IN (v_pa, v_pb);
+  PERFORM zz_teste.confere('anon não chama concluir_troca_senha',
+    zz_teste.como(NULL, 'select public.concluir_troca_senha()'), -1);
+  PERFORM zz_teste.confere('prof A conclui a própria troca de senha',
+    zz_teste.como(v_pa, 'select public.concluir_troca_senha()'), 1);
+  PERFORM zz_teste.confere('a troca do prof A zerou só a flag dele',
+    (SELECT count(*) FROM public.perfis WHERE id = v_pa AND NOT trocar_senha), 1);
+  PERFORM zz_teste.confere('a flag do prof B continua ligada',
+    (SELECT count(*) FROM public.perfis WHERE id = v_pb AND trocar_senha), 1);
+  PERFORM zz_teste.confere('prof A não escreve trocar_senha direto em perfis',
+    zz_teste.como(v_pa, format('update public.perfis set trocar_senha = true where id = %L', v_pb)), 0);
 
   -- Erro de propósito: desfaz TODAS as inserções acima (nada fica gravado).
   RAISE EXCEPTION 'TODOS OS TESTES DE RLS PASSARAM';
