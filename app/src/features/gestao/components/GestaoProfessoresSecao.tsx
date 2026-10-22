@@ -110,16 +110,16 @@ export const GestaoProfessoresSecao: React.FC = () => {
       return;
     }
     const senhaLimpa = senha.trim();
-    if (senhaLimpa.length > 0 && senhaLimpa.length < 4) {
-      setErroForm('A senha deve ter pelo menos 4 caracteres.');
+    if (senhaLimpa.length > 0 && senhaLimpa.length < 6) {
+      setErroForm('A senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
     setSalvando(true);
     setErroForm(null);
     try {
-      const senhaFinal = senhaLimpa || 'demo123';
-      await gestaoService.convidarProfessor(email.trim(), nome.trim(), senhaLimpa || undefined);
+      const retorno = await gestaoService.convidarProfessor(email.trim(), nome.trim(), senhaLimpa || undefined);
+      const senhaFinal = retorno.senha_provisoria ?? (senhaLimpa || 'demo123');
       toast.success('Professor cadastrado com sucesso!');
       setConviteSucesso({ nome: nome.trim(), email: email.trim(), senha: senhaFinal });
       await carregarDados();
@@ -153,8 +153,8 @@ export const GestaoProfessoresSecao: React.FC = () => {
     e.preventDefault();
     if (!professorParaRedefinir) return;
     const senhaLimpa = novaSenha.trim();
-    if (!senhaLimpa || senhaLimpa.length < 4) {
-      setErroRedefinir('A nova senha deve ter pelo menos 4 caracteres.');
+    if (!senhaLimpa || senhaLimpa.length < 6) {
+      setErroRedefinir('A nova senha deve ter pelo menos 6 caracteres.');
       return;
     }
 
@@ -433,7 +433,7 @@ export const GestaoProfessoresSecao: React.FC = () => {
                 }
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Deixe em branco para usar a senha padrão (<strong>demo123</strong>) ou informe uma senha (mínimo de 4 caracteres).
+                Deixe em branco para usar a senha padrão (<strong>demo123</strong>) ou informe uma senha (mínimo de 6 caracteres).
               </p>
             </div>
 
@@ -489,7 +489,7 @@ export const GestaoProfessoresSecao: React.FC = () => {
               type={mostrarNovaSenha ? 'text' : 'password'}
               value={novaSenha}
               onChange={(e) => setNovaSenha(e.target.value)}
-              placeholder="Digite a nova senha (mínimo 4 caracteres)"
+              placeholder="Digite a nova senha (mínimo 6 caracteres)"
               required
               disabled={redefinindo}
               rightIcon={

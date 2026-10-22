@@ -7,7 +7,6 @@
  */
 
 import {
-  GestaoService,
   ProfessorService,
   AlunoService,
   RelatorioService,
@@ -27,8 +26,7 @@ function criarServicoNaoImplementado<T extends object>(nome: string): T {
   });
 }
 
-export const criarSupabaseGestaoService = (): GestaoService =>
-  criarServicoNaoImplementado<GestaoService>('GestaoService');
+export { criarSupabaseGestaoService } from './gestao.supabase';
 export const criarSupabaseProfessorService = (): ProfessorService =>
   criarServicoNaoImplementado<ProfessorService>('ProfessorService');
 export const criarSupabaseAlunoService = (): AlunoService =>

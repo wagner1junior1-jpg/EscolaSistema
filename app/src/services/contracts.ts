@@ -156,7 +156,11 @@ export interface GestaoService {
   criarOferta(dados: Omit<Oferta, 'id' | 'created_at'>): Promise<Oferta>;
   excluirOferta(id: string): Promise<void>;
   listarProfessores(): Promise<Perfil[]>;
-  convidarProfessor(email: string, nome: string, senha?: string): Promise<Perfil>;
+  convidarProfessor(
+    email: string,
+    nome: string,
+    senha?: string
+  ): Promise<Perfil & { senha_provisoria?: string }>;
   redefinirSenhaProfessor(id: string, novaSenha: string): Promise<void>;
   desativarProfessor(id: string): Promise<void>;
   listarAlunos(turmaId?: string): Promise<AlunoPublico[]>;
