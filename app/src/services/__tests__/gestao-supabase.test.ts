@@ -10,7 +10,10 @@ interface MockTabelaConfig {
   error?: { message: string; code?: string } | null;
 }
 
-function criarClienteSimulado(tabelasConfig: Record<string, MockTabelaConfig | MockTabelaConfig[]> = {}) {
+function criarClienteSimulado(
+  tabelasConfig: Record<string, MockTabelaConfig | MockTabelaConfig[]> = {},
+  respostasRpc: Array<{ message: string; code?: string } | null> = []
+) {
   const contadoresTabela: Record<string, number> = {};
   const chamadasRegistradas: { tabela: string; metodo: string; args: unknown[] }[] = [];
 
@@ -89,6 +92,7 @@ function criarClienteSimulado(tabelasConfig: Record<string, MockTabelaConfig | M
     builder.is = vi.fn(registrar('is'));
     builder.order = vi.fn(registrar('order'));
     builder.limit = vi.fn(registrar('limit'));
+    builder.in = vi.fn(registrar('in'));
     builder.single = vi.fn(async () => {
       chamadasRegistradas.push({ tabela, metodo: 'single', args: [] });
       return { data: resultado.data ?? null, error: resultado.error ?? null };
@@ -105,13 +109,21 @@ function criarClienteSimulado(tabelasConfig: Record<string, MockTabelaConfig | M
     return builder;
   });
 
+  // Cada chamada de rpc consome a próxima resposta (null = sucesso).
+  let indiceRpc = 0;
+  const rpc = vi.fn(async (_nome: string, _args?: unknown) => ({
+    data: null,
+    error: respostasRpc[indiceRpc++] ?? null,
+  }));
+
   const cliente = {
     auth,
     functions,
     from,
+    rpc,
   } as unknown as SupabaseClient;
 
-  return { cliente, chamadasRegistradas, functions };
+  return { cliente, chamadasRegistradas, functions, rpc };
 }
 
 describe('GestaoService Supabase (Fase 5.1)', () => {
@@ -418,24 +430,188 @@ describe('GestaoService Supabase (Fase 5.1)', () => {
     });
   });
 
-  describe('Métodos de alunos (Fase 5.2)', () => {
-    it('métodos de alunos lançam erro indicando a Fase 5.2', async () => {
-      const { cliente } = criarClienteSimulado();
-      const service = new SupabaseGestaoService(cliente);
+  describe('Alunos e PIN (Fase 5.2)', () => {
+    const linhaAluno = (id: string, numero: number) => ({
+      id,
+      created_at: '2026-10-22T00:00:00Z',
+      escola_id: 'escola-1',
+      turma_id: 'turma-1',
+      nome_completo: `Aluno ${numero}`,
+      numero_chamada: numero,
+      ativo: true,
+    });
+    const novoAluno = {
+      escola_id: 'ignorado',
+      turma_id: 'turma-1',
+      nome_completo: '  Maria Souza  ',
+      numero_chamada: 5,
+      ativo: true,
+    };
 
-      await expect(service.listarAlunos()).rejects.toThrow('5.2');
+    it('listarAlunos filtra ativos e deleted_at, e por turma quando informada', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado({
+        alunos: { data: [linhaAluno('a1', 1)], error: null },
+      });
+      const lista = await new SupabaseGestaoService(cliente).listarAlunos('turma-1');
+
+      expect(lista).toHaveLength(1);
+      const filtros = chamadasRegistradas.filter((c) => c.tabela === 'alunos').map((c) => [c.metodo, ...c.args]);
+      expect(filtros).toEqual(
+        expect.arrayContaining([
+          ['eq', 'ativo', true],
+          ['is', 'deleted_at', null],
+          ['eq', 'turma_id', 'turma-1'],
+        ])
+      );
+    });
+
+    it('listarAlunos nunca pede a coluna do PIN e traduz o erro', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado({
+        alunos: { error: { message: 'permission denied' } },
+      });
+      await expect(new SupabaseGestaoService(cliente).listarAlunos()).rejects.toThrow(
+        'Não foi possível listar os alunos.'
+      );
+      const select = chamadasRegistradas.find((c) => c.tabela === 'alunos' && c.metodo === 'select');
+      expect(String(select?.args[0])).not.toMatch(/pin/i);
+    });
+
+    it('cadastrarAluno grava o PIN pela RPC e devolve o PIN puro uma única vez', async () => {
+      const { cliente, rpc, chamadasRegistradas } = criarClienteSimulado({
+        alunos: { data: linhaAluno('a1', 5), error: null },
+      });
+      const resultado = await new SupabaseGestaoService(cliente).cadastrarAluno({
+        ...novoAluno,
+        pin: '4321',
+      });
+
+      expect(resultado.pin_puro).toBe('4321');
+      expect(resultado.aluno).not.toHaveProperty('pin_hash');
+      expect(rpc).toHaveBeenCalledWith('definir_pin_aluno', { p_aluno_id: 'a1', p_pin: '4321' });
+      const insercao = chamadasRegistradas.find((c) => c.tabela === 'alunos' && c.metodo === 'insert');
+      expect(insercao?.args[0]).toMatchObject({
+        escola_id: 'escola-1', // vem da sessão, não do parâmetro
+        nome_completo: 'Maria Souza',
+      });
+      expect(insercao?.args[0]).not.toHaveProperty('pin');
+    });
+
+    it('cadastrarAluno sem PIN gera um de 4 dígitos', async () => {
+      const { cliente, rpc } = criarClienteSimulado({
+        alunos: { data: linhaAluno('a1', 5), error: null },
+      });
+      const { pin_puro } = await new SupabaseGestaoService(cliente).cadastrarAluno(novoAluno);
+      expect(pin_puro).toMatch(/^[1-9]\d{3}$/);
+      expect(rpc).toHaveBeenCalledWith('definir_pin_aluno', { p_aluno_id: 'a1', p_pin: pin_puro });
+    });
+
+    it('cadastrarAluno rejeita nome vazio e PIN inválido antes de gravar', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado();
+      const service = new SupabaseGestaoService(cliente);
+      await expect(service.cadastrarAluno({ ...novoAluno, nome_completo: '   ' })).rejects.toThrow(
+        'Informe o nome do aluno.'
+      );
+      await expect(service.cadastrarAluno({ ...novoAluno, pin: '12a4' })).rejects.toThrow(
+        'O PIN deve conter exatamente 4 dígitos numéricos.'
+      );
+      expect(chamadasRegistradas.some((c) => c.metodo === 'insert')).toBe(false);
+    });
+
+    it('cadastrarAluno desfaz o cadastro (deleted_at) quando a RPC do PIN falha', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado(
+        { alunos: [{ data: linhaAluno('a1', 5), error: null }, { data: null, error: null }] },
+        [{ message: 'Aluno não encontrado ou sem permissão.', code: 'P0001' }]
+      );
+      await expect(new SupabaseGestaoService(cliente).cadastrarAluno(novoAluno)).rejects.toThrow(
+        'Aluno não encontrado ou sem permissão.'
+      );
+      const desfazer = chamadasRegistradas.find((c) => c.tabela === 'alunos' && c.metodo === 'update');
+      expect(desfazer?.args[0]).toMatchObject({ ativo: false });
+      expect(desfazer?.args[0]).toHaveProperty('deleted_at');
+    });
+
+    it('erro técnico da RPC não vaza para a tela', async () => {
+      const { cliente } = criarClienteSimulado({}, [
+        { message: 'function definir_pin_aluno(uuid, text) does not exist', code: '42883' },
+      ]);
+      await expect(new SupabaseGestaoService(cliente).gerarOuResetarPin('a1')).rejects.toThrow(
+        'Não foi possível definir o PIN do aluno.'
+      );
+    });
+
+    it('cadastrarAlunosEmLote numera a partir do maior número e gera um PIN por aluno', async () => {
+      const { cliente, rpc, chamadasRegistradas } = criarClienteSimulado({
+        alunos: [
+          { data: [{ numero_chamada: 22 }], error: null },
+          { data: [linhaAluno('a2', 24), linhaAluno('a1', 23)], error: null },
+        ],
+      });
+      const resultados = await new SupabaseGestaoService(cliente).cadastrarAlunosEmLote('turma-1', [
+        ' Ana ',
+        '',
+        'Bia',
+      ]);
+
+      const insercao = chamadasRegistradas.find((c) => c.tabela === 'alunos' && c.metodo === 'insert');
+      const linhas = insercao?.args[0] as Array<{ nome_completo: string; numero_chamada: number }>;
+      expect(linhas.map((l) => [l.nome_completo, l.numero_chamada])).toEqual([
+        ['Ana', 23],
+        ['Bia', 24],
+      ]);
+      expect(resultados.map((r) => r.aluno.id)).toEqual(['a1', 'a2']);
+      expect(rpc).toHaveBeenCalledTimes(2);
+      resultados.forEach((r) => expect(r.pin_puro).toMatch(/^[1-9]\d{3}$/));
+    });
+
+    it('cadastrarAlunosEmLote sem nomes não chama o servidor', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado();
+      expect(await new SupabaseGestaoService(cliente).cadastrarAlunosEmLote('turma-1', [' ', ''])).toEqual([]);
+      expect(chamadasRegistradas).toHaveLength(0);
+    });
+
+    it('cadastrarAlunosEmLote desfaz o lote inteiro se um PIN falhar', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado(
+        {
+          alunos: [
+            { data: [], error: null },
+            { data: [linhaAluno('a1', 1), linhaAluno('a2', 2)], error: null },
+            { data: null, error: null },
+          ],
+        },
+        [null, { message: 'falha', code: 'XX000' }]
+      );
       await expect(
-        service.cadastrarAluno({
-          escola_id: 'e1',
-          turma_id: 't1',
-          nome_completo: 'Aluno',
-          numero_chamada: 1,
-          ativo: true,
-        })
-      ).rejects.toThrow('5.2');
-      await expect(service.cadastrarAlunosEmLote('t1', ['Aluno'])).rejects.toThrow('5.2');
-      await expect(service.atualizarAluno('a1', { nome_completo: 'Novo' })).rejects.toThrow('5.2');
-      await expect(service.gerarOuResetarPin('a1')).rejects.toThrow('5.2');
+        new SupabaseGestaoService(cliente).cadastrarAlunosEmLote('turma-1', ['Ana', 'Bia'])
+      ).rejects.toThrow('Não foi possível definir o PIN do aluno.');
+
+      const desfazer = chamadasRegistradas.find((c) => c.tabela === 'alunos' && c.metodo === 'in');
+      expect(desfazer?.args).toEqual(['id', ['a1', 'a2']]);
+    });
+
+    it('atualizarAluno aplica só os campos informados e avisa quando não encontra', async () => {
+      const { cliente, chamadasRegistradas } = criarClienteSimulado({
+        alunos: { data: linhaAluno('a1', 1), error: null },
+      });
+      await new SupabaseGestaoService(cliente).atualizarAluno('a1', { nome_completo: ' Novo ', ativo: false });
+      const update = chamadasRegistradas.find((c) => c.tabela === 'alunos' && c.metodo === 'update');
+      expect(update?.args[0]).toEqual({ nome_completo: 'Novo', ativo: false });
+
+      const { cliente: vazio } = criarClienteSimulado({ alunos: { data: null, error: null } });
+      await expect(new SupabaseGestaoService(vazio).atualizarAluno('x', { ativo: true })).rejects.toThrow(
+        'Aluno não encontrado.'
+      );
+    });
+
+    it('gerarOuResetarPin usa o PIN informado ou gera um novo', async () => {
+      const { cliente, rpc } = criarClienteSimulado();
+      const service = new SupabaseGestaoService(cliente);
+      expect(await service.gerarOuResetarPin('a1', '0007')).toEqual({ pin_puro: '0007' });
+      const { pin_puro } = await service.gerarOuResetarPin('a1');
+      expect(pin_puro).toMatch(/^\d{4}$/);
+      expect(rpc).toHaveBeenNthCalledWith(1, 'definir_pin_aluno', { p_aluno_id: 'a1', p_pin: '0007' });
+      await expect(service.gerarOuResetarPin('a1', '123')).rejects.toThrow(
+        'O PIN deve conter exatamente 4 dígitos numéricos.'
+      );
     });
   });
 });

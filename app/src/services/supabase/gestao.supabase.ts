@@ -9,7 +9,8 @@
  * - Exclusão lógica com deleted_at; consultas ativas sempre filtram deleted_at IS NULL.
  * - Toda chamada verifica { error } do Supabase e converte em Error com mensagem em PT-BR.
  * - Professores: criação, redefinição de senha e desativação via Edge Function admin-usuarios.
- * - Alunos (5.2): permanecem não implementados nesta fase.
+ * - Alunos e PIN (5.2): PIN gerado no cliente e mostrado uma única vez; o hash é gravado
+ *   pela RPC definir_pin_aluno (bcrypt no servidor).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -642,36 +643,211 @@ export class SupabaseGestaoService implements GestaoService {
   }
 
   // ---------------------------------------------------------------------------
-  // 8. Alunos (Escopo da Fase 5.2 — não implementar agora)
+  // 8. Alunos e PIN (Fase 5.2)
+  // O PIN em texto puro só existe no cliente, no instante em que é gerado, e é devolvido
+  // uma única vez. No banco fica apenas o hash bcrypt, gravado pela RPC definir_pin_aluno.
   // ---------------------------------------------------------------------------
 
-  async listarAlunos(_turmaId?: string): Promise<AlunoPublico[]> {
-    throw new Error('GestaoService.listarAlunos será feito na 5.2');
+  async listarAlunos(turmaId?: string): Promise<AlunoPublico[]> {
+    let consulta = this.cliente
+      .from('alunos')
+      .select(COLUNAS_ALUNO)
+      .eq('ativo', true)
+      .is('deleted_at', null);
+    if (turmaId) {
+      consulta = consulta.eq('turma_id', turmaId);
+    }
+    const { data, error } = await consulta.order('numero_chamada', { ascending: true });
+
+    if (error) {
+      throw new Error('Não foi possível listar os alunos.');
+    }
+    return (data || []) as AlunoPublico[];
   }
 
   async cadastrarAluno(
-    _dados: Omit<Aluno, 'id' | 'created_at' | 'pin_hash'> & { pin?: string }
+    dados: Omit<Aluno, 'id' | 'created_at' | 'pin_hash'> & { pin?: string }
   ): Promise<{ aluno: AlunoPublico; pin_puro: string }> {
-    throw new Error('GestaoService.cadastrarAluno será feito na 5.2');
+    const nome = dados.nome_completo?.trim();
+    if (!nome) {
+      throw new Error('Informe o nome do aluno.');
+    }
+    const pinPuro = pinInformadoOuGerado(dados.pin);
+    const { escola_id } = await this.obterContextoSessao();
+
+    const { data, error } = await this.cliente
+      .from('alunos')
+      .insert({
+        escola_id,
+        turma_id: dados.turma_id,
+        nome_completo: nome,
+        numero_chamada: dados.numero_chamada,
+        ativo: dados.ativo !== undefined ? dados.ativo : true,
+      })
+      .select(COLUNAS_ALUNO)
+      .single();
+
+    if (error) {
+      throw new Error('Não foi possível cadastrar o aluno.');
+    }
+    const aluno = data as AlunoPublico;
+
+    try {
+      await this.definirPin(aluno.id, pinPuro);
+    } catch (erroPin) {
+      // Sem PIN o aluno não consegue entrar: desfaz o cadastro em vez de deixá-lo pela metade.
+      await this.desfazerCadastro([aluno.id]);
+      throw erroPin;
+    }
+    return { aluno, pin_puro: pinPuro };
   }
 
   async cadastrarAlunosEmLote(
-    _turmaId: string,
-    _nomes: string[]
+    turmaId: string,
+    nomes: string[]
   ): Promise<Array<{ aluno: AlunoPublico; pin_puro: string }>> {
-    throw new Error('GestaoService.cadastrarAlunosEmLote será feito na 5.2');
+    const nomesLimpos = nomes.map((n) => n.trim()).filter((n) => n !== '');
+    if (nomesLimpos.length === 0) {
+      return [];
+    }
+    const { escola_id } = await this.obterContextoSessao();
+
+    const { data: ultimo, error: erroUltimo } = await this.cliente
+      .from('alunos')
+      .select('numero_chamada')
+      .eq('turma_id', turmaId)
+      .is('deleted_at', null)
+      .order('numero_chamada', { ascending: false })
+      .limit(1);
+
+    if (erroUltimo) {
+      throw new Error('Não foi possível verificar a numeração de chamada da turma.');
+    }
+    const primeiroNumero =
+      ((ultimo as Array<{ numero_chamada: number }> | null)?.[0]?.numero_chamada ?? 0) + 1;
+
+    const { data, error } = await this.cliente
+      .from('alunos')
+      .insert(
+        nomesLimpos.map((nome, i) => ({
+          escola_id,
+          turma_id: turmaId,
+          nome_completo: nome,
+          numero_chamada: primeiroNumero + i,
+          ativo: true,
+        }))
+      )
+      .select(COLUNAS_ALUNO);
+
+    if (error) {
+      throw new Error('Não foi possível cadastrar os alunos.');
+    }
+    const criados = ((data || []) as AlunoPublico[]).sort(
+      (a, b) => a.numero_chamada - b.numero_chamada
+    );
+
+    const resultados: Array<{ aluno: AlunoPublico; pin_puro: string }> = [];
+    try {
+      for (const aluno of criados) {
+        const pinPuro = gerarPin();
+        await this.definirPin(aluno.id, pinPuro);
+        resultados.push({ aluno, pin_puro: pinPuro });
+      }
+    } catch (erroPin) {
+      // Tudo ou nada: se algum PIN falhar, nenhum aluno do lote fica cadastrado sem o PIN ser mostrado.
+      await this.desfazerCadastro(criados.map((a) => a.id));
+      throw erroPin;
+    }
+    return resultados;
   }
 
   async atualizarAluno(
-    _id: string,
-    _dados: { nome_completo?: string; numero_chamada?: number; ativo?: boolean }
+    id: string,
+    dados: { nome_completo?: string; numero_chamada?: number; ativo?: boolean }
   ): Promise<AlunoPublico> {
-    throw new Error('GestaoService.atualizarAluno será feito na 5.2');
+    const payload: Record<string, unknown> = {};
+    if (dados.nome_completo !== undefined) {
+      const nome = dados.nome_completo.trim();
+      if (!nome) {
+        throw new Error('Informe o nome do aluno.');
+      }
+      payload.nome_completo = nome;
+    }
+    if (dados.numero_chamada !== undefined) payload.numero_chamada = dados.numero_chamada;
+    if (dados.ativo !== undefined) payload.ativo = dados.ativo;
+
+    const { data, error } = await this.cliente
+      .from('alunos')
+      .update(payload)
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select(COLUNAS_ALUNO)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error('Não foi possível atualizar o aluno.');
+    }
+    if (!data) {
+      throw new Error('Aluno não encontrado.');
+    }
+    return data as AlunoPublico;
   }
 
-  async gerarOuResetarPin(_alunoId: string, _novoPin?: string): Promise<{ pin_puro: string }> {
-    throw new Error('GestaoService.gerarOuResetarPin será feito na 5.2');
+  async gerarOuResetarPin(alunoId: string, novoPin?: string): Promise<{ pin_puro: string }> {
+    const pinPuro = pinInformadoOuGerado(novoPin);
+    await this.definirPin(alunoId, pinPuro);
+    return { pin_puro: pinPuro };
   }
+
+  /** Grava o hash do PIN no servidor. A RPC valida a permissão e encerra as sessões antigas. */
+  private async definirPin(alunoId: string, pin: string): Promise<void> {
+    const { error } = await this.cliente.rpc('definir_pin_aluno', {
+      p_aluno_id: alunoId,
+      p_pin: pin,
+    });
+    if (error) {
+      // As mensagens da RPC (RAISE EXCEPTION, código P0001) já estão em português.
+      throw new Error(
+        error.code === 'P0001' && error.message
+          ? error.message
+          : 'Não foi possível definir o PIN do aluno.'
+      );
+    }
+  }
+
+  /** Exclusão lógica dos alunos criados numa operação que não terminou. */
+  private async desfazerCadastro(ids: string[]): Promise<void> {
+    const { error } = await this.cliente
+      .from('alunos')
+      .update({ deleted_at: new Date().toISOString(), ativo: false })
+      .in('id', ids);
+    if (error) {
+      throw new Error(
+        'O PIN não pôde ser definido e o cadastro não pôde ser desfeito. Confira a lista de alunos da turma.'
+      );
+    }
+  }
+}
+
+const COLUNAS_ALUNO = 'id, created_at, escola_id, turma_id, nome_completo, numero_chamada, ativo';
+
+/** PIN de 4 dígitos (1000 a 9999, como no mock) sorteado com o gerador seguro do navegador. */
+function gerarPin(): string {
+  const limite = 0x100000000 - (0x100000000 % 9000); // descarta o resto para não enviesar o sorteio
+  const buffer = new Uint32Array(1);
+  do {
+    crypto.getRandomValues(buffer);
+  } while (buffer[0] >= limite);
+  return String(1000 + (buffer[0] % 9000));
+}
+
+function pinInformadoOuGerado(pin?: string | null): string {
+  const limpo = pin?.trim();
+  if (!limpo) return gerarPin();
+  if (!/^\d{4}$/.test(limpo)) {
+    throw new Error('O PIN deve conter exatamente 4 dígitos numéricos.');
+  }
+  return limpo;
 }
 
 export const criarSupabaseGestaoService = (
