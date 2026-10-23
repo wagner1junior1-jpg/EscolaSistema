@@ -66,6 +66,8 @@ function criarClienteSimulado(
     builder.delete = vi.fn(registrar('delete'));
     builder.upsert = vi.fn(registrar('upsert'));
     builder.eq = vi.fn(registrar('eq'));
+    builder.neq = vi.fn(registrar('neq'));
+    builder.not = vi.fn(registrar('not'));
     builder.is = vi.fn(registrar('is'));
     builder.in = vi.fn(registrar('in'));
     builder.order = vi.fn(registrar('order'));
@@ -953,60 +955,446 @@ describe('ProfessorService Supabase (Fase 5.3)', () => {
     });
   });
 
-  describe('6. Métodos das Fases 5.4 e 5.5 lançam erro planejado', () => {
-    it('mapaDeCalor lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.mapaDeCalor('ativ-1')).rejects.toThrow(
-        'ProfessorService.mapaDeCalor será feito na 5.4/5.5'
-      );
+  describe('6. Mapa de Calor e Correções de Discursivas (Fase 5.4)', () => {
+    describe('mapaDeCalor', () => {
+      it('calcula mapa de calor usando calcularMapaDeCalorQuestao e conta alunos distintos', async () => {
+        const { cliente, chamadasRegistradas } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1', titulo: 'Prova Bimestral' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+          questoes: {
+            data: [
+              {
+                id: 'q-1',
+                ordem: 1,
+                enunciado: 'Quanto é 2 + 2?',
+                tipo: 'objetiva',
+              },
+            ],
+          },
+          alternativas: {
+            data: [
+              {
+                id: 'alt-a',
+                questao_id: 'q-1',
+                letra: 'A',
+                texto: '3',
+                correta: false,
+                por_que_errou: 'Subtraiu 1',
+                updated_at: '2026-02-10T10:00:00Z',
+              },
+              {
+                id: 'alt-b',
+                questao_id: 'q-1',
+                letra: 'B',
+                texto: '4',
+                correta: true,
+                por_que_errou: null,
+                updated_at: '2026-02-10T10:00:00Z',
+              },
+            ],
+          },
+          respostas: {
+            data: [
+              {
+                id: 'r-1',
+                aluno_id: 'aluno-1',
+                questao_id: 'q-1',
+                alternativa_id: 'alt-b',
+                acertou: true,
+                respondida_em: '2026-02-10T10:05:00Z',
+              },
+              {
+                id: 'r-2',
+                aluno_id: 'aluno-2',
+                questao_id: 'q-1',
+                alternativa_id: 'alt-a',
+                acertou: false,
+                respondida_em: '2026-02-10T10:06:00Z',
+              },
+              {
+                id: 'r-3',
+                aluno_id: 'aluno-1', // aluno-1 respondeu novamente / duplicado
+                questao_id: 'q-1',
+                alternativa_id: 'alt-b',
+                acertou: true,
+                respondida_em: '2026-02-10T10:07:00Z',
+              },
+            ],
+          },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const resultado = await service.mapaDeCalor('ativ-1');
+
+        expect(resultado.atividade_id).toBe('ativ-1');
+        expect(resultado.titulo).toBe('Prova Bimestral');
+        // Conta alunos distintos (aluno-1 e aluno-2 => 2 alunos)
+        expect(resultado.total_alunos_responderam).toBe(2);
+        expect(resultado.questoes).toHaveLength(1);
+        expect(resultado.questoes[0].questao_id).toBe('q-1');
+        expect(resultado.questoes[0].total_respostas).toBe(3);
+
+        const isQuestoes = chamadasRegistradas.filter(
+          (c) => c.tabela === 'questoes' && c.metodo === 'is'
+        );
+        expect(isQuestoes).toContainEqual({
+          tabela: 'questoes',
+          metodo: 'is',
+          args: ['deleted_at', null],
+        });
+      });
+
+      it('erro do banco em mapaDeCalor lança erro em português', async () => {
+        const { cliente } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1', titulo: 'Prova' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+          questoes: { error: { message: 'db error' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.mapaDeCalor('ativ-1')).rejects.toThrow(
+          'Não foi possível carregar as questões para o mapa de calor.'
+        );
+      });
     });
 
+    describe('listarCorrecoesPendentes', () => {
+      it('só o professor dono pode listar correções pendentes', async () => {
+        const { cliente } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-outro', turma_id: 't-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.listarCorrecoesPendentes('ativ-1')).rejects.toThrow(
+          'Você não tem permissão para esta ação.'
+        );
+      });
+
+      it('retorna apenas respostas discursivas com correcao = pendente ordenadas por respondida_em com nome do aluno', async () => {
+        const { cliente, chamadasRegistradas } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+          questoes: {
+            data: [
+              {
+                id: 'q-disc-1',
+                ordem: 2,
+                enunciado: 'Explique a fotossíntese',
+                resposta_esperada: 'Processo pelo qual...',
+                tipo: 'discursiva',
+              },
+            ],
+          },
+          respostas: {
+            data: [
+              {
+                id: 'r-pend-1',
+                aluno_id: 'al-1',
+                questao_id: 'q-disc-1',
+                texto_resposta: 'As plantas usam luz do sol',
+                respondida_em: '2026-02-10T08:00:00Z',
+              },
+            ],
+          },
+          alunos: {
+            data: [
+              { id: 'al-1', nome_completo: 'Lucas Silva' },
+            ],
+          },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const pendentes = await service.listarCorrecoesPendentes('ativ-1');
+
+        expect(pendentes).toHaveLength(1);
+        expect(pendentes[0].resposta_id).toBe('r-pend-1');
+        expect(pendentes[0].aluno_nome).toBe('Lucas Silva');
+        expect(pendentes[0].questao_enunciado).toBe('Explique a fotossíntese');
+        expect(pendentes[0].resposta_esperada).toBe('Processo pelo qual...');
+
+        const eqCorrecao = chamadasRegistradas.find(
+          (c) => c.tabela === 'respostas' && c.metodo === 'eq' && c.args[0] === 'correcao'
+        );
+        expect(eqCorrecao?.args[1]).toBe('pendente');
+      });
+
+      it('erro do banco em listarCorrecoesPendentes lança mensagem em português', async () => {
+        const { cliente } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+          questoes: { error: { message: 'db error' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.listarCorrecoesPendentes('ativ-1')).rejects.toThrow(
+          'Não foi possível verificar as questões da atividade.'
+        );
+      });
+    });
+
+    describe('listarCorrecoesFeitas', () => {
+      it('retorna correções feitas ordenadas por corrigido_em decrescente e deriva a nota', async () => {
+        const { cliente } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+          questoes: {
+            data: [
+              {
+                id: 'q-disc-1',
+                ordem: 1,
+                enunciado: 'Explique a fotossíntese',
+                resposta_esperada: 'Processo...',
+                tipo: 'discursiva',
+              },
+            ],
+          },
+          respostas: {
+            data: [
+              {
+                id: 'r-feita-1',
+                aluno_id: 'al-1',
+                questao_id: 'q-disc-1',
+                texto_resposta: 'Resposta completa',
+                correcao: 'certo',
+                pontuacao: 1.0,
+                comentario_professor: 'Muito bom!',
+                corrigido_em: '2026-02-11T10:00:00Z',
+                respondida_em: '2026-02-10T08:00:00Z',
+              },
+              {
+                id: 'r-feita-2',
+                aluno_id: 'al-2',
+                questao_id: 'q-disc-1',
+                texto_resposta: 'Resposta média',
+                correcao: 'parcial',
+                pontuacao: 0.6,
+                comentario_professor: 'Faltou detalhar',
+                corrigido_em: '2026-02-12T10:00:00Z', // Mais recente
+                respondida_em: '2026-02-10T09:00:00Z',
+              },
+            ],
+          },
+          alunos: {
+            data: [
+              { id: 'al-1', nome_completo: 'Lucas Silva' },
+              { id: 'al-2', nome_completo: 'Beatriz Costa' },
+            ],
+          },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const feitas = await service.listarCorrecoesFeitas('ativ-1');
+
+        expect(feitas).toHaveLength(2);
+        // r-feita-2 é mais recente (dia 12 vs dia 11)
+        expect(feitas[0].resposta_id).toBe('r-feita-2');
+        expect(feitas[0].nota).toBe(60); // pontuacao 0.6 -> nota 60
+        expect(feitas[0].aluno_nome).toBe('Beatriz Costa');
+
+        expect(feitas[1].resposta_id).toBe('r-feita-1');
+        expect(feitas[1].nota).toBe(100); // pontuacao 1.0 -> nota 100
+        expect(feitas[1].aluno_nome).toBe('Lucas Silva');
+      });
+
+      it('erro do banco em listarCorrecoesFeitas lança mensagem em português', async () => {
+        const { cliente } = criarClienteSimulado({
+          atividades: {
+            data: { id: 'ativ-1', oferta_id: 'of-1' },
+          },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+          questoes: { error: { message: 'db error' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.listarCorrecoesFeitas('ativ-1')).rejects.toThrow(
+          'Não foi possível verificar as questões da atividade.'
+        );
+      });
+    });
+
+    describe('corrigirResposta', () => {
+      it('rejeita questão se não for discursiva', async () => {
+        const { cliente } = criarClienteSimulado({
+          respostas: { data: { id: 'r-1', questao_id: 'q-obj-1' } },
+          questoes: { data: { id: 'q-obj-1', atividade_id: 'ativ-1', tipo: 'objetiva' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.corrigirResposta('r-1', 'certo')).rejects.toThrow(
+          'Esta questão não é discursiva.'
+        );
+      });
+
+      it('rejeita professor que não é o dono da oferta', async () => {
+        const { cliente } = criarClienteSimulado({
+          respostas: { data: { id: 'r-1', questao_id: 'q-1' } },
+          questoes: { data: { id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' } },
+          atividades: { data: { id: 'ativ-1', oferta_id: 'of-1' } },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-outro', turma_id: 't-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.corrigirResposta('r-1', 'certo')).rejects.toThrow(
+          'Você não tem permissão para esta ação.'
+        );
+      });
+
+      it('rejeita comentário com mais de 500 caracteres', async () => {
+        const { cliente } = criarClienteSimulado({
+          respostas: { data: { id: 'r-1', questao_id: 'q-1' } },
+          questoes: { data: { id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' } },
+          atividades: { data: { id: 'ativ-1', oferta_id: 'of-1' } },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const comentarioLongo = 'A'.repeat(501);
+        await expect(
+          service.corrigirResposta('r-1', 'certo', comentarioLongo)
+        ).rejects.toThrow('O comentário do professor deve ter no máximo 500 caracteres.');
+      });
+
+      it('rejeita nota menor que 0 ou maior que 100', async () => {
+        const { cliente } = criarClienteSimulado({
+          respostas: { data: { id: 'r-1', questao_id: 'q-1' } },
+          questoes: { data: { id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' } },
+          atividades: { data: { id: 'ativ-1', oferta_id: 'of-1' } },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(
+          service.corrigirResposta('r-1', 'certo', undefined, -5)
+        ).rejects.toThrow('A nota deve estar entre 0 e 100.');
+
+        await expect(
+          service.corrigirResposta('r-1', 'certo', undefined, 105)
+        ).rejects.toThrow('A nota deve estar entre 0 e 100.');
+      });
+
+      it('envia no update EXATAMENTE as 5 chaves de correção (privilégio por coluna)', async () => {
+        const { cliente, chamadasRegistradas } = criarClienteSimulado({
+          respostas: { data: { id: 'r-1', questao_id: 'q-1' } },
+          questoes: { data: { id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' } },
+          atividades: { data: { id: 'ativ-1', oferta_id: 'of-1' } },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await service.corrigirResposta('r-1', 'parcial', 'Bom esforço', 75);
+
+        const updateResposta = chamadasRegistradas.find(
+          (c) => c.tabela === 'respostas' && c.metodo === 'update'
+        );
+        expect(updateResposta).toBeDefined();
+
+        const payload = updateResposta?.args[0] as Record<string, unknown>;
+        const chavesEnviadas = Object.keys(payload).sort();
+        const chavesEsperadas = [
+          'comentario_professor',
+          'corrigido_em',
+          'corrigido_por',
+          'correcao',
+          'pontuacao',
+        ].sort();
+
+        // Trava que NENHUMA outra chave (ex.: aluno_id, texto_resposta, id, etc.) é enviada
+        expect(chavesEnviadas).toEqual(chavesEsperadas);
+        expect(payload.corrigido_por).toBe('prof-1');
+        expect(payload.comentario_professor).toBe('Bom esforço');
+        expect(payload.correcao).toBe('parcial');
+        expect(payload.pontuacao).toBe(0.75);
+      });
+
+      it('avisa quando o banco não alterou nenhuma linha (RLS filtrou o update)', async () => {
+        const { cliente } = criarClienteSimulado({
+          respostas: [
+            { data: { id: 'r-1', questao_id: 'q-1' } }, // leitura da resposta
+            { data: [] }, // update sem linhas afetadas
+          ],
+          questoes: { data: { id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' } },
+          atividades: { data: { id: 'ativ-1', oferta_id: 'of-1' } },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+        });
+
+        await expect(
+          new SupabaseProfessorService(cliente).corrigirResposta('r-1', 'certo')
+        ).rejects.toThrow('A correção não foi salva');
+      });
+
+      it('notas 100, 0 e 50 derivam certo, errado e parcial com pontuação respectiva', async () => {
+        const { cliente, chamadasRegistradas } = criarClienteSimulado({
+          respostas: { data: { id: 'r-1', questao_id: 'q-1' } },
+          questoes: { data: { id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' } },
+          atividades: { data: { id: 'ativ-1', oferta_id: 'of-1' } },
+          ofertas: { data: { id: 'of-1', professor_id: 'prof-1', turma_id: 't-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+
+        // Nota 100 -> certo (1.0)
+        await service.corrigirResposta('r-1', 'errado', undefined, 100);
+        let update = chamadasRegistradas.filter(
+          (c) => c.tabela === 'respostas' && c.metodo === 'update'
+        ).pop();
+        expect(update?.args[0]).toMatchObject({ correcao: 'certo', pontuacao: 1 });
+
+        // Nota 0 -> errado (0.0)
+        await service.corrigirResposta('r-1', 'certo', undefined, 0);
+        update = chamadasRegistradas.filter(
+          (c) => c.tabela === 'respostas' && c.metodo === 'update'
+        ).pop();
+        expect(update?.args[0]).toMatchObject({ correcao: 'errado', pontuacao: 0 });
+
+        // Nota 50 -> parcial (0.5)
+        await service.corrigirResposta('r-1', 'certo', undefined, 50);
+        update = chamadasRegistradas.filter(
+          (c) => c.tabela === 'respostas' && c.metodo === 'update'
+        ).pop();
+        expect(update?.args[0]).toMatchObject({ correcao: 'parcial', pontuacao: 0.5 });
+      });
+    });
+  });
+
+  describe('7. Métodos da Fase 5.5 lançam erro planejado', () => {
     it('desempenhoOferta lança erro combinado', async () => {
       const service = new SupabaseProfessorService({} as SupabaseClient);
       await expect(service.desempenhoOferta('of-1', 'per-1')).rejects.toThrow(
-        'ProfessorService.desempenhoOferta será feito na 5.4/5.5'
+        'ProfessorService.desempenhoOferta será feito na 5.5'
       );
     });
 
     it('fichaAluno lança erro combinado', async () => {
       const service = new SupabaseProfessorService({} as SupabaseClient);
       await expect(service.fichaAluno('al-1')).rejects.toThrow(
-        'ProfessorService.fichaAluno será feito na 5.4/5.5'
+        'ProfessorService.fichaAluno será feito na 5.5'
       );
     });
 
     it('listarAlunosPorSerie lança erro combinado', async () => {
       const service = new SupabaseProfessorService({} as SupabaseClient);
       await expect(service.listarAlunosPorSerie('7º')).rejects.toThrow(
-        'ProfessorService.listarAlunosPorSerie será feito na 5.4/5.5'
+        'ProfessorService.listarAlunosPorSerie será feito na 5.5'
       );
     });
 
     it('desempenhoAlunoPorMaterias lança erro combinado', async () => {
       const service = new SupabaseProfessorService({} as SupabaseClient);
       await expect(service.desempenhoAlunoPorMaterias('al-1')).rejects.toThrow(
-        'ProfessorService.desempenhoAlunoPorMaterias será feito na 5.4/5.5'
-      );
-    });
-
-    it('listarCorrecoesPendentes lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.listarCorrecoesPendentes('ativ-1')).rejects.toThrow(
-        'ProfessorService.listarCorrecoesPendentes será feito na 5.4/5.5'
-      );
-    });
-
-    it('listarCorrecoesFeitas lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.listarCorrecoesFeitas('ativ-1')).rejects.toThrow(
-        'ProfessorService.listarCorrecoesFeitas será feito na 5.4/5.5'
-      );
-    });
-
-    it('corrigirResposta lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.corrigirResposta('resp-1', 'certo')).rejects.toThrow(
-        'ProfessorService.corrigirResposta será feito na 5.4/5.5'
+        'ProfessorService.desempenhoAlunoPorMaterias será feito na 5.5'
       );
     });
   });

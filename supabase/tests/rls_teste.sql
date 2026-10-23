@@ -231,6 +231,21 @@ BEGIN
   PERFORM zz_teste.confere('prof A não escreve trocar_senha direto em perfis',
     zz_teste.como(v_pa, format('update public.perfis set trocar_senha = true where id = %L', v_pb)), 0);
 
+  -- ---------- 9. Respostas: a equipe só altera as colunas de correção (migration 0006) ----------
+  -- (precisa da 0006 aplicada; sem ela os "-1" abaixo falham)
+  PERFORM zz_teste.confere('prof A não troca o dono da resposta',
+    zz_teste.como(v_pa, format('update public.respostas set aluno_id = %L where questao_id = %L', v_aluno_b, v_q_a)), -1);
+  PERFORM zz_teste.confere('prof A não muda acertou',
+    zz_teste.como(v_pa, format('update public.respostas set acertou = false where questao_id = %L', v_q_a)), -1);
+  PERFORM zz_teste.confere('prof A não muda texto_resposta',
+    zz_teste.como(v_pa, format('update public.respostas set texto_resposta = ''x'' where questao_id = %L', v_q_a)), -1);
+  PERFORM zz_teste.confere('prof A não muda tentativas',
+    zz_teste.como(v_pa, format('update public.respostas set tentativas = 9 where questao_id = %L', v_q_a)), -1);
+  PERFORM zz_teste.confere('prof A grava todas as colunas da correção',
+    zz_teste.como(v_pa, format('update public.respostas set correcao = ''parcial'', pontuacao = 0.5, comentario_professor = ''ok'', corrigido_por = %L, corrigido_em = now() where questao_id = %L', v_pa, v_q_a)), 1);
+  PERFORM zz_teste.confere('direção X corrige resposta da escola',
+    zz_teste.como(v_dx, format('update public.respostas set correcao = ''certo'' where questao_id = %L', v_q_a)), 1);
+
   -- Erro de propósito: desfaz TODAS as inserções acima (nada fica gravado).
   RAISE EXCEPTION 'TODOS OS TESTES DE RLS PASSARAM';
 END $f$;

@@ -33,12 +33,15 @@ import {
   PrioridadeAviso,
   AlunoObservacao,
   Alternativa,
+  Questao,
+  Resposta,
   MapaDeCalorAtividade,
   RelatorioDesempenhoOferta,
   FichaAluno,
   AlunoComDesempenhoResumo,
   DesempenhoAlunoMateriaItem,
 } from '@/lib/types';
+import { calcularMapaDeCalorQuestao, pontuacaoDaResposta } from '../calculos';
 
 interface LinhaOfertaBanco {
   id: string;
@@ -1318,47 +1321,383 @@ export class SupabaseProfessorService implements ProfessorService {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. Métodos das Fases 5.4 e 5.5 (Não implementados nesta etapa)
+  // 6. Mapa de Calor e Correção de Discursivas (Fase 5.4)
   // ---------------------------------------------------------------------------
 
-  async mapaDeCalor(_atividadeId: string): Promise<MapaDeCalorAtividade> {
-    throw new Error('ProfessorService.mapaDeCalor será feito na 5.4/5.5');
+  async mapaDeCalor(atividadeId: string): Promise<MapaDeCalorAtividade> {
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoLeituraOferta(oferta.id);
+
+    const { data: questoesData, error: erroQuestoes } = await this.cliente
+      .from('questoes')
+      .select('id, created_at, atividade_id, ordem, tipo, dificuldade, enunciado, imagem_url, dica, explicacao, resposta_esperada, banco_questao_id, assunto_id')
+      .eq('atividade_id', atividadeId)
+      .is('deleted_at', null)
+      .order('ordem', { ascending: true });
+
+    if (erroQuestoes) {
+      throw new Error('Não foi possível carregar as questões para o mapa de calor.');
+    }
+
+    const questoes = (questoesData || []) as Questao[];
+    const questaoIds = questoes.map((q) => q.id);
+
+    let alternativas: Alternativa[] = [];
+    let respostas: Resposta[] = [];
+
+    if (questaoIds.length > 0) {
+      const { data: altsData, error: erroAlts } = await this.cliente
+        .from('alternativas')
+        .select('id, updated_at, questao_id, letra, texto, correta, por_que_errou')
+        .in('questao_id', questaoIds)
+        .order('letra', { ascending: true });
+
+      if (erroAlts) {
+        throw new Error('Não foi possível carregar as alternativas para o mapa de calor.');
+      }
+
+      alternativas = (altsData || []).map((alt) => ({
+        id: alt.id,
+        created_at: alt.updated_at,
+        questao_id: alt.questao_id,
+        letra: alt.letra,
+        texto: alt.texto,
+        correta: alt.correta,
+        por_que_errou: alt.por_que_errou,
+      }));
+
+      const { data: respostasData, error: erroRespostas } = await this.cliente
+        .from('respostas')
+        .select('id, aluno_id, questao_id, alternativa_id, acertou, pontuacao, texto_resposta, correcao, comentario_professor, corrigido_por, corrigido_em, respondida_em, tentativas, acertou_final, updated_at')
+        .in('questao_id', questaoIds);
+
+      if (erroRespostas) {
+        throw new Error('Não foi possível carregar as respostas para o mapa de calor.');
+      }
+
+      respostas = (respostasData || []).map((r) => ({
+        id: r.id,
+        created_at: r.respondida_em,
+        aluno_id: r.aluno_id,
+        questao_id: r.questao_id,
+        alternativa_id: r.alternativa_id,
+        acertou: r.acertou,
+        tentativas: r.tentativas,
+        acertou_final: r.acertou_final,
+        texto_resposta: r.texto_resposta,
+        correcao: r.correcao,
+        pontuacao: r.pontuacao !== null && r.pontuacao !== undefined ? Number(r.pontuacao) : null,
+        comentario_professor: r.comentario_professor,
+        corrigido_por: r.corrigido_por,
+        corrigido_em: r.corrigido_em,
+        respondida_em: r.respondida_em,
+      }));
+    }
+
+    const questoesMapa = questoes.map((q) => {
+      const altsDaQuestao = alternativas.filter((alt) => alt.questao_id === q.id);
+      const respostasDaQuestao = respostas.filter((r) => r.questao_id === q.id);
+      return calcularMapaDeCalorQuestao(q, altsDaQuestao, respostasDaQuestao);
+    });
+
+    const alunoIds = new Set(respostas.map((r) => r.aluno_id));
+
+    return {
+      atividade_id: atividadeId,
+      titulo: atividade.titulo,
+      total_alunos_responderam: alunoIds.size,
+      questoes: questoesMapa,
+    };
   }
 
+  async listarCorrecoesPendentes(atividadeId: string): Promise<ItemCorrecaoPendente[]> {
+    const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    const { data: questoesData, error: erroQuestoes } = await this.cliente
+      .from('questoes')
+      .select('id, ordem, enunciado, resposta_esperada, tipo')
+      .eq('atividade_id', atividadeId)
+      .eq('tipo', 'discursiva')
+      .is('deleted_at', null);
+
+    if (erroQuestoes) {
+      throw new Error('Não foi possível verificar as questões da atividade.');
+    }
+
+    const questoes = questoesData || [];
+    if (questoes.length === 0) {
+      return [];
+    }
+
+    const questaoIds = questoes.map((q) => q.id);
+    const questoesMap = new Map(questoes.map((q) => [q.id, q]));
+
+    const { data: respostasData, error: erroRespostas } = await this.cliente
+      .from('respostas')
+      .select('id, aluno_id, questao_id, texto_resposta, respondida_em')
+      .in('questao_id', questaoIds)
+      .eq('correcao', 'pendente')
+      .order('respondida_em', { ascending: true });
+
+    if (erroRespostas) {
+      throw new Error('Não foi possível listar as correções pendentes.');
+    }
+
+    const respostas = respostasData || [];
+    if (respostas.length === 0) {
+      return [];
+    }
+
+    const alunoIds = [...new Set(respostas.map((r) => r.aluno_id))];
+    const { data: alunosData, error: erroAlunos } = await this.cliente
+      .from('alunos')
+      .select('id, nome_completo')
+      .in('id', alunoIds);
+
+    if (erroAlunos) {
+      throw new Error('Não foi possível verificar os alunos das respostas pendentes.');
+    }
+
+    const alunosMap = new Map((alunosData || []).map((a) => [a.id, a.nome_completo]));
+
+    return respostas.map((r) => {
+      const questao = questoesMap.get(r.questao_id)!;
+      const nomeAluno = alunosMap.get(r.aluno_id) || 'Aluno';
+
+      return {
+        resposta_id: r.id,
+        atividade_id: atividade.id,
+        questao_id: questao.id,
+        aluno_id: r.aluno_id,
+        aluno_nome: nomeAluno,
+        nome_aluno: nomeAluno,
+        questao_ordem: questao.ordem,
+        questao_enunciado: questao.enunciado,
+        enunciado: questao.enunciado,
+        resposta_esperada: questao.resposta_esperada ?? null,
+        texto_resposta: r.texto_resposta ?? null,
+        respondida_em: r.respondida_em,
+      };
+    });
+  }
+
+  async listarCorrecoesFeitas(atividadeId: string): Promise<ItemCorrecaoFeita[]> {
+    const { oferta } = await this.obterOfertaDaAtividade(atividadeId);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    const { data: questoesData, error: erroQuestoes } = await this.cliente
+      .from('questoes')
+      .select('id, ordem, enunciado, resposta_esperada, tipo')
+      .eq('atividade_id', atividadeId)
+      .eq('tipo', 'discursiva')
+      .is('deleted_at', null);
+
+    if (erroQuestoes) {
+      throw new Error('Não foi possível verificar as questões da atividade.');
+    }
+
+    const questoes = questoesData || [];
+    if (questoes.length === 0) {
+      return [];
+    }
+
+    const questaoIds = questoes.map((q) => q.id);
+    const questoesMap = new Map(questoes.map((q) => [q.id, q]));
+
+    const { data: respostasData, error: erroRespostas } = await this.cliente
+      .from('respostas')
+      .select('id, aluno_id, questao_id, texto_resposta, correcao, pontuacao, comentario_professor, corrigido_em, respondida_em')
+      .in('questao_id', questaoIds)
+      .neq('correcao', 'pendente')
+      .not('correcao', 'is', null);
+
+    if (erroRespostas) {
+      throw new Error('Não foi possível listar as correções feitas.');
+    }
+
+    const respostas = (respostasData || []).filter(
+      (r) => r.correcao && r.correcao !== 'pendente'
+    );
+
+    if (respostas.length === 0) {
+      return [];
+    }
+
+    respostas.sort(
+      (a, b) =>
+        new Date(b.corrigido_em || b.respondida_em).getTime() -
+        new Date(a.corrigido_em || a.respondida_em).getTime()
+    );
+
+    const alunoIds = [...new Set(respostas.map((r) => r.aluno_id))];
+    const { data: alunosData, error: erroAlunos } = await this.cliente
+      .from('alunos')
+      .select('id, nome_completo')
+      .in('id', alunoIds);
+
+    if (erroAlunos) {
+      throw new Error('Não foi possível verificar os alunos das correções feitas.');
+    }
+
+    const alunosMap = new Map((alunosData || []).map((a) => [a.id, a.nome_completo]));
+
+    return respostas.map((r) => {
+      const questao = questoesMap.get(r.questao_id)!;
+      const nomeAluno = alunosMap.get(r.aluno_id) || 'Aluno';
+      const pontuacaoNum =
+        r.pontuacao !== null && r.pontuacao !== undefined ? Number(r.pontuacao) : null;
+
+      const nota =
+        pontuacaoNum !== null
+          ? pontuacaoNum <= 1
+            ? Math.round(pontuacaoNum * 100)
+            : Math.round(pontuacaoNum)
+          : r.correcao === 'certo'
+            ? 100
+            : r.correcao === 'parcial'
+              ? 50
+              : r.correcao === 'errado'
+                ? 0
+                : null;
+
+      return {
+        resposta_id: r.id,
+        questao_id: questao.id,
+        aluno_id: r.aluno_id,
+        aluno_nome: nomeAluno,
+        nome_aluno: nomeAluno,
+        questao_ordem: questao.ordem,
+        questao_enunciado: questao.enunciado,
+        enunciado: questao.enunciado,
+        resposta_esperada: questao.resposta_esperada ?? null,
+        texto_resposta: r.texto_resposta ?? null,
+        respondida_em: r.respondida_em,
+        correcao: r.correcao as 'certo' | 'parcial' | 'errado',
+        pontuacao: pontuacaoNum,
+        nota,
+        comentario_professor: r.comentario_professor ?? null,
+        corrigido_em: r.corrigido_em ?? null,
+      };
+    });
+  }
+
+  async corrigirResposta(
+    respostaId: string,
+    correcao: 'certo' | 'parcial' | 'errado',
+    comentario?: string,
+    nota?: number
+  ): Promise<void> {
+    const sessao = await this.obterContextoSessao();
+    if (sessao.papel !== 'professor') {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    const { data: resposta, error: erroResposta } = await this.cliente
+      .from('respostas')
+      .select('id, questao_id')
+      .eq('id', respostaId)
+      .maybeSingle();
+
+    if (erroResposta) {
+      throw new Error('Não foi possível verificar a resposta.');
+    }
+    if (!resposta) {
+      throw new Error('Resposta não encontrada.');
+    }
+
+    const { data: questao, error: erroQuestao } = await this.cliente
+      .from('questoes')
+      .select('id, atividade_id, tipo')
+      .eq('id', resposta.questao_id)
+      .maybeSingle();
+
+    if (erroQuestao) {
+      throw new Error('Não foi possível verificar a questão da resposta.');
+    }
+    if (!questao) {
+      throw new Error('Questão não encontrada.');
+    }
+    if (questao.tipo !== 'discursiva') {
+      throw new Error('Esta questão não é discursiva.');
+    }
+
+    const { oferta } = await this.obterOfertaDaAtividade(questao.atividade_id);
+    await this.validarAcessoEscritaOferta(oferta.id);
+
+    if (comentario && comentario.length > 500) {
+      throw new Error('O comentário do professor deve ter no máximo 500 caracteres.');
+    }
+
+    if (nota !== undefined && nota !== null) {
+      if (typeof nota !== 'number' || isNaN(nota) || nota < 0 || nota > 100) {
+        throw new Error('A nota deve estar entre 0 e 100.');
+      }
+    }
+
+    let pontuacaoFinal: number | null;
+    let correcaoFinal = correcao;
+
+    if (typeof nota === 'number') {
+      pontuacaoFinal = Math.round((nota / 100) * 100) / 100;
+      if (nota === 100) {
+        correcaoFinal = 'certo';
+      } else if (nota === 0) {
+        correcaoFinal = 'errado';
+      } else {
+        correcaoFinal = 'parcial';
+      }
+    } else {
+      pontuacaoFinal = pontuacaoDaResposta(questao, { correcao });
+    }
+
+    const agora = new Date().toISOString();
+
+    // Privilégio por coluna da migration 0006: NUNCA enviar chaves além destas 5
+    const payload = {
+      correcao: correcaoFinal,
+      pontuacao: pontuacaoFinal,
+      comentario_professor: comentario ? comentario.trim() : null,
+      corrigido_por: sessao.id,
+      corrigido_em: agora,
+    };
+
+    const { data: atualizadas, error: erroUpdate } = await this.cliente
+      .from('respostas')
+      .update(payload)
+      .eq('id', respostaId)
+      .select('id');
+
+    if (erroUpdate) {
+      throw new Error('Não foi possível salvar a correção da resposta.');
+    }
+    // A RLS filtra em silêncio: sem linha devolvida, a correção não foi gravada.
+    if (Array.isArray(atualizadas) && atualizadas.length === 0) {
+      throw new Error('A correção não foi salva: você não tem permissão sobre esta resposta.');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Métodos da Fase 5.5 (Não implementados nesta etapa)
+  // ---------------------------------------------------------------------------
+
   async desempenhoOferta(_ofertaId: string, _periodoId: string): Promise<RelatorioDesempenhoOferta> {
-    throw new Error('ProfessorService.desempenhoOferta será feito na 5.4/5.5');
+    throw new Error('ProfessorService.desempenhoOferta será feito na 5.5');
   }
 
   async fichaAluno(_ofertaIdOuAlunoId: string, _alunoId?: string): Promise<FichaAluno> {
-    throw new Error('ProfessorService.fichaAluno será feito na 5.4/5.5');
+    throw new Error('ProfessorService.fichaAluno será feito na 5.5');
   }
 
   async listarAlunosPorSerie(_serie: string): Promise<AlunoComDesempenhoResumo[]> {
-    throw new Error('ProfessorService.listarAlunosPorSerie será feito na 5.4/5.5');
+    throw new Error('ProfessorService.listarAlunosPorSerie será feito na 5.5');
   }
 
   async desempenhoAlunoPorMaterias(
     _alunoId: string,
     _periodoId?: string
   ): Promise<DesempenhoAlunoMateriaItem[]> {
-    throw new Error('ProfessorService.desempenhoAlunoPorMaterias será feito na 5.4/5.5');
-  }
-
-  async listarCorrecoesPendentes(_atividadeId: string): Promise<ItemCorrecaoPendente[]> {
-    throw new Error('ProfessorService.listarCorrecoesPendentes será feito na 5.4/5.5');
-  }
-
-  async listarCorrecoesFeitas(_atividadeId: string): Promise<ItemCorrecaoFeita[]> {
-    throw new Error('ProfessorService.listarCorrecoesFeitas será feito na 5.4/5.5');
-  }
-
-  async corrigirResposta(
-    _respostaId: string,
-    _correcao: 'certo' | 'parcial' | 'errado',
-    _comentario?: string,
-    _nota?: number
-  ): Promise<void> {
-    throw new Error('ProfessorService.corrigirResposta será feito na 5.4/5.5');
+    throw new Error('ProfessorService.desempenhoAlunoPorMaterias será feito na 5.5');
   }
 }
 
