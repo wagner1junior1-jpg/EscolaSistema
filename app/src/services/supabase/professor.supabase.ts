@@ -1,5 +1,5 @@
 /**
- * SaberPontual — ProfessorService Supabase (Fase 5.3 do plano do back end)
+ * SaberPontual — ProfessorService Supabase (Fases 5.3 e 5.5 do plano do back end)
  *
  * Implementação real dos fluxos pedagógicos docentes no Supabase:
  * - Minhas ofertas de disciplinas
@@ -7,17 +7,24 @@
  * - Questões e alternativas (salvar com upsert seguro, reordenar, exclusão lógica)
  * - Recados da turma (avisos com turma_id)
  * - Observações de alunos (gravação com nome do professor, exclusão lógica)
+ * - Correção de discursivas e mapa de calor (Fase 5.4)
+ * - Relatórios pedagógicos do professor (desempenho da oferta, ficha do aluno, alunos por série, desempenho por matérias - Fase 5.5)
  *
  * Regras:
  * - escola_id, criado_por e autor vêm sempre da sessão/RLS, nunca de parâmetros da tela.
  * - Toda chamada verifica { error } do Supabase e converte em Error com mensagem em PT-BR.
  * - Exclusão lógica com deleted_at; consultas ativas sempre filtram deleted_at IS NULL.
  * - Alternativas não têm deleted_at: apagam-se junto da questão ou por questao_id.
- * - Métodos das Fases 5.4 e 5.5 lançam "ProfessorService.<nome> será feito na 5.4/5.5".
+ * - Evita consultas N+1: busca registros em lote e agrupa em memória.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as clientePadrao } from '@/lib/supabase';
+import { lerTudoPorIds } from './paginacao';
+
+// Linha crua devolvida pelo PostgREST nas leituras paginadas (quem usa trata os campos).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type LinhaBanco = Record<string, any>;
 import {
   ProfessorService,
   NovaQuestaoPayload,
@@ -37,11 +44,25 @@ import {
   Resposta,
   MapaDeCalorAtividade,
   RelatorioDesempenhoOferta,
+  DesempenhoOfertaAluno,
+  DesempenhoOfertaAtividadeAluno,
   FichaAluno,
+  FichaAlunoAtividadeItem,
+  FichaAlunoQuestaoItem,
   AlunoComDesempenhoResumo,
   DesempenhoAlunoMateriaItem,
+  AlunoPublico,
+  TipoQuestao,
 } from '@/lib/types';
-import { calcularMapaDeCalorQuestao, pontuacaoDaResposta } from '../calculos';
+import {
+  calcularAproveitamentoAtividade,
+  calcularMediaPeriodo,
+  calcularMapaDeCalorQuestao,
+  faixaDesempenho,
+  mediaDoAlunoNasAtividades,
+  pontuacaoDaResposta,
+  discursivaPendente,
+} from '../calculos';
 
 interface LinhaOfertaBanco {
   id: string;
@@ -1366,16 +1387,17 @@ export class SupabaseProfessorService implements ProfessorService {
         por_que_errou: alt.por_que_errou,
       }));
 
-      const { data: respostasData, error: erroRespostas } = await this.cliente
-        .from('respostas')
-        .select('id, aluno_id, questao_id, alternativa_id, acertou, pontuacao, texto_resposta, correcao, comentario_professor, corrigido_por, corrigido_em, respondida_em, tentativas, acertou_final, updated_at')
-        .in('questao_id', questaoIds);
+      const respostasData = await lerTudoPorIds<LinhaBanco>(
+        questaoIds,
+        (bloco) =>
+          this.cliente
+            .from('respostas')
+            .select('id, aluno_id, questao_id, alternativa_id, acertou, pontuacao, texto_resposta, correcao, comentario_professor, corrigido_por, corrigido_em, respondida_em, tentativas, acertou_final, updated_at')
+            .in('questao_id', bloco),
+        'Não foi possível carregar as respostas para o mapa de calor.'
+      );
 
-      if (erroRespostas) {
-        throw new Error('Não foi possível carregar as respostas para o mapa de calor.');
-      }
-
-      respostas = (respostasData || []).map((r) => ({
+      respostas = respostasData.map((r) => ({
         id: r.id,
         created_at: r.respondida_em,
         aluno_id: r.aluno_id,
@@ -1433,18 +1455,18 @@ export class SupabaseProfessorService implements ProfessorService {
     const questaoIds = questoes.map((q) => q.id);
     const questoesMap = new Map(questoes.map((q) => [q.id, q]));
 
-    const { data: respostasData, error: erroRespostas } = await this.cliente
-      .from('respostas')
-      .select('id, aluno_id, questao_id, texto_resposta, respondida_em')
-      .in('questao_id', questaoIds)
-      .eq('correcao', 'pendente')
-      .order('respondida_em', { ascending: true });
-
-    if (erroRespostas) {
-      throw new Error('Não foi possível listar as correções pendentes.');
-    }
-
-    const respostas = respostasData || [];
+    const respostas = (
+      await lerTudoPorIds<LinhaBanco>(
+        questaoIds,
+        (bloco) =>
+          this.cliente
+            .from('respostas')
+            .select('id, aluno_id, questao_id, texto_resposta, respondida_em')
+            .in('questao_id', bloco)
+            .eq('correcao', 'pendente'),
+        'Não foi possível listar as correções pendentes.'
+      )
+    ).sort((a, b) => new Date(a.respondida_em).getTime() - new Date(b.respondida_em).getTime());
     if (respostas.length === 0) {
       return [];
     }
@@ -1505,18 +1527,19 @@ export class SupabaseProfessorService implements ProfessorService {
     const questaoIds = questoes.map((q) => q.id);
     const questoesMap = new Map(questoes.map((q) => [q.id, q]));
 
-    const { data: respostasData, error: erroRespostas } = await this.cliente
-      .from('respostas')
-      .select('id, aluno_id, questao_id, texto_resposta, correcao, pontuacao, comentario_professor, corrigido_em, respondida_em')
-      .in('questao_id', questaoIds)
-      .neq('correcao', 'pendente')
-      .not('correcao', 'is', null);
+    const respostasData = await lerTudoPorIds<LinhaBanco>(
+      questaoIds,
+      (bloco) =>
+        this.cliente
+          .from('respostas')
+          .select('id, aluno_id, questao_id, texto_resposta, correcao, pontuacao, comentario_professor, corrigido_em, respondida_em')
+          .in('questao_id', bloco)
+          .neq('correcao', 'pendente')
+          .not('correcao', 'is', null),
+      'Não foi possível listar as correções feitas.'
+    );
 
-    if (erroRespostas) {
-      throw new Error('Não foi possível listar as correções feitas.');
-    }
-
-    const respostas = (respostasData || []).filter(
+    const respostas = respostasData.filter(
       (r) => r.correcao && r.correcao !== 'pendente'
     );
 
@@ -1678,26 +1701,893 @@ export class SupabaseProfessorService implements ProfessorService {
   }
 
   // ---------------------------------------------------------------------------
-  // 7. Métodos da Fase 5.5 (Não implementados nesta etapa)
+  // 7. Relatórios Pedagógicos do Professor (Fase 5.5)
   // ---------------------------------------------------------------------------
 
-  async desempenhoOferta(_ofertaId: string, _periodoId: string): Promise<RelatorioDesempenhoOferta> {
-    throw new Error('ProfessorService.desempenhoOferta será feito na 5.5');
+  async desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta> {
+    await this.validarAcessoLeituraOferta(ofertaId);
+
+    const { data: oferta, error: erroOferta } = await this.cliente
+      .from('ofertas')
+      .select('id, turma_id, disciplina_id, professor_id')
+      .eq('id', ofertaId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (erroOferta) {
+      throw new Error('Não foi possível verificar a oferta.');
+    }
+    if (!oferta) {
+      throw new Error('Oferta não encontrada.');
+    }
+
+    const { data: turma, error: erroTurma } = await this.cliente
+      .from('turmas')
+      .select('id, nome')
+      .eq('id', oferta.turma_id)
+      .maybeSingle();
+
+    if (erroTurma) {
+      throw new Error('Não foi possível carregar os dados da turma.');
+    }
+
+    const { data: disciplina, error: erroDisciplina } = await this.cliente
+      .from('disciplinas')
+      .select('id, nome')
+      .eq('id', oferta.disciplina_id)
+      .maybeSingle();
+
+    if (erroDisciplina) {
+      throw new Error('Não foi possível carregar os dados da disciplina.');
+    }
+
+    const { data: periodo, error: erroPeriodo } = await this.cliente
+      .from('periodos')
+      .select('id, nome')
+      .eq('id', periodoId)
+      .maybeSingle();
+
+    if (erroPeriodo) {
+      throw new Error('Não foi possível carregar os dados do período.');
+    }
+
+    // Atividades publicadas ou encerradas da oferta no período
+    const { data: ativData, error: erroAtiv } = await this.cliente
+      .from('atividades')
+      .select('id, created_at, titulo, modo, status')
+      .eq('oferta_id', ofertaId)
+      .eq('periodo_id', periodoId)
+      .in('status', ['publicada', 'encerrada'])
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true });
+
+    if (erroAtiv) {
+      throw new Error('Não foi possível carregar as atividades da oferta.');
+    }
+
+    const atividadesDoPeriodo = ativData || [];
+    const ativIds = atividadesDoPeriodo.map((a) => a.id);
+
+    // Alunos ativos da turma
+    const { data: alunosData, error: erroAlunos } = await this.cliente
+      .from('alunos')
+      .select('id, nome_completo, numero_chamada, ativo')
+      .eq('turma_id', oferta.turma_id)
+      .eq('ativo', true)
+      .is('deleted_at', null)
+      .order('numero_chamada', { ascending: true });
+
+    if (erroAlunos) {
+      throw new Error('Não foi possível carregar os alunos da turma.');
+    }
+
+    const alunosDaTurma = alunosData || [];
+
+    // Questões e respostas das atividades
+    let questoes: Array<{ id: string; atividade_id: string; tipo: TipoQuestao }> = [];
+    let respostas: Array<{ id: string; aluno_id: string; questao_id: string; acertou: boolean | null; pontuacao: number | null; correcao: any }> = [];
+
+    if (ativIds.length > 0) {
+      questoes = await lerTudoPorIds<(typeof questoes)[number]>(
+        ativIds,
+        (bloco) =>
+          this.cliente.from('questoes').select('id, atividade_id, tipo').in('atividade_id', bloco).is('deleted_at', null),
+        'Não foi possível carregar as questões das atividades.'
+      );
+
+      const qIds = questoes.map((q) => q.id);
+      respostas = await lerTudoPorIds<(typeof respostas)[number]>(
+        qIds,
+        (bloco) =>
+          this.cliente.from('respostas').select('id, aluno_id, questao_id, acertou, pontuacao, correcao').in('questao_id', bloco),
+        'Não foi possível carregar as respostas das atividades.'
+      );
+    }
+
+    const mapaQuestoesPorAtividade = new Map<string, typeof questoes>();
+    for (const q of questoes) {
+      const lista = mapaQuestoesPorAtividade.get(q.atividade_id) || [];
+      lista.push(q);
+      mapaQuestoesPorAtividade.set(q.atividade_id, lista);
+    }
+
+    const mapaRespostasPorAluno = new Map<string, typeof respostas>();
+    for (const r of respostas) {
+      const lista = mapaRespostasPorAluno.get(r.aluno_id) || [];
+      lista.push(r);
+      mapaRespostasPorAluno.set(r.aluno_id, lista);
+    }
+
+    const alunosRelatorio: DesempenhoOfertaAluno[] = [];
+
+    for (const aluno of alunosDaTurma) {
+      const ativsAluno: DesempenhoOfertaAtividadeAluno[] = [];
+      const respostasDoAluno = mapaRespostasPorAluno.get(aluno.id) || [];
+
+      for (const ativ of atividadesDoPeriodo) {
+        const qs = mapaQuestoesPorAtividade.get(ativ.id) || [];
+        const totalQ = qs.length;
+        const qIdsSet = new Set(qs.map((q) => q.id));
+        const respsAtiv = respostasDoAluno.filter((r) => qIdsSet.has(r.questao_id));
+
+        const concluida = totalQ > 0 && respsAtiv.length === totalQ;
+
+        let temDiscursivaPendente = false;
+        for (const q of qs) {
+          const r = respsAtiv.find((resp) => resp.questao_id === q.id);
+          if (discursivaPendente(q, r)) {
+            temDiscursivaPendente = true;
+            break;
+          }
+        }
+
+        let aproveitamento: number | null = null;
+        if (!temDiscursivaPendente && (concluida || ativ.status === 'encerrada')) {
+          let somaPontos = 0;
+          for (const q of qs) {
+            const r = respsAtiv.find((resp) => resp.questao_id === q.id);
+            const p = pontuacaoDaResposta(q, r);
+            if (p !== null) {
+              somaPontos += p;
+            }
+          }
+          aproveitamento = calcularAproveitamentoAtividade(somaPontos, totalQ);
+        }
+
+        ativsAluno.push({
+          atividade_id: ativ.id,
+          titulo: ativ.titulo,
+          modo: ativ.modo,
+          concluida,
+          aproveitamento,
+          aguardando_correcao: temDiscursivaPendente,
+        });
+      }
+
+      const { media } = mediaDoAlunoNasAtividades(
+        atividadesDoPeriodo,
+        questoes as unknown as Questao[],
+        respostasDoAluno as unknown as Resposta[]
+      );
+      const faixa = faixaDesempenho(media);
+
+      alunosRelatorio.push({
+        aluno_id: aluno.id,
+        nome_completo: aluno.nome_completo,
+        numero_chamada: aluno.numero_chamada,
+        atividades: ativsAluno,
+        media,
+        faixa,
+      });
+    }
+
+    return {
+      oferta_id: ofertaId,
+      turma_nome: turma?.nome || 'Turma',
+      disciplina_nome: disciplina?.nome || 'Disciplina',
+      periodo_nome: periodo?.nome || 'Período',
+      atividades: atividadesDoPeriodo.map((a) => ({ id: a.id, titulo: a.titulo, modo: a.modo })),
+      alunos: alunosRelatorio,
+    };
   }
 
-  async fichaAluno(_ofertaIdOuAlunoId: string, _alunoId?: string): Promise<FichaAluno> {
-    throw new Error('ProfessorService.fichaAluno será feito na 5.5');
+  async fichaAluno(ofertaIdOuAlunoId: string, alunoId?: string): Promise<FichaAluno> {
+    const sessao = await this.obterContextoSessao();
+    if (sessao.papel !== 'professor' && sessao.papel !== 'direcao' && sessao.papel !== 'coordenacao') {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    let realOfertaId = alunoId ? ofertaIdOuAlunoId : '';
+    const realAlunoId = alunoId ? alunoId : ofertaIdOuAlunoId;
+
+    const { data: aluno, error: erroAluno } = await this.cliente
+      .from('alunos')
+      .select('id, escola_id, turma_id, nome_completo, numero_chamada, ativo, created_at')
+      .eq('id', realAlunoId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (erroAluno) {
+      throw new Error('Não foi possível verificar os dados do aluno.');
+    }
+    if (!aluno) {
+      throw new Error('Aluno não encontrado.');
+    }
+
+    if (!realOfertaId) {
+      const { data: ofertasTurma, error: erroOfertas } = await this.cliente
+        .from('ofertas')
+        .select('id, professor_id, turma_id, disciplina_id')
+        .eq('turma_id', aluno.turma_id)
+        .is('deleted_at', null);
+
+      if (erroOfertas) {
+        throw new Error('Não foi possível verificar as ofertas do aluno.');
+      }
+
+      const ofertas = ofertasTurma || [];
+      const ofertaDoProf = ofertas.find(
+        (o) => sessao.papel !== 'professor' || o.professor_id === sessao.id
+      );
+      const qualquerOferta = ofertas[0];
+      realOfertaId = ofertaDoProf ? ofertaDoProf.id : qualquerOferta ? qualquerOferta.id : '';
+    }
+
+    let oferta: { id: string; turma_id: string; disciplina_id: string } | null = null;
+    if (realOfertaId) {
+      await this.validarAcessoLeituraOferta(realOfertaId);
+      const { data: ofData, error: erroOf } = await this.cliente
+        .from('ofertas')
+        .select('id, turma_id, disciplina_id')
+        .eq('id', realOfertaId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (erroOf) {
+        throw new Error('Não foi possível verificar a oferta.');
+      }
+      oferta = ofData;
+    }
+
+    if (oferta && aluno.turma_id !== oferta.turma_id) {
+      throw new Error('O aluno não pertence à turma desta oferta.');
+    }
+
+    const { data: turma, error: erroTurma } = await this.cliente
+      .from('turmas')
+      .select('id, nome')
+      .eq('id', aluno.turma_id)
+      .maybeSingle();
+
+    if (erroTurma) {
+      throw new Error('Não foi possível carregar os dados da turma.');
+    }
+
+    let disciplinaNome = 'Todas as matérias';
+    if (oferta) {
+      const { data: discData, error: erroDisc } = await this.cliente
+        .from('disciplinas')
+        .select('id, nome')
+        .eq('id', oferta.disciplina_id)
+        .maybeSingle();
+
+      if (erroDisc) {
+        throw new Error('Não foi possível carregar os dados da disciplina.');
+      }
+      if (discData?.nome) {
+        disciplinaNome = discData.nome;
+      }
+    }
+
+    let atividades: Array<{ id: string; created_at: string; titulo: string; modo: any; status: string }> = [];
+    if (oferta) {
+      const { data: ativData, error: erroAtiv } = await this.cliente
+        .from('atividades')
+        .select('id, created_at, titulo, modo, status')
+        .eq('oferta_id', oferta.id)
+        .in('status', ['publicada', 'encerrada'])
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true });
+
+      if (erroAtiv) {
+        throw new Error('Não foi possível carregar as atividades da ficha.');
+      }
+      atividades = ativData || [];
+    }
+
+    const ativIds = atividades.map((a) => a.id);
+    let questoes: Array<{ id: string; atividade_id: string; ordem: number; enunciado: string; tipo: TipoQuestao }> = [];
+    let alternativas: Array<{ id: string; questao_id: string; correta: boolean }> = [];
+    let respostas: Array<{
+      id: string;
+      questao_id: string;
+      alternativa_id: string | null;
+      acertou: boolean | null;
+      tentativas: number;
+      acertou_final: boolean | null;
+      texto_resposta: string | null;
+      correcao: any;
+      pontuacao: number | null;
+      comentario_professor: string | null;
+    }> = [];
+
+    if (ativIds.length > 0) {
+      const { data: questData, error: erroQuest } = await this.cliente
+        .from('questoes')
+        .select('id, atividade_id, ordem, enunciado, tipo')
+        .in('atividade_id', ativIds)
+        .is('deleted_at', null)
+        .order('ordem', { ascending: true });
+
+      if (erroQuest) {
+        throw new Error('Não foi possível carregar as questões.');
+      }
+      questoes = (questData || []) as typeof questoes;
+
+      const qIds = questoes.map((q) => q.id);
+      if (qIds.length > 0) {
+        const { data: altsData, error: erroAlts } = await this.cliente
+          .from('alternativas')
+          .select('id, questao_id, correta')
+          .in('questao_id', qIds);
+
+        if (erroAlts) {
+          throw new Error('Não foi possível carregar as alternativas.');
+        }
+        alternativas = altsData || [];
+
+        respostas = await lerTudoPorIds<(typeof respostas)[number]>(
+          qIds,
+          (bloco) =>
+            this.cliente
+              .from('respostas')
+              .select('id, questao_id, alternativa_id, acertou, tentativas, acertou_final, texto_resposta, correcao, pontuacao, comentario_professor')
+              .eq('aluno_id', aluno.id)
+              .in('questao_id', bloco),
+          'Não foi possível carregar as respostas.'
+        );
+      }
+    }
+
+    let somaAcertosMedia = 0;
+    let somaQuestoesMedia = 0;
+    const atividadesFicha: FichaAlunoAtividadeItem[] = [];
+
+    for (const ativ of atividades) {
+      const qs = questoes.filter((q) => q.atividade_id === ativ.id).sort((a, b) => a.ordem - b.ordem);
+      const questoesFicha: FichaAlunoQuestaoItem[] = [];
+      let totalPontos = 0;
+      let totalRespondidas = 0;
+      let temDiscursivaPendente = false;
+
+      for (const q of qs) {
+        const r = respostas.find((resp) => resp.questao_id === q.id);
+        const corretaAlt = alternativas.find((alt) => alt.questao_id === q.id && alt.correta);
+
+        if (r) {
+          totalRespondidas++;
+          const p = pontuacaoDaResposta(q, r);
+          if (p !== null) {
+            totalPontos += p;
+          } else if (q.tipo === 'discursiva') {
+            temDiscursivaPendente = true;
+          }
+        }
+
+        questoesFicha.push({
+          questao_id: q.id,
+          ordem: q.ordem,
+          enunciado: q.enunciado,
+          alternativa_escolhida_id: r ? r.alternativa_id : null,
+          alternativa_correta_id: corretaAlt?.id || '',
+          acertou: r ? r.acertou : null,
+          tentativas: r ? r.tentativas : 0,
+          acertou_final: r ? r.acertou_final : null,
+          tipo: q.tipo ?? 'objetiva',
+          texto_resposta: r ? r.texto_resposta : null,
+          correcao: r ? r.correcao : null,
+          pontuacao_discursiva: r ? (r.pontuacao ?? null) : null,
+          comentario_professor: r ? r.comentario_professor : null,
+        });
+      }
+
+      const totalQ = qs.length;
+      const concluida = totalQ > 0 && totalRespondidas === totalQ;
+
+      let statusAluno: 'concluida' | 'em_andamento' | 'pendente' = 'pendente';
+      if (temDiscursivaPendente) {
+        statusAluno = 'em_andamento';
+      } else if (concluida) {
+        statusAluno = 'concluida';
+      } else if (totalRespondidas > 0) {
+        statusAluno = 'em_andamento';
+      }
+
+      let aproveitamento: number | null = null;
+      if (!temDiscursivaPendente && (concluida || ativ.status === 'encerrada')) {
+        aproveitamento = calcularAproveitamentoAtividade(totalPontos, totalQ);
+        somaAcertosMedia += totalPontos;
+        somaQuestoesMedia += totalQ;
+      }
+
+      atividadesFicha.push({
+        atividade_id: ativ.id,
+        titulo: ativ.titulo,
+        modo: ativ.modo,
+        status_aluno: statusAluno,
+        aproveitamento,
+        questoes: questoesFicha,
+      });
+    }
+
+    const mediaPeriodo = calcularMediaPeriodo(somaAcertosMedia, somaQuestoesMedia);
+    const faixa = faixaDesempenho(mediaPeriodo);
+
+    const alunoPublico: AlunoPublico = {
+      id: aluno.id,
+      escola_id: aluno.escola_id,
+      turma_id: aluno.turma_id,
+      nome_completo: aluno.nome_completo,
+      numero_chamada: aluno.numero_chamada,
+      ativo: aluno.ativo,
+      created_at: aluno.created_at,
+    };
+
+    const desempenhoMaterias = await this.desempenhoAlunoPorMaterias(aluno.id);
+    const observacoes = await this.listarObservacoesAluno(aluno.id);
+
+    return {
+      aluno: alunoPublico,
+      turma_nome: turma?.nome || 'Turma',
+      disciplina_nome: disciplinaNome,
+      atividades: atividadesFicha,
+      media_periodo: mediaPeriodo,
+      faixa,
+      desempenho_materias: desempenhoMaterias,
+      observacoes,
+    };
   }
 
-  async listarAlunosPorSerie(_serie: string): Promise<AlunoComDesempenhoResumo[]> {
-    throw new Error('ProfessorService.listarAlunosPorSerie será feito na 5.5');
+  async listarAlunosPorSerie(serie: string): Promise<AlunoComDesempenhoResumo[]> {
+    const sessao = await this.obterContextoSessao();
+    if (sessao.papel !== 'professor' && sessao.papel !== 'direcao' && sessao.papel !== 'coordenacao') {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    let turmaIdsValidas = new Set<string>();
+    if (sessao.papel === 'professor') {
+      const { data: ofertasProf, error: erroOfertasProf } = await this.cliente
+        .from('ofertas')
+        .select('id, turma_id')
+        .eq('professor_id', sessao.id)
+        .is('deleted_at', null);
+
+      if (erroOfertasProf) {
+        throw new Error('Não foi possível verificar suas ofertas.');
+      }
+      turmaIdsValidas = new Set((ofertasProf || []).map((o) => o.turma_id));
+    }
+
+    // Turmas ativas da escola
+    const { data: turmasData, error: erroTurmas } = await this.cliente
+      .from('turmas')
+      .select('id, nome, serie, escola_id, ativa')
+      .eq('escola_id', sessao.escola_id)
+      .eq('ativa', true)
+      .is('deleted_at', null);
+
+    if (erroTurmas) {
+      throw new Error('Não foi possível carregar as turmas.');
+    }
+
+    const turmasDaSerie = (turmasData || []).filter((t) => {
+      const serieMatch = (t.serie || 'Outras turmas') === serie;
+      return serieMatch && (sessao.papel !== 'professor' || turmaIdsValidas.has(t.id));
+    });
+
+    if (turmasDaSerie.length === 0) {
+      return [];
+    }
+
+    const mapaTurmas = new Map(turmasDaSerie.map((t) => [t.id, t]));
+    const turmaIdsSerie = turmasDaSerie.map((t) => t.id);
+
+    // Alunos ativos da série
+    const { data: alunosData, error: erroAlunos } = await this.cliente
+      .from('alunos')
+      .select('id, turma_id, nome_completo, numero_chamada, escola_id, ativo, created_at')
+      .in('turma_id', turmaIdsSerie)
+      .eq('ativo', true)
+      .is('deleted_at', null);
+
+    if (erroAlunos) {
+      throw new Error('Não foi possível carregar os alunos da série.');
+    }
+
+    const alunosDaSerie = alunosData || [];
+    alunosDaSerie.sort((a, b) => {
+      const turmaA = mapaTurmas.get(a.turma_id)?.nome || '';
+      const turmaB = mapaTurmas.get(b.turma_id)?.nome || '';
+      const cmp = turmaA.localeCompare(turmaB, 'pt-BR');
+      if (cmp !== 0) return cmp;
+      return a.numero_chamada - b.numero_chamada;
+    });
+
+    if (alunosDaSerie.length === 0) {
+      return [];
+    }
+
+    const alunoIds = alunosDaSerie.map((a) => a.id);
+
+    // Batch fetch de ofertas para as turmas da série
+    const { data: ofertasData, error: erroOfertas } = await this.cliente
+      .from('ofertas')
+      .select('id, turma_id, disciplina_id, professor_id')
+      .in('turma_id', turmaIdsSerie)
+      .is('deleted_at', null);
+
+    if (erroOfertas) {
+      throw new Error('Não foi possível carregar as ofertas da série.');
+    }
+    const ofertas = ofertasData || [];
+    const ofIds = ofertas.map((o) => o.id);
+    const discIds = [...new Set(ofertas.map((o) => o.disciplina_id))];
+    const profIds = [...new Set(ofertas.map((o) => o.professor_id))];
+
+    // Disciplinas e Perfis
+    const { data: discData, error: erroDisc } = await this.cliente
+      .from('disciplinas')
+      .select('id, nome')
+      .in('id', discIds)
+      .is('deleted_at', null);
+
+    if (erroDisc) {
+      throw new Error('Não foi possível carregar as disciplinas.');
+    }
+    const mapaDisciplinas = new Map((discData || []).map((d) => [d.id, d.nome]));
+
+    const { data: profData, error: erroProf } = await this.cliente
+      .from('perfis')
+      .select('id, nome')
+      .in('id', profIds);
+
+    if (erroProf) {
+      throw new Error('Não foi possível carregar os perfis.');
+    }
+    const mapaProfessores = new Map((profData || []).map((p) => [p.id, p.nome]));
+
+    // Período ativo da escola
+    const { data: periodosData, error: erroPeriodo } = await this.cliente
+      .from('periodos')
+      .select('id, ativo')
+      .eq('escola_id', sessao.escola_id)
+      .eq('ativo', true)
+      .is('deleted_at', null)
+      .limit(1);
+
+    if (erroPeriodo) {
+      throw new Error('Não foi possível verificar o período ativo.');
+    }
+    const periodoFinalId = periodosData && periodosData.length > 0 ? periodosData[0].id : '';
+
+    // Atividades das ofertas
+    let queryAtiv = this.cliente
+      .from('atividades')
+      .select('id, oferta_id, periodo_id, status')
+      .in('oferta_id', ofIds)
+      .in('status', ['publicada', 'encerrada'])
+      .is('deleted_at', null);
+
+    if (periodoFinalId) {
+      queryAtiv = queryAtiv.eq('periodo_id', periodoFinalId);
+    }
+
+    const { data: ativData, error: erroAtiv } = await queryAtiv;
+    if (erroAtiv) {
+      throw new Error('Não foi possível carregar as atividades.');
+    }
+    const atividades = ativData || [];
+    const ativIds = atividades.map((a) => a.id);
+
+    // Questões
+    let questoes: Array<{ id: string; atividade_id: string; tipo: TipoQuestao }> = [];
+    if (ativIds.length > 0) {
+      questoes = await lerTudoPorIds<(typeof questoes)[number]>(
+        ativIds,
+        (bloco) =>
+          this.cliente.from('questoes').select('id, atividade_id, tipo').in('atividade_id', bloco).is('deleted_at', null),
+        'Não foi possível carregar as questões.'
+      );
+    }
+    const qIds = questoes.map((q) => q.id);
+
+    // Respostas de todos os alunos da série. As questões são só das turmas da série; o filtro por
+    // aluno é feito aqui para não mandar centenas de ids de aluno na URL.
+    const idsAlunosDaSerie = new Set(alunoIds);
+    const respostas = (
+      await lerTudoPorIds<{ id: string; aluno_id: string; questao_id: string; acertou: boolean | null; pontuacao: number | null; correcao: any }>(
+        qIds,
+        (bloco) =>
+          this.cliente.from('respostas').select('id, aluno_id, questao_id, acertou, pontuacao, correcao').in('questao_id', bloco),
+        'Não foi possível carregar as respostas.'
+      )
+    ).filter((r) => idsAlunosDaSerie.has(r.aluno_id));
+
+    // Observações de todos os alunos da série
+    const observacoes = (
+      await lerTudoPorIds<AlunoObservacao>(
+        alunoIds,
+        (bloco) =>
+          this.cliente
+            .from('aluno_observacoes')
+            .select('id, aluno_id, professor_id, professor_nome, texto, created_at, updated_at')
+            .in('aluno_id', bloco)
+            .is('deleted_at', null),
+        'Não foi possível carregar as observações dos alunos.'
+      )
+    ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+    const mapaObservacoesPorAluno = new Map<string, AlunoObservacao[]>();
+    for (const obs of observacoes) {
+      const lista = mapaObservacoesPorAluno.get(obs.aluno_id) || [];
+      lista.push(obs);
+      mapaObservacoesPorAluno.set(obs.aluno_id, lista);
+    }
+
+    const mapaRespostasPorAluno = new Map<string, typeof respostas>();
+    for (const r of respostas) {
+      const lista = mapaRespostasPorAluno.get(r.aluno_id) || [];
+      lista.push(r);
+      mapaRespostasPorAluno.set(r.aluno_id, lista);
+    }
+
+    const mapaOfertasPorTurma = new Map<string, typeof ofertas>();
+    for (const ofItem of ofertas) {
+      const lista = mapaOfertasPorTurma.get(ofItem.turma_id) || [];
+      lista.push(ofItem);
+      mapaOfertasPorTurma.set(ofItem.turma_id, lista);
+    }
+
+    const resultado: AlunoComDesempenhoResumo[] = [];
+
+    for (const aluno of alunosDaSerie) {
+      const turma = mapaTurmas.get(aluno.turma_id);
+      const ofertasTurma = mapaOfertasPorTurma.get(aluno.turma_id) || [];
+      const respostasDoAluno = mapaRespostasPorAluno.get(aluno.id) || [];
+      const obsDoAluno = mapaObservacoesPorAluno.get(aluno.id) || [];
+
+      const materias: DesempenhoAlunoMateriaItem[] = [];
+      let somaAcertos = 0;
+      let somaQuestoes = 0;
+
+      for (const ofItem of ofertasTurma) {
+        const discNome = mapaDisciplinas.get(ofItem.disciplina_id) || 'Disciplina';
+        const profNome = mapaProfessores.get(ofItem.professor_id) || 'Professor(a)';
+        const ativsOferta = atividades.filter((a) => a.oferta_id === ofItem.id);
+
+        const { media, atividades_avaliadas, soma_acertos: acertosOf, soma_questoes: questOf } = mediaDoAlunoNasAtividades(
+          ativsOferta,
+          questoes as unknown as Questao[],
+          respostasDoAluno as unknown as Resposta[]
+        );
+        const faixa = faixaDesempenho(media);
+
+        somaAcertos += acertosOf;
+        somaQuestoes += questOf;
+
+        materias.push({
+          disciplina_id: ofItem.disciplina_id,
+          disciplina_nome: discNome,
+          professor_nome: profNome,
+          oferta_id: ofItem.id,
+          media,
+          faixa,
+          total_atividades: ativsOferta.length,
+          atividades_concluidas: atividades_avaliadas,
+          soma_acertos: acertosOf,
+          soma_questoes: questOf,
+        });
+      }
+
+      const mediaGeral = calcularMediaPeriodo(somaAcertos, somaQuestoes);
+      const faixaGeral = faixaDesempenho(mediaGeral);
+
+      const alunoPublico: AlunoPublico = {
+        id: aluno.id,
+        escola_id: aluno.escola_id,
+        turma_id: aluno.turma_id,
+        nome_completo: aluno.nome_completo,
+        numero_chamada: aluno.numero_chamada,
+        ativo: aluno.ativo,
+        created_at: aluno.created_at,
+      };
+
+      resultado.push({
+        aluno: alunoPublico,
+        turma_id: aluno.turma_id,
+        turma_nome: turma?.nome || 'Turma',
+        turma_serie: turma?.serie || serie,
+        materias,
+        media_geral: mediaGeral,
+        faixa_geral: faixaGeral,
+        ultima_observacao: obsDoAluno[0] || null,
+        total_observacoes: obsDoAluno.length,
+      });
+    }
+
+    return resultado;
   }
 
   async desempenhoAlunoPorMaterias(
-    _alunoId: string,
-    _periodoId?: string
+    alunoId: string,
+    periodoId?: string
   ): Promise<DesempenhoAlunoMateriaItem[]> {
-    throw new Error('ProfessorService.desempenhoAlunoPorMaterias será feito na 5.5');
+    const sessao = await this.obterContextoSessao();
+    if (sessao.papel !== 'professor' && sessao.papel !== 'direcao' && sessao.papel !== 'coordenacao') {
+      throw new Error('Você não tem permissão para esta ação.');
+    }
+
+    const { data: aluno, error: erroAluno } = await this.cliente
+      .from('alunos')
+      .select('id, turma_id, escola_id')
+      .eq('id', alunoId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (erroAluno) {
+      throw new Error('Não foi possível verificar os dados do aluno.');
+    }
+    if (!aluno) {
+      throw new Error('Aluno não encontrado.');
+    }
+
+    const { data: turma, error: erroTurma } = await this.cliente
+      .from('turmas')
+      .select('id, escola_id, nome')
+      .eq('id', aluno.turma_id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (erroTurma) {
+      throw new Error('Não foi possível carregar os dados da turma.');
+    }
+    if (!turma) {
+      throw new Error('Turma não encontrada.');
+    }
+
+    let periodoFinalId = periodoId || '';
+    if (!periodoFinalId) {
+      const { data: periodosData, error: erroPeriodo } = await this.cliente
+        .from('periodos')
+        .select('id, ativo')
+        .eq('escola_id', turma.escola_id)
+        .eq('ativo', true)
+        .is('deleted_at', null)
+        .limit(1);
+
+      if (erroPeriodo) {
+        throw new Error('Não foi possível verificar o período ativo.');
+      }
+      if (periodosData && periodosData.length > 0) {
+        periodoFinalId = periodosData[0].id;
+      }
+    }
+
+    const { data: ofertasData, error: erroOfertas } = await this.cliente
+      .from('ofertas')
+      .select('id, turma_id, disciplina_id, professor_id')
+      .eq('turma_id', turma.id)
+      .is('deleted_at', null);
+
+    if (erroOfertas) {
+      throw new Error('Não foi possível carregar as ofertas da turma.');
+    }
+
+    const ofertasTurma = Array.isArray(ofertasData)
+      ? ofertasData
+      : ofertasData
+      ? [ofertasData]
+      : [];
+    if (ofertasTurma.length === 0) {
+      return [];
+    }
+
+    const discIds = [...new Set(ofertasTurma.map((o) => o.disciplina_id))];
+    const profIds = [...new Set(ofertasTurma.map((o) => o.professor_id))];
+    const ofIds = ofertasTurma.map((o) => o.id);
+
+    const { data: discData, error: erroDisc } = await this.cliente
+      .from('disciplinas')
+      .select('id, nome')
+      .in('id', discIds)
+      .is('deleted_at', null);
+
+    if (erroDisc) {
+      throw new Error('Não foi possível carregar as disciplinas.');
+    }
+    const mapaDisciplinas = new Map((discData || []).map((d) => [d.id, d.nome]));
+
+    const { data: profData, error: erroProf } = await this.cliente
+      .from('perfis')
+      .select('id, nome')
+      .in('id', profIds);
+
+    if (erroProf) {
+      throw new Error('Não foi possível carregar os perfis dos professores.');
+    }
+    const mapaProfessores = new Map((profData || []).map((p) => [p.id, p.nome]));
+
+    let queryAtiv = this.cliente
+      .from('atividades')
+      .select('id, oferta_id, periodo_id, status')
+      .in('oferta_id', ofIds)
+      .in('status', ['publicada', 'encerrada'])
+      .is('deleted_at', null);
+
+    if (periodoFinalId) {
+      queryAtiv = queryAtiv.eq('periodo_id', periodoFinalId);
+    }
+
+    const { data: ativData, error: erroAtiv } = await queryAtiv;
+    if (erroAtiv) {
+      throw new Error('Não foi possível carregar as atividades.');
+    }
+    const ativs = ativData || [];
+    const ativIds = ativs.map((a) => a.id);
+
+    let questoes: Array<{ id: string; atividade_id: string; tipo: TipoQuestao }> = [];
+    let respostasDoAluno: Array<{ id: string; aluno_id: string; questao_id: string; acertou: boolean | null; pontuacao: number | null; correcao: any }> = [];
+
+    if (ativIds.length > 0) {
+      questoes = await lerTudoPorIds<(typeof questoes)[number]>(
+        ativIds,
+        (bloco) =>
+          this.cliente.from('questoes').select('id, atividade_id, tipo').in('atividade_id', bloco).is('deleted_at', null),
+        'Não foi possível carregar as questões.'
+      );
+
+      const qIds = questoes.map((q) => q.id);
+      respostasDoAluno = await lerTudoPorIds<(typeof respostasDoAluno)[number]>(
+        qIds,
+        (bloco) =>
+          this.cliente
+            .from('respostas')
+            .select('id, aluno_id, questao_id, acertou, pontuacao, correcao')
+            .eq('aluno_id', alunoId)
+            .in('questao_id', bloco),
+        'Não foi possível carregar as respostas.'
+      );
+    }
+
+    const resultado: DesempenhoAlunoMateriaItem[] = [];
+
+    for (const ofItem of ofertasTurma) {
+      const discNome = mapaDisciplinas.get(ofItem.disciplina_id) || 'Disciplina';
+      const profNome = mapaProfessores.get(ofItem.professor_id) || 'Professor(a)';
+      const ativsDaOferta = ativs.filter((a) => a.oferta_id === ofItem.id);
+
+      const { media, atividades_avaliadas, soma_acertos, soma_questoes } = mediaDoAlunoNasAtividades(
+        ativsDaOferta,
+        questoes as unknown as Questao[],
+        respostasDoAluno as unknown as Resposta[]
+      );
+      const faixa = faixaDesempenho(media);
+
+      resultado.push({
+        disciplina_id: ofItem.disciplina_id,
+        disciplina_nome: discNome,
+        professor_nome: profNome,
+        oferta_id: ofItem.id,
+        media,
+        faixa,
+        total_atividades: ativsDaOferta.length,
+        atividades_concluidas: atividades_avaliadas,
+        soma_acertos,
+        soma_questoes,
+      });
+    }
+
+    return resultado;
   }
 }
 

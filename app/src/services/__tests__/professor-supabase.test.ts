@@ -72,18 +72,47 @@ function criarClienteSimulado(
     builder.in = vi.fn(registrar('in'));
     builder.order = vi.fn(registrar('order'));
     builder.limit = vi.fn(registrar('limit'));
+    builder.range = vi.fn(registrar('range'));
     builder.single = vi.fn(async () => {
       chamadasRegistradas.push({ tabela, metodo: 'single', args: [] });
+      let data = resultado.data;
+      if (Array.isArray(data)) {
+        data = data[0] ?? null;
+      }
       return {
-        data: resultado.data ?? null,
+        data: data ?? null,
         error: resultado.error ?? null,
         count: resultado.count ?? null,
       };
     });
     builder.maybeSingle = vi.fn(async () => {
       chamadasRegistradas.push({ tabela, metodo: 'maybeSingle', args: [] });
+      if (tabela === 'perfis') {
+        if (configTabela && typeof configTabela === 'object' && 'data' in configTabela && configTabela.data && !Array.isArray(configTabela.data)) {
+          return {
+            data: resultado.data ?? null,
+            error: resultado.error ?? null,
+            count: resultado.count ?? null,
+          };
+        }
+        return {
+          data: {
+            id: usuarioSessao.id,
+            escola_id: usuarioSessao.escola_id,
+            papel: usuarioSessao.papel,
+            nome: usuarioSessao.nome,
+            ativo: true,
+          },
+          error: null,
+          count: null,
+        };
+      }
+      let data = resultado.data;
+      if (Array.isArray(data)) {
+        data = data[0] ?? null;
+      }
       return {
-        data: resultado.data ?? null,
+        data: data ?? null,
         error: resultado.error ?? null,
         count: resultado.count ?? null,
       };
@@ -1369,33 +1398,259 @@ describe('ProfessorService Supabase (Fase 5.3)', () => {
     });
   });
 
-  describe('7. Métodos da Fase 5.5 lançam erro planejado', () => {
-    it('desempenhoOferta lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.desempenhoOferta('of-1', 'per-1')).rejects.toThrow(
-        'ProfessorService.desempenhoOferta será feito na 5.5'
-      );
+  describe('7. Relatórios Pedagógicos do Professor (Fase 5.5)', () => {
+    describe('desempenhoOferta', () => {
+      it('calcula o desempenho da oferta para os alunos da turma', async () => {
+        const { cliente } = criarClienteSimulado({
+          ofertas: { data: [{ id: 'of-1', turma_id: 't-1', disciplina_id: 'disc-1', professor_id: 'prof-1' }] },
+          turmas: { data: { id: 't-1', nome: '7º Ano A' } },
+          disciplinas: { data: { id: 'disc-1', nome: 'Matemática' } },
+          periodos: { data: { id: 'per-1', nome: '1º Bimestre' } },
+          atividades: { data: [
+            { id: 'ativ-1', created_at: '2026-03-01', titulo: 'Frações', modo: 'exercicio', status: 'publicada' },
+          ] },
+          alunos: { data: [
+            { id: 'al-1', nome_completo: 'Mariana Lima', numero_chamada: 1, ativo: true },
+            { id: 'al-2', nome_completo: 'Lucas Alves', numero_chamada: 2, ativo: true },
+          ] },
+          questoes: { data: [{ id: 'q-1', atividade_id: 'ativ-1', tipo: 'objetiva' }] },
+          respostas: { data: [
+            { id: 'r-1', aluno_id: 'al-1', questao_id: 'q-1', acertou: true, pontuacao: null, correcao: null },
+            { id: 'r-2', aluno_id: 'al-2', questao_id: 'q-1', acertou: false, pontuacao: null, correcao: null },
+          ] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const relatorio = await service.desempenhoOferta('of-1', 'per-1');
+
+        expect(relatorio.turma_nome).toBe('7º Ano A');
+        expect(relatorio.disciplina_nome).toBe('Matemática');
+        expect(relatorio.periodo_nome).toBe('1º Bimestre');
+        expect(relatorio.alunos).toHaveLength(2);
+
+        // Mariana acertou (100%, Ótimo)
+        expect(relatorio.alunos[0].nome_completo).toBe('Mariana Lima');
+        expect(relatorio.alunos[0].media).toBe(100);
+        expect(relatorio.alunos[0].faixa).toBe('Ótimo');
+        expect(relatorio.alunos[0].atividades[0].aproveitamento).toBe(100);
+
+        // Lucas errou (0%, Atenção)
+        expect(relatorio.alunos[1].nome_completo).toBe('Lucas Alves');
+        expect(relatorio.alunos[1].media).toBe(0);
+        expect(relatorio.alunos[1].faixa).toBe('Atenção');
+        expect(relatorio.alunos[1].atividades[0].aproveitamento).toBe(0);
+      });
+
+      it('bloqueia professor que não leciona na oferta', async () => {
+        const { cliente } = criarClienteSimulado({
+          ofertas: { data: { id: 'of-outro', turma_id: 't-1', professor_id: 'outro-prof' } },
+        }, {
+          id: 'prof-1',
+          escola_id: 'escola-1',
+          papel: 'professor',
+          nome: 'Professora Ana',
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.desempenhoOferta('of-outro', 'per-1')).rejects.toThrow(
+          'Você não tem permissão para esta ação.'
+        );
+      });
+
+      it('turma sem alunos retorna lista vazia de alunos', async () => {
+        const { cliente } = criarClienteSimulado({
+          ofertas: { data: [{ id: 'of-1', turma_id: 't-1', disciplina_id: 'disc-1', professor_id: 'prof-1' }] },
+          turmas: { data: { id: 't-1', nome: '8º Ano B' } },
+          disciplinas: { data: { id: 'disc-1', nome: 'História' } },
+          periodos: { data: { id: 'per-1', nome: '1º Bimestre' } },
+          atividades: { data: [] },
+          alunos: { data: [] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const relatorio = await service.desempenhoOferta('of-1', 'per-1');
+        expect(relatorio.alunos).toEqual([]);
+      });
+
+      it('discursiva pendente fica fora da média e marca aguardando_correcao', async () => {
+        const { cliente } = criarClienteSimulado({
+          ofertas: { data: [{ id: 'of-1', turma_id: 't-1', disciplina_id: 'disc-1', professor_id: 'prof-1' }] },
+          turmas: { data: { id: 't-1', nome: '7º Ano A' } },
+          disciplinas: { data: { id: 'disc-1', nome: 'Redação' } },
+          periodos: { data: { id: 'per-1', nome: '1º Bimestre' } },
+          atividades: { data: [
+            { id: 'ativ-1', created_at: '2026-03-01', titulo: 'Texto Narrativo', modo: 'exercicio', status: 'publicada' },
+          ] },
+          alunos: { data: [
+            { id: 'al-1', nome_completo: 'Mariana Lima', numero_chamada: 1, ativo: true },
+          ] },
+          questoes: { data: [{ id: 'q-1', atividade_id: 'ativ-1', tipo: 'discursiva' }] },
+          respostas: { data: [
+            { id: 'r-1', aluno_id: 'al-1', questao_id: 'q-1', acertou: null, pontuacao: null, correcao: 'pendente' },
+          ] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const relatorio = await service.desempenhoOferta('of-1', 'per-1');
+
+        expect(relatorio.alunos[0].atividades[0].aguardando_correcao).toBe(true);
+        expect(relatorio.alunos[0].atividades[0].aproveitamento).toBeNull();
+        expect(relatorio.alunos[0].media).toBeNull();
+        expect(relatorio.alunos[0].faixa).toBe('Sem atividades');
+      });
     });
 
-    it('fichaAluno lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.fichaAluno('al-1')).rejects.toThrow(
-        'ProfessorService.fichaAluno será feito na 5.5'
-      );
+    describe('fichaAluno', () => {
+      it('carrega a ficha com atividades, notas, observações e desempenho por matérias', async () => {
+        const { cliente } = criarClienteSimulado({
+          alunos: { data: { id: 'al-1', escola_id: 'escola-1', turma_id: 't-1', nome_completo: 'Beatriz Souza', numero_chamada: 3, ativo: true, created_at: '2026-01-01' } },
+          ofertas: { data: [{ id: 'of-1', turma_id: 't-1', disciplina_id: 'disc-1', professor_id: 'prof-1' }] },
+          turmas: { data: { id: 't-1', escola_id: 'escola-1', nome: '7º Ano A' } },
+          disciplinas: { data: [{ id: 'disc-1', nome: 'Matemática' }] },
+          perfis: { data: [{ id: 'prof-1', nome: 'Professora Ana' }] },
+          periodos: { data: [{ id: 'per-1', ativo: true }] },
+          atividades: { data: [
+            { id: 'ativ-1', created_at: '2026-02-01', titulo: 'Álgebra', modo: 'exercicio', status: 'publicada' },
+          ] },
+          questoes: { data: [{ id: 'q-1', atividade_id: 'ativ-1', ordem: 1, enunciado: 'x + 2 = 5', tipo: 'objetiva' }] },
+          alternativas: { data: [{ id: 'alt-1', questao_id: 'q-1', correta: true }] },
+          respostas: { data: [
+            { id: 'r-1', aluno_id: 'al-1', questao_id: 'q-1', alternativa_id: 'alt-1', acertou: true, tentativas: 1, acertou_final: true, texto_resposta: null, correcao: null, pontuacao: null, comentario_professor: null },
+          ] },
+          aluno_observacoes: { data: [
+            { id: 'obs-1', aluno_id: 'al-1', professor_id: 'prof-1', professor_nome: 'Professora Ana', texto: 'Muito participativa.', created_at: '2026-02-05', updated_at: '2026-02-05' },
+          ] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const ficha = await service.fichaAluno('of-1', 'al-1');
+
+        expect(ficha.aluno.nome_completo).toBe('Beatriz Souza');
+        expect(ficha.turma_nome).toBe('7º Ano A');
+        expect(ficha.media_periodo).toBe(100);
+        expect(ficha.faixa).toBe('Ótimo');
+        expect(ficha.atividades).toHaveLength(1);
+        expect(ficha.atividades[0].status_aluno).toBe('concluida');
+        expect(ficha.observacoes).toHaveLength(1);
+        expect(ficha.desempenho_materias).toHaveLength(1);
+      });
+
+      it('lança erro se o aluno não existir', async () => {
+        const { cliente } = criarClienteSimulado({
+          alunos: { data: null },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.fichaAluno('al-inexistente')).rejects.toThrow('Aluno não encontrado.');
+      });
+
+      it('lança erro se o aluno não pertencer à turma da oferta', async () => {
+        const { cliente } = criarClienteSimulado({
+          alunos: { data: { id: 'al-1', turma_id: 't-outra' } },
+          ofertas: { data: { id: 'of-1', turma_id: 't-1', professor_id: 'prof-1' } },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.fichaAluno('of-1', 'al-1')).rejects.toThrow(
+          'O aluno não pertence à turma desta oferta.'
+        );
+      });
     });
 
-    it('listarAlunosPorSerie lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.listarAlunosPorSerie('7º')).rejects.toThrow(
-        'ProfessorService.listarAlunosPorSerie será feito na 5.5'
-      );
+    describe('listarAlunosPorSerie', () => {
+      it('lista alunos da série nas turmas do professor', async () => {
+        const { cliente } = criarClienteSimulado({
+          ofertas: { data: [{ id: 'of-1', turma_id: 't-1', professor_id: 'prof-1', disciplina_id: 'disc-1' }] },
+          turmas: { data: [{ id: 't-1', nome: '7º Ano A', serie: '7º', escola_id: 'escola-1', ativa: true }] },
+          alunos: { data: [
+            { id: 'al-1', turma_id: 't-1', nome_completo: 'Mariana Lima', numero_chamada: 1, escola_id: 'escola-1', ativo: true, created_at: '2026-01-01' },
+          ] },
+          disciplinas: { data: [{ id: 'disc-1', nome: 'Matemática' }] },
+          perfis: { data: [{ id: 'prof-1', nome: 'Professora Ana' }] },
+          periodos: { data: [{ id: 'per-1', ativo: true }] },
+          atividades: { data: [] },
+          aluno_observacoes: { data: [] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const alunos = await service.listarAlunosPorSerie('7º');
+
+        expect(alunos).toHaveLength(1);
+        expect(alunos[0].aluno.nome_completo).toBe('Mariana Lima');
+        expect(alunos[0].turma_nome).toBe('7º Ano A');
+        expect(alunos[0].media_geral).toBeNull();
+        expect(alunos[0].faixa_geral).toBe('Sem atividades');
+      });
+
+      it('retorna lista vazia se nenhuma turma corresponder à série', async () => {
+        const { cliente } = criarClienteSimulado({
+          ofertas: { data: [] },
+          turmas: { data: [{ id: 't-1', nome: '9º Ano A', serie: '9º', escola_id: 'escola-1', ativa: true }] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const alunos = await service.listarAlunosPorSerie('6º');
+        expect(alunos).toEqual([]);
+      });
     });
 
-    it('desempenhoAlunoPorMaterias lança erro combinado', async () => {
-      const service = new SupabaseProfessorService({} as SupabaseClient);
-      await expect(service.desempenhoAlunoPorMaterias('al-1')).rejects.toThrow(
-        'ProfessorService.desempenhoAlunoPorMaterias será feito na 5.5'
-      );
+    describe('desempenhoAlunoPorMaterias', () => {
+      it('calcula o aproveitamento do aluno em cada matéria da turma', async () => {
+        const { cliente } = criarClienteSimulado({
+          alunos: { data: { id: 'al-1', turma_id: 't-1', escola_id: 'escola-1' } },
+          turmas: { data: { id: 't-1', escola_id: 'escola-1', nome: '7º Ano A' } },
+          periodos: { data: [{ id: 'per-1', ativo: true }] },
+          ofertas: { data: [
+            { id: 'of-1', turma_id: 't-1', disciplina_id: 'disc-1', professor_id: 'prof-1' },
+            { id: 'of-2', turma_id: 't-1', disciplina_id: 'disc-2', professor_id: 'prof-2' },
+          ] },
+          disciplinas: { data: [
+            { id: 'disc-1', nome: 'Matemática' },
+            { id: 'disc-2', nome: 'Português' },
+          ] },
+          perfis: { data: [
+            { id: 'prof-1', nome: 'Professora Ana' },
+            { id: 'prof-2', nome: 'Professora Márcia' },
+          ] },
+          atividades: { data: [
+            { id: 'ativ-1', oferta_id: 'of-1', periodo_id: 'per-1', status: 'publicada' },
+            { id: 'ativ-2', oferta_id: 'of-2', periodo_id: 'per-1', status: 'publicada' },
+          ] },
+          questoes: { data: [
+            { id: 'q-1', atividade_id: 'ativ-1', tipo: 'objetiva' },
+            { id: 'q-2', atividade_id: 'ativ-2', tipo: 'objetiva' },
+          ] },
+          respostas: { data: [
+            // Acertou matemática (100%), errou português (0%)
+            { id: 'r-1', aluno_id: 'al-1', questao_id: 'q-1', acertou: true, pontuacao: null, correcao: null },
+            { id: 'r-2', aluno_id: 'al-1', questao_id: 'q-2', acertou: false, pontuacao: null, correcao: null },
+          ] },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        const materias = await service.desempenhoAlunoPorMaterias('al-1', 'per-1');
+
+        expect(materias).toHaveLength(2);
+        expect(materias[0]).toMatchObject({
+          disciplina_nome: 'Matemática',
+          media: 100,
+          faixa: 'Ótimo',
+        });
+        expect(materias[1]).toMatchObject({
+          disciplina_nome: 'Português',
+          media: 0,
+          faixa: 'Atenção',
+        });
+      });
+
+      it('lança erro se o aluno não for encontrado', async () => {
+        const { cliente } = criarClienteSimulado({
+          alunos: { data: null },
+        });
+
+        const service = new SupabaseProfessorService(cliente);
+        await expect(service.desempenhoAlunoPorMaterias('al-404')).rejects.toThrow('Aluno não encontrado.');
+      });
     });
   });
 });

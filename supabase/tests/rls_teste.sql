@@ -246,6 +246,31 @@ BEGIN
   PERFORM zz_teste.confere('direção X corrige resposta da escola',
     zz_teste.como(v_dx, format('update public.respostas set correcao = ''certo'' where questao_id = %L', v_q_a)), 1);
 
+  -- ---------- 10. Relatórios da escola por RPC (migration 0007) ----------
+  -- (precisa da 0007 aplicada; sem ela estes testes falham com "function does not exist")
+  -- Atenção: nos testes de negação a função precisa ser LIDA (where j is not null). Um "select f()" solto,
+  -- dentro do count(*) do zz_teste.como, é descartado pelo planner quando f é STABLE e nunca roda.
+  PERFORM zz_teste.confere('anon não chama relatorio_visao_geral',
+    zz_teste.como(NULL, 'select 1 from (select public.relatorio_visao_geral() j) s where j is not null'), -1);
+  PERFORM zz_teste.confere('anon não chama relatorio_dados_periodo',
+    zz_teste.como(NULL, format('select 1 from (select public.relatorio_dados_periodo(%L) j) s where j is not null', v_per_x)), -1);
+  PERFORM zz_teste.confere('prof A não chama relatorio_visao_geral',
+    zz_teste.como(v_pa, 'select 1 from (select public.relatorio_visao_geral() j) s where j is not null'), -1);
+  PERFORM zz_teste.confere('prof A não chama relatorio_dados_periodo',
+    zz_teste.como(v_pa, format('select 1 from (select public.relatorio_dados_periodo(%L) j) s where j is not null', v_per_x)), -1);
+
+  PERFORM zz_teste.confere('direção X: visão geral da escola X (2 alunos, 3 turmas: a ZX foi criada na seção 5, 2 professores, 2 atividades publicadas)',
+    zz_teste.como(v_dx, 'select 1 from (select public.relatorio_visao_geral() j) s where (j->>''total_alunos'')::int = 2 and (j->>''total_turmas'')::int = 3 and (j->>''total_professores'')::int = 2 and (j->>''total_atividades_publicadas'')::int = 2 and (j->>''aproveitamento_medio'')::numeric = 100'), 1);
+  PERFORM zz_teste.confere('direção Y: visão geral só da escola Y',
+    zz_teste.como(v_dy, 'select 1 from (select public.relatorio_visao_geral() j) s where (j->>''total_alunos'')::int = 1 and (j->>''total_turmas'')::int = 1 and (j->>''total_professores'')::int = 0 and (j->>''total_atividades_publicadas'')::int = 0 and (j->''aproveitamento_medio'') = ''null''::jsonb'), 1);
+
+  PERFORM zz_teste.confere('coordenação X: snapshot do período com as 3 turmas (inclui a ZX), 2 respostas e o gabarito',
+    zz_teste.como(v_cx, format('select 1 from (select public.relatorio_dados_periodo(%L) j) s where jsonb_array_length(j->''turmas'') = 3 and jsonb_array_length(j->''respostas'') = 2 and jsonb_array_length(j->''alternativas'') = 2 and jsonb_array_length(j->''atividades'') = 2', v_per_x)), 1);
+  PERFORM zz_teste.confere('direção Y pedindo o período da X recebe tudo vazio',
+    zz_teste.como(v_dy, format('select 1 from (select public.relatorio_dados_periodo(%L) j) s where jsonb_array_length(j->''turmas'') = 0 and jsonb_array_length(j->''alunos'') = 0 and jsonb_array_length(j->''respostas'') = 0 and jsonb_array_length(j->''perfis'') = 0', v_per_x)), 1);
+  PERFORM zz_teste.confere('o snapshot nunca leva PIN nem credenciais',
+    zz_teste.como(v_dx, format('select 1 from (select public.relatorio_dados_periodo(%L)::text t) s where t not like ''%%pin_hash%%'' and t not like ''%%hash-de-teste%%''', v_per_x)), 1);
+
   -- Erro de propósito: desfaz TODAS as inserções acima (nada fica gravado).
   RAISE EXCEPTION 'TODOS OS TESTES DE RLS PASSARAM';
 END $f$;
