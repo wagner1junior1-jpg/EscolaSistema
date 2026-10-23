@@ -8,7 +8,6 @@
 
 import {
   AlunoService,
-  BancoService,
   ServicoIA,
 } from '../contracts';
 
@@ -27,9 +26,8 @@ function criarServicoNaoImplementado<T extends object>(nome: string): T {
 export { criarSupabaseGestaoService } from './gestao.supabase';
 export { criarSupabaseProfessorService } from './professor.supabase';
 export { criarSupabaseRelatorioService } from './relatorio.supabase';
+export { criarSupabaseBancoService } from './banco.supabase';
 export const criarSupabaseAlunoService = (): AlunoService =>
   criarServicoNaoImplementado<AlunoService>('AlunoService');
-export const criarSupabaseBancoService = (): BancoService =>
-  criarServicoNaoImplementado<BancoService>('BancoService');
 export const criarSupabaseIAService = (): ServicoIA =>
   criarServicoNaoImplementado<ServicoIA>('ServicoIA');

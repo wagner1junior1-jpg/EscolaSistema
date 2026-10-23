@@ -28,6 +28,7 @@ import {
 import { getDatabase, saveDatabase } from './db';
 import { gerarId } from './ids';
 import { exigirUsuario } from './autorizacao';
+import { embaralhar } from '../sorteio';
 
 const LETRAS_PADRAO: LetraAlternativa[] = ['A', 'B', 'C', 'D', 'E'];
 
@@ -729,11 +730,11 @@ export class MockBancoService implements ServicoBanco {
       );
     }
 
-    // Pega as disponíveis respeitando o limite pedido
+    // Sorteia (aleatório) entre as disponíveis, respeitando o limite pedido
     const selecionadas: BancoQuestao[] = [
-      ...fáceis.slice(0, Math.max(0, quantidades.facil)),
-      ...médias.slice(0, Math.max(0, quantidades.medio)),
-      ...difíceis.slice(0, Math.max(0, quantidades.dificil)),
+      ...embaralhar(fáceis).slice(0, Math.max(0, quantidades.facil)),
+      ...embaralhar(médias).slice(0, Math.max(0, quantidades.medio)),
+      ...embaralhar(difíceis).slice(0, Math.max(0, quantidades.dificil)),
     ];
 
     if (selecionadas.length === 0) {
