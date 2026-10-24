@@ -293,6 +293,8 @@ export interface QuestaoSugeridaIA {
 export interface RespostaGeracaoIA {
   questoes: QuestaoSugeridaIA[];
   texto_transcrito?: string;
+  /** Aviso geral do lote (faltaram questões, vieram fora do formato, aviso da própria IA). */
+  aviso?: string | null;
 }
 
 

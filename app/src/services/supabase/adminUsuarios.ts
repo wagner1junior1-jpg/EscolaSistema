@@ -25,7 +25,8 @@ const FUNCAO_ADMIN_USUARIOS = import.meta.env.VITE_FN_ADMIN_USUARIOS?.trim() || 
 
 const ERRO_PADRAO = 'Não foi possível concluir a operação. Tente novamente.';
 
-async function extrairMensagem(error: unknown): Promise<string> {
+/** Lê `{ erro }` do corpo da resposta de uma Edge Function (usada também por ia.supabase.ts). */
+export async function extrairMensagem(error: unknown): Promise<string> {
   const contexto = (error as { context?: unknown } | null)?.context;
   if (contexto instanceof Response) {
     try {

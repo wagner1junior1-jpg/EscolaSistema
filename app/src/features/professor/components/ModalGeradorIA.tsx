@@ -18,6 +18,7 @@ import {
 } from '@/services';
 import { obterGeminiApiKey, salvarGeminiApiKeyLocal } from '@/services/mock/ia.mock';
 import { reduzirImagem } from '@/lib/imagem';
+import { IA_NO_SERVIDOR } from '@/lib/ambiente';
 import {
   Sparkles,
   Upload,
@@ -106,7 +107,8 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
   // Configuração opcional de chave da API Gemini na interface
   const [mostrarConfigChave, setMostrarConfigChave] = useState(false);
   const [chaveGeminiInput, setChaveGeminiInput] = useState('');
-  const temChaveAtiva = Boolean(obterGeminiApiKey());
+  const temChaveAtiva = IA_NO_SERVIDOR || Boolean(obterGeminiApiKey());
+  const [avisoLote, setAvisoLote] = useState<string | null>(null);
 
   // Inicialização ao abrir modal
   useEffect(() => {
@@ -114,6 +116,7 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
       setEtapa('formulario');
       setErro(null);
       setQuestoesSugeridas([]);
+      setAvisoLote(null);
       setAprovadasIds(new Set());
       setFotos([]);
       setTextoBase('');
@@ -256,6 +259,7 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
       });
 
       setQuestoesSugeridas(resposta.questoes);
+      setAvisoLote(resposta.aviso ?? null);
       setAprovadasIds(new Set());
       setEtapa('revisao');
       toast.success(
@@ -399,20 +403,22 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                     Informe a matéria, a série, a submatéria e, se desejar, fotos ou o texto do conteúdo didático. A IA gerará até 20 questões com gabarito comentado para você revisar antes de salvar.
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMostrarConfigChave(!mostrarConfigChave)}
-                  className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline shrink-0 cursor-pointer"
-                >
-                  {mostrarConfigChave ? 'Fechar chave' : 'Chave API'}
-                </button>
+                {!IA_NO_SERVIDOR && (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarConfigChave(!mostrarConfigChave)}
+                    className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 underline shrink-0 cursor-pointer"
+                  >
+                    {mostrarConfigChave ? 'Fechar chave' : 'Chave API'}
+                  </button>
+                )}
               </div>
 
-              {mostrarConfigChave && (
+              {!IA_NO_SERVIDOR && mostrarConfigChave && (
                 <div className="pt-2 border-t border-indigo-200/60 flex flex-col sm:flex-row gap-2">
                   <Input
                     type="password"
-                    placeholder="Cole sua chave VITE_GEMINI_API_KEY (opcional se já estiver no .env)"
+                    placeholder="Cole a chave do Google Gemini (fica só neste navegador)"
                     value={chaveGeminiInput}
                     onChange={(e) => setChaveGeminiInput(e.target.value)}
                     className="text-xs flex-1"
@@ -817,6 +823,13 @@ export const ModalGeradorIA: React.FC<ModalGeradorIAProps> = ({
                 </Button>
               </div>
             </div>
+
+            {avisoLote && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">{avisoLote}</p>
+              </div>
+            )}
 
             {/* Lista de cartões em formato 1 linha (clica para abrir) */}
             <div className="space-y-2.5">

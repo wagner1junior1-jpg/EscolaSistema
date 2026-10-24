@@ -7,3 +7,9 @@
  * VITE_MODO_TESTE=false.
  */
 export const MODO_TESTE: boolean = import.meta.env.VITE_MODO_TESTE !== 'false';
+
+/**
+ * Com Supabase a IA roda na Edge Function (a chave do Gemini fica no servidor); no mock a
+ * demonstração usa uma chave colada no navegador ou as questões de exemplo.
+ */
+export const IA_NO_SERVIDOR: boolean = (import.meta.env.VITE_DATA_SOURCE || 'mock') === 'supabase';
