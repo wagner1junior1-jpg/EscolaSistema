@@ -1283,6 +1283,23 @@ export async function enriquecerEscolaReal3a6Ano(db: MockDatabaseSchema): Promis
     },
   ];
 
+  // O assunto de cada questão precisa existir (o Supabase tem chave estrangeira; o mock tolerava
+  // referência solta). A questão de Português usava 'ass-port-figuras', que nunca foi criado.
+  const assuntosDasQuestoesAna = [
+    { id: 'ass-port-figuras', disciplina_id: 'disc-port', nome: 'Figuras de Linguagem' },
+  ];
+  for (const ass of assuntosDasQuestoesAna) {
+    if (!db.assuntos.some((a) => a.id === ass.id)) {
+      db.assuntos.push({
+        id: ass.id,
+        created_at: '2026-08-20T10:00:00Z',
+        escola_id: escolaId,
+        disciplina_id: ass.disciplina_id,
+        nome: ass.nome,
+      });
+    }
+  }
+
   for (const bq of questoesBnccAna) {
     if (!db.banco_questoes.some((item) => item.id === bq.id)) {
       db.banco_questoes.push({
