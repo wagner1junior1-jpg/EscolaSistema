@@ -20,6 +20,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as clientePadrao } from '@/lib/supabase';
+import { CacheCurto } from './cacheCurto';
 import { lerTudoPorIds } from './paginacao';
 
 // Linha crua devolvida pelo PostgREST nas leituras paginadas (quem usa trata os campos).
@@ -120,8 +121,18 @@ interface ContextoSessao {
 
 const LETRAS_VALIDAS: Array<'A' | 'B' | 'C' | 'D' | 'E'> = ['A', 'B', 'C', 'D', 'E'];
 
+interface OfertaBasica {
+  id: string;
+  professor_id: string;
+  turma_id: string;
+}
+
 export class SupabaseProfessorService implements ProfessorService {
   constructor(private readonly cliente: SupabaseClient = clientePadrao) {}
+
+  // Leituras repetidas pelo painel (ver cacheCurto.ts). A RLS do banco continua valendo.
+  private readonly cacheContexto = new CacheCurto<ContextoSessao>(30_000);
+  private readonly cacheOfertas = new CacheCurto<OfertaBasica>(15_000);
 
   /**
    * Obtém os dados de sessão do usuário logado e valida se seu perfil está ativo.
@@ -132,19 +143,42 @@ export class SupabaseProfessorService implements ProfessorService {
       throw new Error('Sessão expirada. Entre novamente.');
     }
     const userId = sessao.session.user.id;
-    const { data: perfil, error: erroPerfil } = await this.cliente
-      .from('perfis')
-      .select('id, escola_id, papel, nome, ativo')
-      .eq('id', userId)
-      .maybeSingle();
+    // A chave é o id do usuário: quem entra depois com outra conta não reaproveita o contexto.
+    return this.cacheContexto.obter(userId, async () => {
+      const { data: perfil, error: erroPerfil } = await this.cliente
+        .from('perfis')
+        .select('id, escola_id, papel, nome, ativo')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (erroPerfil) {
-      throw new Error('Não foi possível verificar os dados do seu usuário.');
-    }
-    if (!perfil || !perfil.ativo) {
-      throw new Error('Usuário não encontrado ou inativo.');
-    }
-    return perfil as ContextoSessao;
+      if (erroPerfil) {
+        throw new Error('Não foi possível verificar os dados do seu usuário.');
+      }
+      if (!perfil || !perfil.ativo) {
+        throw new Error('Usuário não encontrado ou inativo.');
+      }
+      return perfil as ContextoSessao;
+    });
+  }
+
+  /** Lê a oferta (id, professor, turma). Oferta inexistente é erro e não fica no cache. */
+  private obterOfertaBasica(ofertaId: string): Promise<OfertaBasica> {
+    return this.cacheOfertas.obter(ofertaId, async () => {
+      const { data: oferta, error } = await this.cliente
+        .from('ofertas')
+        .select('id, professor_id, turma_id')
+        .eq('id', ofertaId)
+        .is('deleted_at', null)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error('Não foi possível verificar a oferta.');
+      }
+      if (!oferta) {
+        throw new Error('Oferta não encontrada.');
+      }
+      return oferta as OfertaBasica;
+    });
   }
 
   /**
@@ -156,19 +190,7 @@ export class SupabaseProfessorService implements ProfessorService {
       throw new Error('Você não tem permissão para esta ação.');
     }
 
-    const { data: oferta, error } = await this.cliente
-      .from('ofertas')
-      .select('id, professor_id, turma_id')
-      .eq('id', ofertaId)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error('Não foi possível verificar a oferta.');
-    }
-    if (!oferta) {
-      throw new Error('Oferta não encontrada.');
-    }
+    const oferta = await this.obterOfertaBasica(ofertaId);
 
     if (sessao.papel === 'professor' && oferta.professor_id !== sessao.id) {
       throw new Error('Você não tem permissão para esta ação.');
@@ -188,19 +210,7 @@ export class SupabaseProfessorService implements ProfessorService {
       throw new Error('Você não tem permissão para esta ação.');
     }
 
-    const { data: oferta, error } = await this.cliente
-      .from('ofertas')
-      .select('id, professor_id, turma_id')
-      .eq('id', ofertaId)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error('Não foi possível verificar a oferta.');
-    }
-    if (!oferta) {
-      throw new Error('Oferta não encontrada.');
-    }
+    const oferta = await this.obterOfertaBasica(ofertaId);
 
     if (oferta.professor_id !== sessao.id) {
       throw new Error('Você não tem permissão para esta ação.');
@@ -230,18 +240,11 @@ export class SupabaseProfessorService implements ProfessorService {
       throw new Error('Atividade não encontrada.');
     }
 
-    const { data: oferta, error: erroOferta } = await this.cliente
-      .from('ofertas')
-      .select('id, professor_id, turma_id')
-      .eq('id', atividade.oferta_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (erroOferta) {
+    let oferta: OfertaBasica;
+    try {
+      oferta = await this.obterOfertaBasica(atividade.oferta_id);
+    } catch {
       throw new Error('Não foi possível verificar a oferta da atividade.');
-    }
-    if (!oferta) {
-      throw new Error('Oferta associada à atividade não encontrada.');
     }
 
     return { atividade: atividade as Atividade, oferta };

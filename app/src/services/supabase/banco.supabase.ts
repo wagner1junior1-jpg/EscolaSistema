@@ -19,6 +19,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as clientePadrao } from '@/lib/supabase';
+import { CacheCurto } from './cacheCurto';
 import {
   ServicoBanco,
   SalvarBancoQuestaoPayload,
@@ -102,6 +103,9 @@ interface LinhaBancoAlternativa {
 export class SupabaseBancoService implements ServicoBanco {
   constructor(private readonly cliente: SupabaseClient = clientePadrao) {}
 
+  // Leitura repetida a cada método (ver cacheCurto.ts). A RLS do banco continua valendo.
+  private readonly cacheContexto = new CacheCurto<ContextoSessao>(30_000);
+
   /**
    * Obtém a sessão autenticada e o perfil ativo.
    */
@@ -111,19 +115,22 @@ export class SupabaseBancoService implements ServicoBanco {
       throw new Error('Sessão expirada. Entre novamente.');
     }
     const userId = sessao.session.user.id;
-    const { data: perfil, error: erroPerfil } = await this.cliente
-      .from('perfis')
-      .select('id, escola_id, papel, nome, ativo')
-      .eq('id', userId)
-      .maybeSingle();
+    // A chave é o id do usuário: quem entra depois com outra conta não reaproveita o contexto.
+    return this.cacheContexto.obter(userId, async () => {
+      const { data: perfil, error: erroPerfil } = await this.cliente
+        .from('perfis')
+        .select('id, escola_id, papel, nome, ativo')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (erroPerfil) {
-      throw new Error('Não foi possível verificar os dados do seu usuário.');
-    }
-    if (!perfil || !perfil.ativo) {
-      throw new Error('Usuário não encontrado ou inativo.');
-    }
-    return perfil as ContextoSessao;
+      if (erroPerfil) {
+        throw new Error('Não foi possível verificar os dados do seu usuário.');
+      }
+      if (!perfil || !perfil.ativo) {
+        throw new Error('Usuário não encontrado ou inativo.');
+      }
+      return perfil as ContextoSessao;
+    });
   }
 
   /**
