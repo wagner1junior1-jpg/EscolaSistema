@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { criarSupabaseAlunoService, criarSupabaseIAService } from '../supabase/stub';
+import { criarSupabaseIAService } from '../supabase/stub';
 import { obterStatusSincronizacao, assinarMudancas } from '../sincronizacao';
 import { saveDatabase, getDatabase } from '../mock/db';
 
@@ -8,7 +8,6 @@ describe('Separação mock x Supabase (Fase 1)', () => {
     await expect(criarSupabaseIAService().consultarCota()).rejects.toThrow(
       'ainda não foi implementado'
     );
-    await expect(criarSupabaseAlunoService().login('a', '1')).rejects.toThrow('AlunoService.login');
   });
 
   it('interface única de sincronização usa o mock por padrão', async () => {
