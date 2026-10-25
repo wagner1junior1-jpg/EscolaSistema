@@ -13,6 +13,9 @@
  *
  * Para zerar a escola demo antes de recarregar:
  *   npx vite-node src/scripts/seed-supabase.ts -- --confirmo-teste --zerar
+ *
+ * Base pequena (a dos testes automáticos, para o E2E em modo Supabase):
+ *   npx vite-node src/scripts/seed-supabase.ts -- --confirmo-teste --zerar --base-pequena
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -43,12 +46,18 @@ if (!temConfirmoTeste) {
   process.exit(1);
 }
 
-// Garante que o mock gere a base completa (não base mínima de teste)
-if (process.env.NODE_ENV === 'test') {
-  delete process.env.NODE_ENV;
-}
-if (process.env.VITEST) {
-  delete process.env.VITEST;
+// --base-pequena: a base dos testes automáticos (a que o E2E espera, Fase 7.3).
+// Sem ela, garante que o mock gere a base ampliada (não a base mínima de teste).
+const temBasePequena = process.argv.includes('--base-pequena');
+if (temBasePequena) {
+  process.env.NODE_ENV = 'test';
+} else {
+  if (process.env.NODE_ENV === 'test') {
+    delete process.env.NODE_ENV;
+  }
+  if (process.env.VITEST) {
+    delete process.env.VITEST;
+  }
 }
 
 const admin = createClient(url, serviceRoleKey, {
@@ -62,7 +71,7 @@ async function executarSeed() {
   console.log('=====================================================');
   console.log('🚀 SaberPontual — Seed do Supabase de TESTE');
   console.log(`🌐 URL: ${url}`);
-  console.log(`⚙️  Modo: ${temZerar ? 'Zerar e recarregar (--zerar)' : 'Carga idempotente'}`);
+  console.log(`⚙️  Modo: ${temZerar ? 'Zerar e recarregar (--zerar)' : 'Carga idempotente'}${temBasePequena ? ', base pequena' : ', base ampliada'}`);
   console.log('=====================================================');
 
   // 1. Gerar a base do mock ampliada

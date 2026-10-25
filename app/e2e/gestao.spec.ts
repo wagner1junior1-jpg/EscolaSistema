@@ -6,6 +6,8 @@ async function loginDemo(page: Page, nomeOuEmail: string) {
   await page.goto('/entrar');
   await page.getByText(nomeOuEmail).click();
   await page.getByRole('button', { name: 'Entrar' }).click();
+  // Com o Supabase o login leva um instante: navegar antes cancelaria a requisição.
+  await page.waitForURL((u) => !u.pathname.startsWith('/entrar'));
 }
 
 test.describe('Portal de Gestão', () => {

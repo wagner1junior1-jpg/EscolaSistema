@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { ALUNO_7A_3, ATIV_DEMO_MAT_FRAC, OFERTA_MAT_7A } from './ids';
 
 test.use({ viewport: { width: 1280, height: 900 } });
 
@@ -6,6 +7,8 @@ async function loginDemo(page: Page, nomeOuEmail: string) {
   await page.goto('/entrar');
   await page.getByText(nomeOuEmail).click();
   await page.getByRole('button', { name: 'Entrar' }).click();
+  // Com o Supabase o login leva um instante: navegar antes cancelaria a requisição.
+  await page.waitForURL((u) => !u.pathname.startsWith('/entrar'));
 }
 
 test.describe('Portal do Professor', () => {
@@ -39,7 +42,7 @@ test.describe('Portal do Professor', () => {
       await expect(page).toHaveURL(/\/professor/);
 
       // Abre a oferta de Matemática 7º A
-      await page.goto('/professor/oferta/oferta-mat-7a');
+      await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
 
       // Clica em Nova Atividade
       await page.getByRole('button', { name: 'Nova Atividade' }).click();
@@ -116,7 +119,7 @@ test.describe('Portal do Professor', () => {
     test('P4: Ana edita textos da atividade publicada', async () => {
       // Volta para login do professor
       await loginDemo(page, 'Profª Ana Paula');
-      await page.goto('/professor/oferta/oferta-mat-7a?aba=atividades');
+      await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=atividades`);
 
       // Aba Publicadas
       await page.getByRole('button', { name: /Publicadas/ }).click();
@@ -148,7 +151,7 @@ test.describe('Portal do Professor', () => {
     await loginDemo(page, 'Profª Ana Paula');
 
     // Abre resultados de Frações
-    await page.goto('/professor/atividade/ativ-demo-mat-frac/resultados');
+    await page.goto(`/professor/atividade/${ATIV_DEMO_MAT_FRAC}/resultados`);
 
     // A questão 2 tem o chip "Questão crítica", o acerto 28,6% ou 28.6% e "Letra B (3 alunos)"
     const q2 = page.locator('.rounded-2xl').filter({ hasText: 'Questão 2' });
@@ -163,7 +166,7 @@ test.describe('Portal do Professor', () => {
   test('P6: Aba Desempenho e filtro de alunos em Atenção', async ({ page }) => {
     await loginDemo(page, 'Profª Ana Paula');
 
-    await page.goto('/professor/oferta/oferta-mat-7a?aba=desempenho');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=desempenho`);
 
     // As linhas dos 4 alunos mostram "Atenção"
     await expect(page.locator('tr').filter({ hasText: 'Gabriel Lima' })).toContainText('Atenção');
@@ -186,7 +189,7 @@ test.describe('Portal do Professor', () => {
     await loginDemo(page, 'Profª Ana Paula');
 
     // Abre ficha do aluno-7a-3
-    await page.goto('/professor/oferta/oferta-mat-7a/aluno/aluno-7a-3');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}/aluno/${ALUNO_7A_3}`);
 
     // Contém "2ª tentativa"
     await expect(page.getByText(/2ª tentativa/)).toBeVisible();
@@ -196,7 +199,7 @@ test.describe('Portal do Professor', () => {
     // Carlos tenta acessar oferta de Matemática da Ana
     await loginDemo(page, 'Prof. Carlos Roberto');
 
-    await page.goto('/professor/oferta/oferta-mat-7a');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
     await expect(page.getByText(/permissão/i)).toBeVisible();
 
     // Carlos tenta acessar /gestao
@@ -207,7 +210,7 @@ test.describe('Portal do Professor', () => {
   test('P9: Envio de recado e visualização no mural do aluno', async ({ page }) => {
     // Ana cria o recado
     await loginDemo(page, 'Profª Ana Paula');
-    await page.goto('/professor/oferta/oferta-mat-7a?aba=recados');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=recados`);
 
     await page.getByLabel('Título do Recado *').fill('Recado E2E');
     await page.getByLabel('Mensagem *').fill('Conteúdo de aviso enviado pelo teste automatizado.');
@@ -231,7 +234,7 @@ test.describe('Portal do Professor', () => {
 
   test('P10: Aba Desempenho do professor mostra 33,3% (incompleta) para Lucas', async ({ page }) => {
     await loginDemo(page, 'Profª Ana Paula');
-    await page.goto('/professor/oferta/oferta-mat-7a?aba=desempenho');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=desempenho`);
 
     // A célula do Lucas na "Prova: Números Inteiros (encerrada)" mostra 33% (incompleta)
     const lucasRow = page.locator('tr').filter({ hasText: 'Lucas Oliveira' });
@@ -272,7 +275,7 @@ test.describe('Portal do Professor', () => {
     await expect(page).toHaveURL(/\/professor/);
 
     // Abre a oferta de Matemática 7º A
-    await page.goto('/professor/oferta/oferta-mat-7a');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
 
     // Clica no botão "Criar a partir do Banco"
     const btnCriarBanco = page.getByRole('button', { name: 'Criar a partir do Banco' });
@@ -353,7 +356,7 @@ test.describe('Portal do Professor', () => {
   test('P13: Professora amplia prazo de atividade publicada e reabre para o aluno', async ({ page }) => {
     // 1. Professora Ana abre "Editar textos" da atividade publicada "Frações e Porcentagem no Dia a Dia"
     await loginDemo(page, 'Profª Ana Paula');
-    await page.goto('/professor/oferta/oferta-mat-7a?aba=atividades');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=atividades`);
     await page.getByRole('button', { name: /Publicadas/ }).click();
 
     const cardProf = page.locator('.rounded-2xl').filter({ hasText: 'Frações e Porcentagem no Dia a Dia' });
@@ -381,7 +384,7 @@ test.describe('Portal do Professor', () => {
 
     // 3. Professora amplia o prazo para uma data futura e salva
     await loginDemo(page, 'Profª Ana Paula');
-    await page.goto('/professor/oferta/oferta-mat-7a?aba=atividades');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=atividades`);
     await page.getByRole('button', { name: /Publicadas/ }).click();
 
     const cardProf2 = page.locator('.rounded-2xl').filter({ hasText: 'Frações e Porcentagem no Dia a Dia' });

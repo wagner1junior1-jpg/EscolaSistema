@@ -1,4 +1,5 @@
 import { test, expect, Page, ConsoleMessage } from '@playwright/test';
+import { OFERTA_MAT_7A } from './ids';
 
 test.describe.serial('Fase H1 — Banco de Questões (B1 a B8)', () => {
   let page: Page;
@@ -161,7 +162,7 @@ test.describe.serial('Fase H1 — Banco de Questões (B1 a B8)', () => {
 
   test('B4: Ana sorteia 3 questões do banco para uma atividade em rascunho', async () => {
     // Abre a oferta de Matemática do 7º Ano A
-    await page.goto('/professor/oferta/oferta-mat-7a');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
 
     // Cria nova atividade
     await page.getByRole('button', { name: 'Nova Atividade' }).click();
@@ -258,7 +259,7 @@ test.describe.serial('Fase H1 — Banco de Questões (B1 a B8)', () => {
 
   test('B6: Ana publica a atividade e Adicionar do banco fica bloqueado na UI e no serviço', async () => {
     // Abre a oferta para publicar a atividade
-    await page.goto('/professor/oferta/oferta-mat-7a');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
 
     // Localiza o card da atividade em rascunho e clica em Publicar
     const card = page.locator('.rounded-2xl, .border-slate-200').filter({ hasText: 'Atividade B4 Banco' }).first();

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { OFERTA_MAT_7A } from './ids';
 
 test.describe.serial('Ensaio Geral da Demonstração (D1 a D6)', () => {
   let page: Page;
@@ -61,7 +62,7 @@ test.describe.serial('Ensaio Geral da Demonstração (D1 a D6)', () => {
     await expect(page).toHaveURL(/\/professor/);
 
     // Abre a oferta de Matemática 7º A
-    await page.goto('/professor/oferta/oferta-mat-7a');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
 
     // Clica em Nova Atividade
     await page.getByRole('button', { name: 'Nova Atividade' }).click();
@@ -205,7 +206,7 @@ test.describe.serial('Ensaio Geral da Demonstração (D1 a D6)', () => {
     await expect(page).toHaveURL(/\/professor/);
 
     // Abre a oferta de Matemática 7º A
-    await page.goto('/professor/oferta/oferta-mat-7a');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}`);
 
     // Abre Resultados da atividade
     await page.getByRole('button', { name: /Publicadas/ }).click();
@@ -215,7 +216,7 @@ test.describe.serial('Ensaio Geral da Demonstração (D1 a D6)', () => {
     await expect(page.getByText('1 aluno respondeu')).toBeVisible();
 
     // Aba Desempenho da oferta
-    await page.goto('/professor/oferta/oferta-mat-7a?aba=desempenho');
+    await page.goto(`/professor/oferta/${OFERTA_MAT_7A}?aba=desempenho`);
     const linhaLucas = page.locator('tbody tr').filter({ hasText: 'Lucas Oliveira' });
     await expect(linhaLucas).toBeVisible();
     await expect(linhaLucas).toContainText('50%');

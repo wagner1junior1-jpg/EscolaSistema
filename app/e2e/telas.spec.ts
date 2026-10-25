@@ -1,4 +1,5 @@
 import { test, expect, Page, ConsoleMessage } from '@playwright/test';
+import { ALUNO_7A_1, ATIV_DEMO_MAT_FRAC, OFERTA_MAT_7A } from './ids';
 
 interface VerificacaoResultado {
   scrollWidth: number;
@@ -159,7 +160,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/aluno/atividade/ativ-demo-mat-frac',
+          `/aluno/atividade/${ATIV_DEMO_MAT_FRAC}`,
           'aluno-player-exercicio',
           vp.largura,
           vp.altura,
@@ -187,7 +188,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/professor/oferta/oferta-mat-7a?aba=atividades',
+          `/professor/oferta/${OFERTA_MAT_7A}?aba=atividades`,
           'professor-oferta-atividades',
           vp.largura,
           vp.altura,
@@ -195,7 +196,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/professor/oferta/oferta-mat-7a?aba=desempenho',
+          `/professor/oferta/${OFERTA_MAT_7A}?aba=desempenho`,
           'professor-oferta-desempenho',
           vp.largura,
           vp.altura,
@@ -203,7 +204,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/professor/oferta/oferta-mat-7a?aba=recados',
+          `/professor/oferta/${OFERTA_MAT_7A}?aba=recados`,
           'professor-oferta-recados',
           vp.largura,
           vp.altura,
@@ -211,7 +212,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/professor/atividade/ativ-demo-mat-frac',
+          `/professor/atividade/${ATIV_DEMO_MAT_FRAC}`,
           'professor-atividade-editor',
           vp.largura,
           vp.altura,
@@ -219,7 +220,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/professor/atividade/ativ-demo-mat-frac/resultados',
+          `/professor/atividade/${ATIV_DEMO_MAT_FRAC}/resultados`,
           'professor-atividade-resultados',
           vp.largura,
           vp.altura,
@@ -227,7 +228,7 @@ test.describe('Inspeção Visual e Responsiva de Telas (390px e 1280px)', () => 
         );
         await testarTela(
           page,
-          '/professor/oferta/oferta-mat-7a/aluno/aluno-7a-1',
+          `/professor/oferta/${OFERTA_MAT_7A}/aluno/${ALUNO_7A_1}`,
           'professor-ficha-aluno',
           vp.largura,
           vp.altura,

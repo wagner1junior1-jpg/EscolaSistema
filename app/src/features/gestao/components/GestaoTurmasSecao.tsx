@@ -188,9 +188,11 @@ export const GestaoTurmasSecao: React.FC = () => {
         });
         toast.success('Turma atualizada com sucesso!');
       } else {
-        if (!escola) throw new Error('Escola não configurada.');
+        // O formulário pode abrir antes de a tela terminar de carregar (com o Supabase leva ~1 s).
+        const escolaAtual = escola ?? (await gestaoService.obterEscola());
+        if (!escolaAtual) throw new Error('Escola não configurada.');
         await gestaoService.criarTurma({
-          escola_id: escola.id,
+          escola_id: escolaAtual.id,
           nome: formNome.trim(),
           serie: formSerie.trim(),
           segmento: formSegmento,
