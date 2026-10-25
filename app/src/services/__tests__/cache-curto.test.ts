@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { CacheCurto } from '../supabase/cacheCurto';
+import { CacheCurto, ChamadasSimultaneas } from '../supabase/cacheCurto';
 
 describe('CacheCurto', () => {
   it('chamadas simultâneas para a mesma chave fazem uma única consulta', async () => {
@@ -61,5 +61,34 @@ describe('CacheCurto', () => {
     cache.limpar();
     await cache.obter('k', carregar);
     expect(carregar).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ChamadasSimultaneas', () => {
+  it('chamadas simultâneas para a mesma chave fazem uma única consulta', async () => {
+    const juntas = new ChamadasSimultaneas<number>();
+    const carregar = vi.fn(async () => 7);
+    const r = await Promise.all([juntas.obter('x', carregar), juntas.obter('x', carregar), juntas.obter('y', carregar)]);
+    expect(r).toEqual([7, 7, 7]);
+    expect(carregar).toHaveBeenCalledTimes(2);
+  });
+
+  it('nada fica guardado depois que a consulta termina', async () => {
+    const juntas = new ChamadasSimultaneas<number>();
+    let n = 0;
+    const carregar = vi.fn(async () => ++n);
+    expect(await juntas.obter('x', carregar)).toBe(1);
+    expect(await juntas.obter('x', carregar)).toBe(2);
+  });
+
+  it('erro chega a todos que esperavam e não fica guardado', async () => {
+    const juntas = new ChamadasSimultaneas<number>();
+    const falhar = vi.fn(async () => {
+      throw new Error('sem acesso');
+    });
+    const r = await Promise.allSettled([juntas.obter('k', falhar), juntas.obter('k', falhar)]);
+    expect(r.map((x) => x.status)).toEqual(['rejected', 'rejected']);
+    expect(falhar).toHaveBeenCalledTimes(1);
+    expect(await juntas.obter('k', async () => 3)).toBe(3);
   });
 });

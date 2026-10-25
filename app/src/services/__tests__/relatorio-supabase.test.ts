@@ -115,5 +115,37 @@ describe('RelatorioService Supabase (Fase 5.5, via RPC)', () => {
         calcularQuestoesCriticasEscola(banco, periodoId)
       );
     });
+
+    it('relatórios pedidos juntos (Conselho) leem o snapshot UMA vez e dão o mesmo resultado; o pedido seguinte lê de novo', async () => {
+      const banco = await criarBancoDemonstracao();
+      const periodoId = banco.periodos.find((p) => p.ativo)?.id ?? banco.periodos[0].id;
+      const snapshot = JSON.parse(JSON.stringify(banco));
+      const { cliente, rpc } = clienteComRpc({ data: snapshot, error: null });
+      const service = new SupabaseRelatorioService(cliente);
+
+      const [th, aa, qc] = await Promise.all([
+        service.desempenhoHierarquicoTurmas(periodoId),
+        service.alunosEmAtencao(periodoId),
+        service.questoesCriticasEscola(periodoId),
+      ]);
+      expect(rpc).toHaveBeenCalledTimes(1);
+      // Os cálculos dividem o mesmo objeto: nenhum pode estragar o dos outros.
+      expect(th).toEqual(calcularDesempenhoHierarquico(banco, periodoId));
+      expect(aa).toEqual(calcularAlunosEmAtencao(banco, periodoId));
+      expect(qc).toEqual(calcularQuestoesCriticasEscola(banco, periodoId));
+      expect(snapshot).toEqual(JSON.parse(JSON.stringify(banco)));
+
+      await service.desempenhoTurmas(periodoId);
+      expect(rpc).toHaveBeenCalledTimes(2);
+    });
+
+    it('períodos diferentes pedidos juntos não se misturam', async () => {
+      const { cliente, rpc } = clienteComRpc({ data: {}, error: null });
+      const service = new SupabaseRelatorioService(cliente);
+      await Promise.all([service.desempenhoTurmas('per-1'), service.desempenhoTurmas('per-2')]);
+      expect(rpc).toHaveBeenCalledWith('relatorio_dados_periodo', { p_periodo_id: 'per-1' });
+      expect(rpc).toHaveBeenCalledWith('relatorio_dados_periodo', { p_periodo_id: 'per-2' });
+      expect(rpc).toHaveBeenCalledTimes(2);
+    });
   });
 });

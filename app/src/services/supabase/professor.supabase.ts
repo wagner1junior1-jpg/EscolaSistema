@@ -20,7 +20,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as clientePadrao } from '@/lib/supabase';
-import { CacheCurto } from './cacheCurto';
+import { CacheCurto, ChamadasSimultaneas } from './cacheCurto';
 import { lerTudoPorIds } from './paginacao';
 import {
   calcularDesempenhoOferta,
@@ -138,6 +138,11 @@ export class SupabaseProfessorService implements ProfessorService {
   // Leituras repetidas pelo painel (ver cacheCurto.ts). A RLS do banco continua valendo.
   private readonly cacheContexto = new CacheCurto<ContextoSessao>(30_000);
   private readonly cacheOfertas = new CacheCurto<OfertaBasica>(15_000);
+  // A tela de resultados pede atividade, mapa de calor e correções de uma vez (Promise.all):
+  // as leituras iguais em andamento viram uma só. Nada fica guardado depois (ver cacheCurto.ts).
+  private readonly leiturasAtividade = new ChamadasSimultaneas<Atividade>();
+  private readonly leiturasQuestoes = new ChamadasSimultaneas<Questao[]>();
+  private readonly leiturasAlternativas = new ChamadasSimultaneas<Alternativa[]>();
 
   /**
    * Obtém os dados de sessão do usuário logado e valida se seu perfil está ativo.
@@ -231,19 +236,22 @@ export class SupabaseProfessorService implements ProfessorService {
     atividade: Atividade;
     oferta: { id: string; professor_id: string; turma_id: string };
   }> {
-    const { data: atividade, error: erroAtiv } = await this.cliente
-      .from('atividades')
-      .select('id, created_at, oferta_id, periodo_id, titulo, descricao, prazo, modo, status, criado_por')
-      .eq('id', atividadeId)
-      .is('deleted_at', null)
-      .maybeSingle();
+    const atividade = await this.leiturasAtividade.obter(atividadeId, async () => {
+      const { data, error: erroAtiv } = await this.cliente
+        .from('atividades')
+        .select('id, created_at, oferta_id, periodo_id, titulo, descricao, prazo, modo, status, criado_por')
+        .eq('id', atividadeId)
+        .is('deleted_at', null)
+        .maybeSingle();
 
-    if (erroAtiv) {
-      throw new Error('Não foi possível obter a atividade.');
-    }
-    if (!atividade) {
-      throw new Error('Atividade não encontrada.');
-    }
+      if (erroAtiv) {
+        throw new Error('Não foi possível obter a atividade.');
+      }
+      if (!data) {
+        throw new Error('Atividade não encontrada.');
+      }
+      return data as Atividade;
+    });
 
     let oferta: OfertaBasica;
     try {
@@ -252,7 +260,52 @@ export class SupabaseProfessorService implements ProfessorService {
       throw new Error('Não foi possível verificar a oferta da atividade.');
     }
 
-    return { atividade: atividade as Atividade, oferta };
+    return { atividade, oferta };
+  }
+
+  /**
+   * Questões de uma atividade, na ordem da prova. Só chamar DEPOIS de validar o acesso.
+   * O array é compartilhado entre chamadas simultâneas: não alterar.
+   */
+  private lerQuestoesDaAtividade(atividadeId: string, falha: string): Promise<Questao[]> {
+    return this.leiturasQuestoes.obter(atividadeId, async () => {
+      const { data, error } = await this.cliente
+        .from('questoes')
+        .select('id, created_at, atividade_id, ordem, tipo, dificuldade, enunciado, imagem_url, dica, explicacao, resposta_esperada, banco_questao_id, assunto_id')
+        .eq('atividade_id', atividadeId)
+        .is('deleted_at', null)
+        .order('ordem', { ascending: true });
+
+      if (error) {
+        throw new Error(falha);
+      }
+      return (data || []) as Questao[];
+    });
+  }
+
+  /** Alternativas das questões, em ordem de letra. Mesmo cuidado de lerQuestoesDaAtividade. */
+  private lerAlternativasDasQuestoes(questaoIds: string[], falha: string): Promise<Alternativa[]> {
+    if (questaoIds.length === 0) return Promise.resolve([]);
+    return this.leiturasAlternativas.obter(questaoIds.join(','), async () => {
+      const { data, error } = await this.cliente
+        .from('alternativas')
+        .select('id, updated_at, questao_id, letra, texto, correta, por_que_errou')
+        .in('questao_id', questaoIds)
+        .order('letra', { ascending: true });
+
+      if (error) {
+        throw new Error(falha);
+      }
+      return (data || []).map((alt) => ({
+        id: alt.id,
+        created_at: alt.updated_at,
+        questao_id: alt.questao_id,
+        letra: alt.letra,
+        texto: alt.texto,
+        correta: alt.correta,
+        por_que_errou: alt.por_que_errou,
+      }));
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -407,42 +460,14 @@ export class SupabaseProfessorService implements ProfessorService {
     const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
     await this.validarAcessoLeituraOferta(oferta.id);
 
-    const { data: questoesData, error: erroQuestoes } = await this.cliente
-      .from('questoes')
-      .select('id, created_at, atividade_id, ordem, tipo, dificuldade, enunciado, imagem_url, dica, explicacao, resposta_esperada, banco_questao_id, assunto_id')
-      .eq('atividade_id', atividadeId)
-      .is('deleted_at', null)
-      .order('ordem', { ascending: true });
-
-    if (erroQuestoes) {
-      throw new Error('Não foi possível carregar as questões da atividade.');
-    }
-
-    const questoes = questoesData || [];
-    const questaoIds = questoes.map((q) => q.id);
-
-    let alternativas: Array<Alternativa> = [];
-    if (questaoIds.length > 0) {
-      const { data: altsData, error: erroAlts } = await this.cliente
-        .from('alternativas')
-        .select('id, updated_at, questao_id, letra, texto, correta, por_que_errou')
-        .in('questao_id', questaoIds)
-        .order('letra', { ascending: true });
-
-      if (erroAlts) {
-        throw new Error('Não foi possível carregar as alternativas das questões.');
-      }
-
-      alternativas = (altsData || []).map((alt) => ({
-        id: alt.id,
-        created_at: alt.updated_at,
-        questao_id: alt.questao_id,
-        letra: alt.letra,
-        texto: alt.texto,
-        correta: alt.correta,
-        por_que_errou: alt.por_que_errou,
-      }));
-    }
+    const questoes = await this.lerQuestoesDaAtividade(
+      atividadeId,
+      'Não foi possível carregar as questões da atividade.'
+    );
+    const alternativas = await this.lerAlternativasDasQuestoes(
+      questoes.map((q) => q.id),
+      'Não foi possível carregar as alternativas das questões.'
+    );
 
     const questoesCompletas = questoes.map((q) => {
       const altsDaQuestao = alternativas
@@ -1423,43 +1448,20 @@ export class SupabaseProfessorService implements ProfessorService {
     const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
     await this.validarAcessoLeituraOferta(oferta.id);
 
-    const { data: questoesData, error: erroQuestoes } = await this.cliente
-      .from('questoes')
-      .select('id, created_at, atividade_id, ordem, tipo, dificuldade, enunciado, imagem_url, dica, explicacao, resposta_esperada, banco_questao_id, assunto_id')
-      .eq('atividade_id', atividadeId)
-      .is('deleted_at', null)
-      .order('ordem', { ascending: true });
-
-    if (erroQuestoes) {
-      throw new Error('Não foi possível carregar as questões para o mapa de calor.');
-    }
-
-    const questoes = (questoesData || []) as Questao[];
+    const questoes = await this.lerQuestoesDaAtividade(
+      atividadeId,
+      'Não foi possível carregar as questões para o mapa de calor.'
+    );
     const questaoIds = questoes.map((q) => q.id);
 
     let alternativas: Alternativa[] = [];
     let respostas: Resposta[] = [];
 
     if (questaoIds.length > 0) {
-      const { data: altsData, error: erroAlts } = await this.cliente
-        .from('alternativas')
-        .select('id, updated_at, questao_id, letra, texto, correta, por_que_errou')
-        .in('questao_id', questaoIds)
-        .order('letra', { ascending: true });
-
-      if (erroAlts) {
-        throw new Error('Não foi possível carregar as alternativas para o mapa de calor.');
-      }
-
-      alternativas = (altsData || []).map((alt) => ({
-        id: alt.id,
-        created_at: alt.updated_at,
-        questao_id: alt.questao_id,
-        letra: alt.letra,
-        texto: alt.texto,
-        correta: alt.correta,
-        por_que_errou: alt.por_que_errou,
-      }));
+      alternativas = await this.lerAlternativasDasQuestoes(
+        questaoIds,
+        'Não foi possível carregar as alternativas para o mapa de calor.'
+      );
 
       const respostasData = await lerTudoPorIds<LinhaBanco>(
         questaoIds,
@@ -1510,18 +1512,9 @@ export class SupabaseProfessorService implements ProfessorService {
     const { atividade, oferta } = await this.obterOfertaDaAtividade(atividadeId);
     await this.validarAcessoEscritaOferta(oferta.id);
 
-    const { data: questoesData, error: erroQuestoes } = await this.cliente
-      .from('questoes')
-      .select('id, ordem, enunciado, resposta_esperada, tipo')
-      .eq('atividade_id', atividadeId)
-      .eq('tipo', 'discursiva')
-      .is('deleted_at', null);
-
-    if (erroQuestoes) {
-      throw new Error('Não foi possível verificar as questões da atividade.');
-    }
-
-    const questoes = questoesData || [];
+    const questoes = (
+      await this.lerQuestoesDaAtividade(atividadeId, 'Não foi possível verificar as questões da atividade.')
+    ).filter((q) => q.tipo === 'discursiva');
     if (questoes.length === 0) {
       return [];
     }
@@ -1582,18 +1575,9 @@ export class SupabaseProfessorService implements ProfessorService {
     const { oferta } = await this.obterOfertaDaAtividade(atividadeId);
     await this.validarAcessoEscritaOferta(oferta.id);
 
-    const { data: questoesData, error: erroQuestoes } = await this.cliente
-      .from('questoes')
-      .select('id, ordem, enunciado, resposta_esperada, tipo')
-      .eq('atividade_id', atividadeId)
-      .eq('tipo', 'discursiva')
-      .is('deleted_at', null);
-
-    if (erroQuestoes) {
-      throw new Error('Não foi possível verificar as questões da atividade.');
-    }
-
-    const questoes = questoesData || [];
+    const questoes = (
+      await this.lerQuestoesDaAtividade(atividadeId, 'Não foi possível verificar as questões da atividade.')
+    ).filter((q) => q.tipo === 'discursiva');
     if (questoes.length === 0) {
       return [];
     }

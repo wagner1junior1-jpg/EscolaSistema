@@ -43,3 +43,26 @@ export class CacheCurto<T> {
     this.itens.clear();
   }
 }
+
+/**
+ * Junta chamadas SIMULTÂNEAS para a mesma chave numa única consulta, sem guardar nada depois
+ * que ela termina (a próxima chamada lê de novo). Serve para telas que pedem a mesma leitura
+ * várias vezes de uma vez (`Promise.all`), onde um cache com prazo poderia mostrar dado velho
+ * logo depois de uma gravação.
+ *
+ * Quem recebe o resultado compartilhado NÃO pode alterá-lo (copie antes de ordenar ou mudar).
+ */
+export class ChamadasSimultaneas<T> {
+  private readonly emAndamento = new Map<string, Promise<T>>();
+
+  obter(chave: string, carregar: () => Promise<T>): Promise<T> {
+    const existente = this.emAndamento.get(chave);
+    if (existente) return existente;
+
+    const valor: Promise<T> = carregar().finally(() => {
+      if (this.emAndamento.get(chave) === valor) this.emAndamento.delete(chave);
+    });
+    this.emAndamento.set(chave, valor);
+    return valor;
+  }
+}

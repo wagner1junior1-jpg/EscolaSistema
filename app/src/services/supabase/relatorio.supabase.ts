@@ -28,6 +28,7 @@ import {
   calcularAlunosEmAtencao,
   calcularQuestoesCriticasEscola,
 } from '../relatorios-escola';
+import { ChamadasSimultaneas } from './cacheCurto';
 
 export class SupabaseRelatorioService implements RelatorioService {
   constructor(private readonly cliente: SupabaseClient = clientePadrao) {}
@@ -43,7 +44,15 @@ export class SupabaseRelatorioService implements RelatorioService {
     return data as T;
   }
 
-  private async dadosDoPeriodo(periodoId: string): Promise<DadosRelatorioEscola> {
+  // Desempenho e Conselho pedem 2 a 3 relatórios do mesmo período de uma vez: um snapshot só.
+  // Os cálculos de relatorios-escola.ts não alteram o snapshot, por isso ele pode ser dividido.
+  private readonly snapshots = new ChamadasSimultaneas<DadosRelatorioEscola>();
+
+  private dadosDoPeriodo(periodoId: string): Promise<DadosRelatorioEscola> {
+    return this.snapshots.obter(periodoId, () => this.lerDadosDoPeriodo(periodoId));
+  }
+
+  private async lerDadosDoPeriodo(periodoId: string): Promise<DadosRelatorioEscola> {
     const dados = await this.chamar<Partial<DadosRelatorioEscola>>(
       'relatorio_dados_periodo',
       { p_periodo_id: periodoId },
