@@ -3,8 +3,8 @@
  *
  * A UI assina mudanças, acompanha o status e força a sincronização por aqui,
  * sem saber se a fonte é o mock (localStorage) ou o Supabase.
- * Hoje só o mock está ligado; o Supabase se registra com `registrarFonteSincronizacao`
- * quando os serviços reais existirem (Fase 5).
+ * O mock é o padrão; com VITE_DATA_SOURCE=supabase, services/index.ts registra a fonte do
+ * Supabase (`criarFonteSupabase`) com `registrarFonteSincronizacao`.
  */
 
 import { assinarMudancas as assinarMudancasMock, getDatabase } from './mock/db';
@@ -42,6 +42,47 @@ const fonteMock: FonteSincronizacao = {
     await getDatabase();
   },
 };
+
+/**
+ * Fonte do Supabase: os dados já nascem na nuvem (não há cópia local para "sincronizar"), então o
+ * status é sempre "conectado". O botão de atualizar (`forcar`) avisa as telas inscritas em
+ * `assinarMudancas`, que recarregam seus dados do banco.
+ */
+export function criarFonteSupabase(agora: () => Date = () => new Date()): FonteSincronizacao {
+  let info: InfoSincronizacao = { status: 'conectado', ultimaSincronizacao: null, origem: 'supabase' };
+  const ouvintesMudanca = new Set<() => void>();
+  const ouvintesStatus = new Set<(i: InfoSincronizacao) => void>();
+
+  const definir = (novo: InfoSincronizacao) => {
+    info = novo;
+    ouvintesStatus.forEach((cb) => cb(info));
+  };
+
+  return {
+    assinarMudancas(callback) {
+      ouvintesMudanca.add(callback);
+      return () => {
+        ouvintesMudanca.delete(callback);
+      };
+    },
+    assinarStatus(callback) {
+      ouvintesStatus.add(callback);
+      callback(info);
+      return () => {
+        ouvintesStatus.delete(callback);
+      };
+    },
+    obterStatus: () => info,
+    async forcar() {
+      definir({ ...info, status: 'sincronizando' });
+      try {
+        ouvintesMudanca.forEach((cb) => cb());
+      } finally {
+        definir({ status: 'conectado', ultimaSincronizacao: agora(), origem: 'supabase' });
+      }
+    },
+  };
+}
 
 let fonteAtiva: FonteSincronizacao = fonteMock;
 

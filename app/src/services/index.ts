@@ -35,12 +35,18 @@ import {
   criarSupabaseIAService,
 } from './supabase/stub';
 import { MODO_TESTE } from '@/lib/ambiente';
+import { criarFonteSupabase, registrarFonteSincronizacao } from './sincronizacao';
 
 export * from './contracts';
 export * from './calculos';
 export * from '@/lib/types';
 
 const dataSource = import.meta.env.VITE_DATA_SOURCE || 'mock';
+
+// O selo de sincronização e o botão de atualizar passam a falar do Supabase, não do mock.
+if (dataSource === 'supabase') {
+  registrarFonteSincronizacao(criarFonteSupabase());
+}
 
 export const authService: AuthService =
   dataSource === 'supabase' ? criarSupabaseAuthService() : new MockAuthService();
