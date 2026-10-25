@@ -6,7 +6,6 @@ import {
   professorService,
   assinarMudancas,
   FichaAluno,
-  LetraAlternativa,
 } from '@/services';
 import {
   ArrowLeft,
@@ -33,7 +32,6 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
   const idDaOferta = ofertaId || '';
 
   const [ficha, setFicha] = useState<FichaAluno | null>(null);
-  const [mapaLetras, setMapaLetras] = useState<Record<string, Record<string, LetraAlternativa>>>({});
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [modalObsAberto, setModalObsAberto] = useState(false);
@@ -48,31 +46,8 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
         ? await professorService.fichaAluno(idDaOferta, idDoAluno)
         : await professorService.fichaAluno(idDoAluno);
 
+      // As letras das alternativas já vêm na ficha (antes: uma atividade completa por item)
       setFicha(fichaCarregada);
-
-      // Busca dados estruturais das atividades para mapear letras de cada alternativa
-      const mapaTemp: Record<string, Record<string, LetraAlternativa>> = {};
-
-      await Promise.all(
-        fichaCarregada.atividades.map(async (ativ) => {
-          try {
-            const completa = await professorService.obterAtividade(ativ.atividade_id);
-            if (completa) {
-              const altsMap: Record<string, LetraAlternativa> = {};
-              completa.questoes.forEach((q) => {
-                q.alternativas.forEach((alt) => {
-                  altsMap[alt.id] = alt.letra as LetraAlternativa;
-                });
-              });
-              mapaTemp[ativ.atividade_id] = altsMap;
-            }
-          } catch {
-            // Continua se não conseguir carregar alternativas
-          }
-        })
-      );
-
-      setMapaLetras(mapaTemp);
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Falha ao carregar ficha pedagógica do aluno.');
     } finally {
@@ -89,11 +64,6 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
       desassinar();
     };
   }, [carregarFicha]);
-
-  const obterLetra = (ativId: string, altId: string | null) => {
-    if (!altId) return null;
-    return mapaLetras[ativId]?.[altId] || null;
-  };
 
   const linkVoltar = idDaOferta
     ? `/professor/oferta/${idDaOferta}?aba=desempenho`
@@ -417,8 +387,8 @@ export const ProfessorFichaAlunoPage: React.FC = () => {
                     <CardContent className="p-5 sm:p-6 space-y-4">
                       {ativ.questoes.map((q) => {
                         const isDiscursiva = q.tipo === 'discursiva';
-                        const letraEscolhida = obterLetra(ativ.atividade_id, q.alternativa_escolhida_id);
-                        const letraCorreta = obterLetra(ativ.atividade_id, q.alternativa_correta_id);
+                        const letraEscolhida = q.alternativa_escolhida_letra ?? null;
+                        const letraCorreta = q.alternativa_correta_letra ?? null;
                         const semResposta = isDiscursiva ? !q.texto_resposta : !q.alternativa_escolhida_id;
 
                         const temRetentativa = !isDiscursiva && q.tentativas > 1 && q.acertou_final;

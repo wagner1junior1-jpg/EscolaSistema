@@ -589,6 +589,9 @@ export interface FichaAlunoQuestaoItem {
   enunciado: string;
   alternativa_escolhida_id: string | null;
   alternativa_correta_id: string;
+  /** Letras já resolvidas, para a tela não precisar carregar cada atividade completa. */
+  alternativa_escolhida_letra?: LetraAlternativa | null;
+  alternativa_correta_letra?: LetraAlternativa | null;
   acertou: boolean | null;
   tentativas: number;
   acertou_final: boolean | null;

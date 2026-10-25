@@ -870,6 +870,9 @@ export class MockProfessorService implements ProfessorService {
           (resp) => resp.aluno_id === aluno.id && resp.questao_id === q.id
         );
         const corretaAlt = db.alternativas.find((alt) => alt.questao_id === q.id && alt.correta);
+        const escolhidaAlt = r?.alternativa_id
+          ? db.alternativas.find((alt) => alt.id === r.alternativa_id && alt.questao_id === q.id)
+          : undefined;
 
         if (r) {
           totalRespondidas++;
@@ -887,6 +890,8 @@ export class MockProfessorService implements ProfessorService {
           enunciado: q.enunciado,
           alternativa_escolhida_id: r ? r.alternativa_id : null,
           alternativa_correta_id: corretaAlt?.id || '',
+          alternativa_escolhida_letra: escolhidaAlt?.letra ?? null,
+          alternativa_correta_letra: corretaAlt?.letra ?? null,
           acertou: r ? r.acertou : null,
           tentativas: r ? r.tentativas : 0,
           acertou_final: r ? r.acertou_final : null,

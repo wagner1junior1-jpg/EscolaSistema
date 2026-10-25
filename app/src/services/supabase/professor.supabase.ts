@@ -59,6 +59,7 @@ import {
   DesempenhoAlunoMateriaItem,
   AlunoPublico,
   TipoQuestao,
+  LetraAlternativa,
 } from '@/lib/types';
 import {
   calcularAproveitamentoAtividade,
@@ -1983,51 +1984,56 @@ export class SupabaseProfessorService implements ProfessorService {
       throw new Error('O aluno não pertence à turma desta oferta.');
     }
 
-    const { data: turma, error: erroTurma } = await this.cliente
-      .from('turmas')
-      .select('id, nome')
-      .eq('id', aluno.turma_id)
-      .maybeSingle();
+    // Matérias e observações só dependem do aluno: correm junto com o resto da ficha.
+    // O erro não se perde: o `await extras` lá embaixo o lança; o catch só evita o aviso de
+    // promessa rejeitada sem tratamento quando outra leitura falha antes.
+    const extras = Promise.all([this.desempenhoAlunoPorMaterias(aluno.id), this.listarObservacoesAluno(aluno.id)]);
+    extras.catch(() => undefined);
 
-    if (erroTurma) {
-      throw new Error('Não foi possível carregar os dados da turma.');
-    }
-
-    let disciplinaNome = 'Todas as matérias';
-    if (oferta) {
-      const { data: discData, error: erroDisc } = await this.cliente
-        .from('disciplinas')
-        .select('id, nome')
-        .eq('id', oferta.disciplina_id)
-        .maybeSingle();
-
-      if (erroDisc) {
-        throw new Error('Não foi possível carregar os dados da disciplina.');
-      }
-      if (discData?.nome) {
-        disciplinaNome = discData.nome;
-      }
-    }
-
-    let atividades: Array<{ id: string; created_at: string; titulo: string; modo: any; status: string }> = [];
-    if (oferta) {
-      const { data: ativData, error: erroAtiv } = await this.cliente
-        .from('atividades')
-        .select('id, created_at, titulo, modo, status')
-        .eq('oferta_id', oferta.id)
-        .in('status', ['publicada', 'encerrada'])
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
-
-      if (erroAtiv) {
-        throw new Error('Não foi possível carregar as atividades da ficha.');
-      }
-      atividades = ativData || [];
-    }
+    const ofertaDaFicha = oferta;
+    const [turma, disciplinaNome, atividades] = await Promise.all([
+      (async () => {
+        const { data, error } = await this.cliente
+          .from('turmas')
+          .select('id, nome')
+          .eq('id', aluno.turma_id)
+          .maybeSingle();
+        if (error) {
+          throw new Error('Não foi possível carregar os dados da turma.');
+        }
+        return data;
+      })(),
+      (async () => {
+        if (!ofertaDaFicha) return 'Todas as matérias';
+        const { data, error } = await this.cliente
+          .from('disciplinas')
+          .select('id, nome')
+          .eq('id', ofertaDaFicha.disciplina_id)
+          .maybeSingle();
+        if (error) {
+          throw new Error('Não foi possível carregar os dados da disciplina.');
+        }
+        return (data?.nome as string | undefined) || 'Todas as matérias';
+      })(),
+      (async () => {
+        if (!ofertaDaFicha) return [];
+        const { data, error } = await this.cliente
+          .from('atividades')
+          .select('id, created_at, titulo, modo, status')
+          .eq('oferta_id', ofertaDaFicha.id)
+          .in('status', ['publicada', 'encerrada'])
+          .is('deleted_at', null)
+          .order('created_at', { ascending: true });
+        if (error) {
+          throw new Error('Não foi possível carregar as atividades da ficha.');
+        }
+        return (data || []) as Array<{ id: string; created_at: string; titulo: string; modo: ModoAtividade; status: string }>;
+      })(),
+    ]);
 
     const ativIds = atividades.map((a) => a.id);
     let questoes: Array<{ id: string; atividade_id: string; ordem: number; enunciado: string; tipo: TipoQuestao }> = [];
-    let alternativas: Array<{ id: string; questao_id: string; correta: boolean }> = [];
+    let alternativas: Array<{ id: string; questao_id: string; correta: boolean; letra: LetraAlternativa }> = [];
     let respostas: Array<{
       id: string;
       questao_id: string;
@@ -2042,42 +2048,39 @@ export class SupabaseProfessorService implements ProfessorService {
     }> = [];
 
     if (ativIds.length > 0) {
-      const { data: questData, error: erroQuest } = await this.cliente
-        .from('questoes')
-        .select('id, atividade_id, ordem, enunciado, tipo')
-        .in('atividade_id', ativIds)
-        .is('deleted_at', null)
-        .order('ordem', { ascending: true });
-
-      if (erroQuest) {
-        throw new Error('Não foi possível carregar as questões.');
-      }
-      questoes = (questData || []) as typeof questoes;
+      questoes = await lerTudoPorIds<(typeof questoes)[number]>(
+        ativIds,
+        (bloco) =>
+          this.cliente
+            .from('questoes')
+            .select('id, atividade_id, ordem, enunciado, tipo')
+            .in('atividade_id', bloco)
+            .is('deleted_at', null),
+        'Não foi possível carregar as questões.'
+      );
 
       const qIds = questoes.map((q) => q.id);
       if (qIds.length > 0) {
-        const { data: altsData, error: erroAlts } = await this.cliente
-          .from('alternativas')
-          .select('id, questao_id, correta')
-          .in('questao_id', qIds);
-
-        if (erroAlts) {
-          throw new Error('Não foi possível carregar as alternativas.');
-        }
-        alternativas = altsData || [];
-
-        respostas = await lerTudoPorIds<(typeof respostas)[number]>(
-          qIds,
-          (bloco) =>
-            this.cliente
-              .from('respostas')
-              .select('id, questao_id, alternativa_id, acertou, tentativas, acertou_final, texto_resposta, correcao, pontuacao, comentario_professor')
-              .eq('aluno_id', aluno.id)
-              .in('questao_id', bloco),
-          'Não foi possível carregar as respostas.'
-        );
+        [alternativas, respostas] = await Promise.all([
+          lerTudoPorIds<(typeof alternativas)[number]>(
+            qIds,
+            (bloco) => this.cliente.from('alternativas').select('id, questao_id, correta, letra').in('questao_id', bloco),
+            'Não foi possível carregar as alternativas.'
+          ),
+          lerTudoPorIds<(typeof respostas)[number]>(
+            qIds,
+            (bloco) =>
+              this.cliente
+                .from('respostas')
+                .select('id, questao_id, alternativa_id, acertou, tentativas, acertou_final, texto_resposta, correcao, pontuacao, comentario_professor')
+                .eq('aluno_id', aluno.id)
+                .in('questao_id', bloco),
+            'Não foi possível carregar as respostas.'
+          ),
+        ]);
       }
     }
+    const alternativaPorId = new Map(alternativas.map((alt) => [alt.id, alt]));
 
     let somaAcertosMedia = 0;
     let somaQuestoesMedia = 0;
@@ -2093,6 +2096,7 @@ export class SupabaseProfessorService implements ProfessorService {
       for (const q of qs) {
         const r = respostas.find((resp) => resp.questao_id === q.id);
         const corretaAlt = alternativas.find((alt) => alt.questao_id === q.id && alt.correta);
+        const escolhidaAlt = r?.alternativa_id ? alternativaPorId.get(r.alternativa_id) : undefined;
 
         if (r) {
           totalRespondidas++;
@@ -2110,6 +2114,8 @@ export class SupabaseProfessorService implements ProfessorService {
           enunciado: q.enunciado,
           alternativa_escolhida_id: r ? r.alternativa_id : null,
           alternativa_correta_id: corretaAlt?.id || '',
+          alternativa_escolhida_letra: escolhidaAlt && escolhidaAlt.questao_id === q.id ? escolhidaAlt.letra : null,
+          alternativa_correta_letra: corretaAlt?.letra ?? null,
           acertou: r ? r.acertou : null,
           tentativas: r ? r.tentativas : 0,
           acertou_final: r ? r.acertou_final : null,
@@ -2163,8 +2169,7 @@ export class SupabaseProfessorService implements ProfessorService {
       created_at: aluno.created_at,
     };
 
-    const desempenhoMaterias = await this.desempenhoAlunoPorMaterias(aluno.id);
-    const observacoes = await this.listarObservacoesAluno(aluno.id);
+    const [desempenhoMaterias, observacoes] = await extras;
 
     return {
       aluno: alunoPublico,
@@ -2526,27 +2531,6 @@ export class SupabaseProfessorService implements ProfessorService {
     const profIds = [...new Set(ofertasTurma.map((o) => o.professor_id))];
     const ofIds = ofertasTurma.map((o) => o.id);
 
-    const { data: discData, error: erroDisc } = await this.cliente
-      .from('disciplinas')
-      .select('id, nome')
-      .in('id', discIds)
-      .is('deleted_at', null);
-
-    if (erroDisc) {
-      throw new Error('Não foi possível carregar as disciplinas.');
-    }
-    const mapaDisciplinas = new Map((discData || []).map((d) => [d.id, d.nome]));
-
-    const { data: profData, error: erroProf } = await this.cliente
-      .from('perfis')
-      .select('id, nome')
-      .in('id', profIds);
-
-    if (erroProf) {
-      throw new Error('Não foi possível carregar os perfis dos professores.');
-    }
-    const mapaProfessores = new Map((profData || []).map((p) => [p.id, p.nome]));
-
     let queryAtiv = this.cliente
       .from('atividades')
       .select('id, oferta_id, periodo_id, status')
@@ -2558,7 +2542,27 @@ export class SupabaseProfessorService implements ProfessorService {
       queryAtiv = queryAtiv.eq('periodo_id', periodoFinalId);
     }
 
-    const { data: ativData, error: erroAtiv } = await queryAtiv;
+    // As três leituras não dependem uma da outra.
+    const [
+      { data: discData, error: erroDisc },
+      { data: profData, error: erroProf },
+      { data: ativData, error: erroAtiv },
+    ] = await Promise.all([
+      this.cliente.from('disciplinas').select('id, nome').in('id', discIds).is('deleted_at', null),
+      this.cliente.from('perfis').select('id, nome').in('id', profIds),
+      queryAtiv,
+    ]);
+
+    if (erroDisc) {
+      throw new Error('Não foi possível carregar as disciplinas.');
+    }
+    const mapaDisciplinas = new Map((discData || []).map((d) => [d.id, d.nome]));
+
+    if (erroProf) {
+      throw new Error('Não foi possível carregar os perfis dos professores.');
+    }
+    const mapaProfessores = new Map((profData || []).map((p) => [p.id, p.nome]));
+
     if (erroAtiv) {
       throw new Error('Não foi possível carregar as atividades.');
     }
