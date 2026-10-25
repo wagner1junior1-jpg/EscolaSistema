@@ -32,10 +32,12 @@ import {
   AlunoObservacao,
   DesempenhoAlunoMateriaItem,
   AlunoComDesempenhoResumo,
+  PainelProfessor,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { gerarId } from './ids';
 import { exigirUsuario } from './autorizacao';
+import { montarPainelPorChamadas } from '../painel-professor';
 import {
   calcularMapaDeCalorQuestao,
   calcularAproveitamentoAtividade,
@@ -687,6 +689,10 @@ export class MockProfessorService implements ProfessorService {
       total_alunos_responderam: alunoIds.size,
       questoes: questoesMapa,
     };
+  }
+
+  async painelProfessor(periodoId: string | null): Promise<PainelProfessor> {
+    return montarPainelPorChamadas(this, periodoId, new Date());
   }
 
   async desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta> {

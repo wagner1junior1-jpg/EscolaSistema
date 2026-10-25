@@ -513,6 +513,7 @@ export interface DesempenhoOfertaAtividadeAluno {
   modo: ModoAtividade;
   concluida: boolean;
   aproveitamento: number | null;
+  aguardando_correcao?: boolean;
 }
 
 export interface DesempenhoOfertaAluno {
@@ -531,6 +532,48 @@ export interface RelatorioDesempenhoOferta {
   periodo_nome: string;
   atividades: Array<{ id: string; titulo: string; modo: ModoAtividade }>;
   alunos: DesempenhoOfertaAluno[];
+}
+
+// Painel inicial do professor (uma chamada em vez de dezenas)
+export interface OfertaComContagem extends OfertaDetalhada {
+  totalRascunhos: number;
+  totalPublicadas: number;
+  totalEncerradas: number;
+  totalGeral: number;
+  totalPendentesCorrecao: number;
+  primeiraAtividadeComPendenteId?: string | null;
+}
+
+export interface AlunoEmAtencaoDashboard {
+  aluno_id: string;
+  nome_completo: string;
+  turma_nome: string;
+  turma_serie?: string;
+  disciplina_nome: string;
+  oferta_id: string;
+  media: number;
+}
+
+export interface AtividadePrazoProximo {
+  id: string;
+  titulo: string;
+  prazo: string;
+  turma_nome: string;
+  disciplina_nome: string;
+  oferta_id: string;
+  modo: ModoAtividade;
+  diasRestantes: number;
+  serie?: string;
+}
+
+export interface PainelProfessor {
+  ofertas: OfertaComContagem[];
+  /** Média crescente (os mais atrasados primeiro). */
+  alunosEmAtencao: AlunoEmAtencaoDashboard[];
+  /** Prazo mais próximo primeiro. */
+  atividadesPrazoProximo: AtividadePrazoProximo[];
+  /** Alunos distintos acompanhados nas ofertas do professor. */
+  totalAlunos: number;
 }
 
 export interface FichaAlunoQuestaoItem {

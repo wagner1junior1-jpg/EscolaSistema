@@ -22,6 +22,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase as clientePadrao } from '@/lib/supabase';
 import { CacheCurto } from './cacheCurto';
 import { lerTudoPorIds } from './paginacao';
+import {
+  calcularDesempenhoOferta,
+  calcularPainelProfessor,
+  type DadosPainelProfessor,
+} from '../painel-professor';
 
 // Linha crua devolvida pelo PostgREST nas leituras paginadas (quem usa trata os campos).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,8 +50,7 @@ import {
   Resposta,
   MapaDeCalorAtividade,
   RelatorioDesempenhoOferta,
-  DesempenhoOfertaAluno,
-  DesempenhoOfertaAtividadeAluno,
+  PainelProfessor,
   FichaAluno,
   FichaAlunoAtividadeItem,
   FichaAlunoQuestaoItem,
@@ -62,7 +66,6 @@ import {
   faixaDesempenho,
   mediaDoAlunoNasAtividades,
   pontuacaoDaResposta,
-  discursivaPendente,
 } from '../calculos';
 
 interface LinhaOfertaBanco {
@@ -1707,6 +1710,38 @@ export class SupabaseProfessorService implements ProfessorService {
   // 7. Relatórios Pedagógicos do Professor (Fase 5.5)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Painel inicial do professor: uma única RPC (0008) em vez de dezenas de leituras por oferta.
+   * A conta é a mesma do mock (painel-professor.ts); a RPC só traz os dados já filtrados.
+   */
+  async painelProfessor(periodoId: string | null): Promise<PainelProfessor> {
+    await this.obterContextoSessao();
+
+    const { data, error } = await this.cliente.rpc('professor_painel_dados');
+    if (error) {
+      throw new Error('Não foi possível carregar o painel do professor.');
+    }
+    const dados = data as DadosPainelProfessor | null;
+    if (!dados || !Array.isArray(dados.ofertas)) {
+      throw new Error('Não foi possível carregar o painel do professor.');
+    }
+
+    let periodo: { id: string; nome: string } | null = null;
+    if (periodoId) {
+      const { data: p, error: erroPeriodo } = await this.cliente
+        .from('periodos')
+        .select('id, nome')
+        .eq('id', periodoId)
+        .maybeSingle();
+      if (erroPeriodo) {
+        throw new Error('Não foi possível carregar os dados do período.');
+      }
+      periodo = p ? { id: p.id as string, nome: p.nome as string } : null;
+    }
+
+    return calcularPainelProfessor(dados, periodo, new Date());
+  }
+
   async desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta> {
     await this.validarAcessoLeituraOferta(ofertaId);
 
@@ -1807,91 +1842,16 @@ export class SupabaseProfessorService implements ProfessorService {
       );
     }
 
-    const mapaQuestoesPorAtividade = new Map<string, typeof questoes>();
-    for (const q of questoes) {
-      const lista = mapaQuestoesPorAtividade.get(q.atividade_id) || [];
-      lista.push(q);
-      mapaQuestoesPorAtividade.set(q.atividade_id, lista);
-    }
-
-    const mapaRespostasPorAluno = new Map<string, typeof respostas>();
-    for (const r of respostas) {
-      const lista = mapaRespostasPorAluno.get(r.aluno_id) || [];
-      lista.push(r);
-      mapaRespostasPorAluno.set(r.aluno_id, lista);
-    }
-
-    const alunosRelatorio: DesempenhoOfertaAluno[] = [];
-
-    for (const aluno of alunosDaTurma) {
-      const ativsAluno: DesempenhoOfertaAtividadeAluno[] = [];
-      const respostasDoAluno = mapaRespostasPorAluno.get(aluno.id) || [];
-
-      for (const ativ of atividadesDoPeriodo) {
-        const qs = mapaQuestoesPorAtividade.get(ativ.id) || [];
-        const totalQ = qs.length;
-        const qIdsSet = new Set(qs.map((q) => q.id));
-        const respsAtiv = respostasDoAluno.filter((r) => qIdsSet.has(r.questao_id));
-
-        const concluida = totalQ > 0 && respsAtiv.length === totalQ;
-
-        let temDiscursivaPendente = false;
-        for (const q of qs) {
-          const r = respsAtiv.find((resp) => resp.questao_id === q.id);
-          if (discursivaPendente(q, r)) {
-            temDiscursivaPendente = true;
-            break;
-          }
-        }
-
-        let aproveitamento: number | null = null;
-        if (!temDiscursivaPendente && (concluida || ativ.status === 'encerrada')) {
-          let somaPontos = 0;
-          for (const q of qs) {
-            const r = respsAtiv.find((resp) => resp.questao_id === q.id);
-            const p = pontuacaoDaResposta(q, r);
-            if (p !== null) {
-              somaPontos += p;
-            }
-          }
-          aproveitamento = calcularAproveitamentoAtividade(somaPontos, totalQ);
-        }
-
-        ativsAluno.push({
-          atividade_id: ativ.id,
-          titulo: ativ.titulo,
-          modo: ativ.modo,
-          concluida,
-          aproveitamento,
-          aguardando_correcao: temDiscursivaPendente,
-        });
-      }
-
-      const { media } = mediaDoAlunoNasAtividades(
-        atividadesDoPeriodo,
-        questoes as unknown as Questao[],
-        respostasDoAluno as unknown as Resposta[]
-      );
-      const faixa = faixaDesempenho(media);
-
-      alunosRelatorio.push({
-        aluno_id: aluno.id,
-        nome_completo: aluno.nome_completo,
-        numero_chamada: aluno.numero_chamada,
-        atividades: ativsAluno,
-        media,
-        faixa,
-      });
-    }
-
-    return {
-      oferta_id: ofertaId,
-      turma_nome: turma?.nome || 'Turma',
-      disciplina_nome: disciplina?.nome || 'Disciplina',
-      periodo_nome: periodo?.nome || 'Período',
-      atividades: atividadesDoPeriodo.map((a) => ({ id: a.id, titulo: a.titulo, modo: a.modo })),
-      alunos: alunosRelatorio,
-    };
+    return calcularDesempenhoOferta({
+      ofertaId,
+      turmaNome: turma?.nome || 'Turma',
+      disciplinaNome: disciplina?.nome || 'Disciplina',
+      periodoNome: periodo?.nome || 'Período',
+      atividadesDoPeriodo,
+      alunosDaTurma,
+      questoes,
+      respostas,
+    });
   }
 
   async fichaAluno(ofertaIdOuAlunoId: string, alunoId?: string): Promise<FichaAluno> {

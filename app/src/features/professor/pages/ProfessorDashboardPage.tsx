@@ -8,7 +8,9 @@ import {
   bancoService,
   iaService,
   gestaoService,
-  OfertaDetalhada,
+  OfertaComContagem,
+  AlunoEmAtencaoDashboard,
+  AtividadePrazoProximo,
   AlunoComDesempenhoResumo,
   Periodo,
   CombinacaoProfessor,
@@ -47,37 +49,6 @@ import { ModalObservacaoAluno } from '../components/ModalObservacaoAluno';
 import { ModalNovaAtividadeRapida } from '../components/ModalNovaAtividadeRapida';
 import { ModalGeradorIA } from '../components/ModalGeradorIA';
 import { TabelaAlunosSerie } from '../components/TabelaAlunosSerie';
-
-interface OfertaComContagem extends OfertaDetalhada {
-  totalRascunhos: number;
-  totalPublicadas: number;
-  totalEncerradas: number;
-  totalGeral: number;
-  totalPendentesCorrecao: number;
-  primeiraAtividadeComPendenteId?: string | null;
-}
-
-interface AlunoEmAtencaoDashboard {
-  aluno_id: string;
-  nome_completo: string;
-  turma_nome: string;
-  turma_serie?: string;
-  disciplina_nome: string;
-  oferta_id: string;
-  media: number;
-}
-
-interface AtividadePrazoProximo {
-  id: string;
-  titulo: string;
-  prazo: string;
-  turma_nome: string;
-  disciplina_nome: string;
-  oferta_id: string;
-  modo: 'prova' | 'exercicio';
-  diasRestantes: number;
-  serie?: string;
-}
 
 export const ProfessorDashboardPage: React.FC = () => {
   const { usuario } = useAuth();
@@ -191,10 +162,7 @@ export const ProfessorDashboardPage: React.FC = () => {
     setCarregando(true);
     setErro(null);
     try {
-      // 1. Carrega ofertas básicas do professor
-      const listaOfertas = await professorService.minhasOfertas();
-
-      // 2. Carrega períodos para identificar o período ativo
+      // 1. Carrega períodos para identificar o período ativo
       let listaPeriodos: Periodo[] = [];
       let pAtivo: Periodo | null = null;
       try {
@@ -206,7 +174,7 @@ export const ProfessorDashboardPage: React.FC = () => {
         // Silencia se não for possível carregar períodos
       }
 
-      // 3. Consulta cota de IA
+      // 2. Consulta cota de IA
       if (!IA_SEM_LIMITE) {
         try {
           const cota = await iaService.consultarCota();
@@ -216,7 +184,7 @@ export const ProfessorDashboardPage: React.FC = () => {
         }
       }
 
-      // 4. Carrega combinações de disciplina/série para o gerador de IA
+      // 3. Carrega combinações de disciplina/série para o gerador de IA
       try {
         const combs = await bancoService.listarCombinacoesDoProfessor();
         setCombinacoes(combs);
@@ -224,124 +192,13 @@ export const ProfessorDashboardPage: React.FC = () => {
         setCombinacoes([]);
       }
 
-      const alunosAtencaoAcumulados: AlunoEmAtencaoDashboard[] = [];
-      const prazosProximosAcumulados: AtividadePrazoProximo[] = [];
-      const alunosIdsSet = new Set<string>();
-
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-
-      // 5. Para cada oferta, busca atividades, contagens, pendências e alunos em atenção
-      const ofertasComContagens: OfertaComContagem[] = await Promise.all(
-        listaOfertas.map(async (oferta) => {
-          try {
-            const atividades = await professorService.listarAtividades(oferta.id);
-            const totalRascunhos = atividades.filter((a) => a.status === 'rascunho').length;
-            const totalPublicadas = atividades.filter((a) => a.status === 'publicada').length;
-            const totalEncerradas = atividades.filter((a) => a.status === 'encerrada').length;
-
-            let totalPendentesCorrecao = 0;
-            let primeiraAtividadeComPendenteId: string | null = null;
-
-            const ativsComRespostas = atividades.filter(
-              (a) => a.status === 'publicada' || a.status === 'encerrada'
-            );
-
-            for (const ativ of ativsComRespostas) {
-              try {
-                const pends = await professorService.listarCorrecoesPendentes(ativ.id);
-                if (pends.length > 0) {
-                  totalPendentesCorrecao += pends.length;
-                  if (!primeiraAtividadeComPendenteId) {
-                    primeiraAtividadeComPendenteId = ativ.id;
-                  }
-                }
-              } catch {
-                // Silencia se não houver pendentes
-              }
-
-              // Checa prazos de atividades publicadas
-              if (ativ.status === 'publicada' && ativ.prazo) {
-                const partes = ativ.prazo.split('-');
-                if (partes.length === 3) {
-                  const dataPrazo = new Date(
-                    Number(partes[0]),
-                    Number(partes[1]) - 1,
-                    Number(partes[2])
-                  );
-                  dataPrazo.setHours(0, 0, 0, 0);
-                  const diffDias = Math.ceil(
-                    (dataPrazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)
-                  );
-                  if (diffDias >= 0 && diffDias <= 4) {
-                    prazosProximosAcumulados.push({
-                      id: ativ.id,
-                      titulo: ativ.titulo,
-                      prazo: ativ.prazo,
-                      turma_nome: oferta.turma_nome,
-                      disciplina_nome: oferta.disciplina_nome,
-                      oferta_id: oferta.id,
-                      modo: ativ.modo,
-                      diasRestantes: diffDias,
-                      serie: oferta.turma_serie,
-                    });
-                  }
-                }
-              }
-            }
-
-            // 6. Alunos em atenção pelo relatório de desempenho do período ativo
-            if (pAtivo) {
-              try {
-                const relatorio = await professorService.desempenhoOferta(oferta.id, pAtivo.id);
-                relatorio.alunos.forEach((al) => {
-                  alunosIdsSet.add(al.aluno_id);
-                  if (al.faixa === 'Atenção' && al.media !== null) {
-                    alunosAtencaoAcumulados.push({
-                      aluno_id: al.aluno_id,
-                      nome_completo: al.nome_completo,
-                      turma_nome: oferta.turma_nome,
-                      turma_serie: oferta.turma_serie,
-                      disciplina_nome: oferta.disciplina_nome,
-                      oferta_id: oferta.id,
-                      media: al.media,
-                    });
-                  }
-                });
-              } catch {
-                // Silencia caso a oferta não tenha avaliações no período
-              }
-            }
-
-            return {
-              ...oferta,
-              totalRascunhos,
-              totalPublicadas,
-              totalEncerradas,
-              totalGeral: atividades.length,
-              totalPendentesCorrecao,
-              primeiraAtividadeComPendenteId,
-            };
-          } catch {
-            return {
-              ...oferta,
-              totalRascunhos: 0,
-              totalPublicadas: 0,
-              totalEncerradas: 0,
-              totalGeral: 0,
-              totalPendentesCorrecao: 0,
-              primeiraAtividadeComPendenteId: null,
-            };
-          }
-        })
-      );
-
-      setOfertas(ofertasComContagens);
-      setAlunosEmAtencao(alunosAtencaoAcumulados.sort((a, b) => a.media - b.media));
-      setAtividadesPrazoProximo(
-        prazosProximosAcumulados.sort((a, b) => a.diasRestantes - b.diasRestantes)
-      );
-      setTotalAlunosGeral(alunosIdsSet.size);
+      // 4. Painel inteiro numa chamada: contagens por oferta, correções pendentes, prazos
+      //    próximos e alunos em atenção (a conta fica no serviço; ver painel-professor.ts)
+      const painel = await professorService.painelProfessor(pAtivo ? pAtivo.id : null);
+      setOfertas(painel.ofertas);
+      setAlunosEmAtencao(painel.alunosEmAtencao);
+      setAtividadesPrazoProximo(painel.atividadesPrazoProximo);
+      setTotalAlunosGeral(painel.totalAlunos);
     } catch (err: unknown) {
       setErro(
         err instanceof Error ? err.message : 'Falha ao carregar turmas do professor.'

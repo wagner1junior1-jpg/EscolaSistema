@@ -271,6 +271,34 @@ BEGIN
   PERFORM zz_teste.confere('o snapshot nunca leva PIN nem credenciais',
     zz_teste.como(v_dx, format('select 1 from (select public.relatorio_dados_periodo(%L)::text t) s where t not like ''%%pin_hash%%'' and t not like ''%%hash-de-teste%%''', v_per_x)), 1);
 
+  -- ---------- 11. Painel do professor por RPC (migration 0008) ----------
+  -- (precisa da 0008 aplicada; sem ela estes testes falham com "function does not exist")
+  -- Estado neste ponto: prof A tem 1 oferta, 2 atividades (a publicada + a rascunho criada na seção 3),
+  -- 1 questão e 1 resposta (só as de atividade publicada/encerrada entram), 1 aluno; prof B, 1 de cada.
+  PERFORM zz_teste.confere('anon não chama professor_painel_dados',
+    zz_teste.como(NULL, 'select 1 from (select public.professor_painel_dados() j) s where j is not null'), -1);
+
+  PERFORM zz_teste.confere('prof A: só a sua oferta, as suas 2 atividades, 1 aluno, 1 questão e 1 resposta',
+    zz_teste.como(v_pa, 'select 1 from (select public.professor_painel_dados() j) s where jsonb_array_length(j->''ofertas'') = 1 and jsonb_array_length(j->''atividades'') = 2 and jsonb_array_length(j->''alunos'') = 1 and jsonb_array_length(j->''questoes'') = 1 and jsonb_array_length(j->''respostas'') = 1'), 1);
+  PERFORM zz_teste.confere('prof A não recebe nada da turma B (oferta, aluno nem resposta)',
+    zz_teste.como(v_pa, format('select 1 from (select public.professor_painel_dados()::text t) s where t not like ''%%%s%%'' and t not like ''%%%s%%'' and t not like ''%%%s%%''', v_of_b, v_aluno_b, v_at_b)), 1);
+  PERFORM zz_teste.confere('prof B: só a sua oferta, 1 atividade, 1 aluno',
+    zz_teste.como(v_pb, 'select 1 from (select public.professor_painel_dados() j) s where jsonb_array_length(j->''ofertas'') = 1 and jsonb_array_length(j->''atividades'') = 1 and jsonb_array_length(j->''alunos'') = 1'), 1);
+
+  PERFORM zz_teste.confere('direção X: as 2 ofertas, as 3 atividades e os 2 alunos da escola',
+    zz_teste.como(v_dx, 'select 1 from (select public.professor_painel_dados() j) s where jsonb_array_length(j->''ofertas'') = 2 and jsonb_array_length(j->''atividades'') = 3 and jsonb_array_length(j->''alunos'') = 2 and jsonb_array_length(j->''questoes'') = 2 and jsonb_array_length(j->''respostas'') = 2'), 1);
+  PERFORM zz_teste.confere('coordenação X: também vê as ofertas da escola',
+    zz_teste.como(v_cx, 'select 1 from (select public.professor_painel_dados() j) s where jsonb_array_length(j->''ofertas'') = 2'), 1);
+  PERFORM zz_teste.confere('direção Y: nada da escola X (tudo vazio)',
+    zz_teste.como(v_dy, 'select 1 from (select public.professor_painel_dados() j) s where jsonb_array_length(j->''ofertas'') = 0 and jsonb_array_length(j->''atividades'') = 0 and jsonb_array_length(j->''alunos'') = 0 and jsonb_array_length(j->''respostas'') = 0'), 1);
+
+  PERFORM zz_teste.confere('o painel nunca leva PIN, credenciais nem gabarito das alternativas',
+    zz_teste.como(v_dx, 'select 1 from (select public.professor_painel_dados()::text t) s where t not like ''%pin_hash%'' and t not like ''%hash-de-teste%'' and t not like ''%"correta"%'' and t not like ''%por_que_errou%'''), 1);
+
+  UPDATE public.perfis SET ativo = false WHERE id = v_pb;
+  PERFORM zz_teste.confere('professor inativo não chama professor_painel_dados',
+    zz_teste.como(v_pb, 'select 1 from (select public.professor_painel_dados() j) s where j is not null'), -1);
+
   -- Erro de propósito: desfaz TODAS as inserções acima (nada fica gravado).
   RAISE EXCEPTION 'TODOS OS TESTES DE RLS PASSARAM';
 END $f$;

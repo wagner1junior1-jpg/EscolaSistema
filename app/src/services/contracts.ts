@@ -29,6 +29,7 @@ import {
   ResultadoProva,
   MeuDesempenhoAluno,
   RelatorioDesempenhoOferta,
+  PainelProfessor,
   FichaAluno,
   VisaoGeralEscola,
   DesempenhoTurmaDisciplinaItem,
@@ -201,6 +202,8 @@ export interface ProfessorService {
     dados: { titulo: string; mensagem: string; prioridade: PrioridadeAviso }
   ): Promise<Aviso>;
   mapaDeCalor(atividadeId: string): Promise<MapaDeCalorAtividade>;
+  /** Painel inicial: contagens por oferta, pendências, prazos e alunos em atenção, numa chamada só. */
+  painelProfessor(periodoId: string | null): Promise<PainelProfessor>;
   desempenhoOferta(ofertaId: string, periodoId: string): Promise<RelatorioDesempenhoOferta>;
   fichaAluno(ofertaIdOuAlunoId: string, alunoId?: string): Promise<FichaAluno>;
   listarAlunosPorSerie(serie: string): Promise<AlunoComDesempenhoResumo[]>;
