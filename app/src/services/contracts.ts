@@ -18,6 +18,7 @@ import {
   AlunoResumido,
   Atividade,
   AtividadeCompleta,
+  AtividadeComContagem,
   AtividadeParaAluno,
   AtividadeResumoAluno,
   ModoAtividade,
@@ -180,6 +181,8 @@ export interface GestaoService {
 export interface ProfessorService {
   minhasOfertas(): Promise<OfertaDetalhada[]>;
   listarAtividades(ofertaId: string): Promise<Atividade[]>;
+  /** Página da turma: atividades com total de questões e discursivas pendentes, sem carregar cada uma. */
+  listarAtividadesComContagem(ofertaId: string): Promise<AtividadeComContagem[]>;
   obterAtividade(atividadeId: string): Promise<AtividadeCompleta | null>;
   criarAtividade(
     ofertaId: string,

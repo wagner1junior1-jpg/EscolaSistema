@@ -544,6 +544,13 @@ export interface OfertaComContagem extends OfertaDetalhada {
   primeiraAtividadeComPendenteId?: string | null;
 }
 
+// Lista da página da turma (contagens sem carregar cada atividade completa)
+export interface AtividadeComContagem extends Atividade {
+  total_questoes: number;
+  /** Discursivas aguardando nota; só o professor dono da oferta vê (os demais recebem 0). */
+  pendentes_correcao: number;
+}
+
 export interface AlunoEmAtencaoDashboard {
   aluno_id: string;
   nome_completo: string;

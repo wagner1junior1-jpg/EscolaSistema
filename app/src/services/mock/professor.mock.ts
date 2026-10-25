@@ -15,6 +15,7 @@ import {
   OfertaDetalhada,
   Atividade,
   AtividadeCompleta,
+  AtividadeComContagem,
   Questao,
   Alternativa,
   ModoAtividade,
@@ -124,6 +125,25 @@ export class MockProfessorService implements ProfessorService {
     return db.atividades
       .filter((a) => a.oferta_id === ofertaId)
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  async listarAtividadesComContagem(ofertaId: string): Promise<AtividadeComContagem[]> {
+    const usuario = await this.validarAcessoLeituraOferta(ofertaId);
+    const atividades = await this.listarAtividades(ofertaId);
+    const db = await getDatabase();
+    const oferta = db.ofertas.find((o) => o.id === ofertaId);
+    // Pendências só para o professor dono, a mesma regra de listarCorrecoesPendentes.
+    const podeCorrigir = usuario.papel === 'professor' && oferta?.professor_id === usuario.id;
+
+    return atividades.map((ativ) => {
+      const questoes = db.questoes.filter((q) => q.atividade_id === ativ.id);
+      const discursivas = new Set(questoes.filter((q) => q.tipo === 'discursiva').map((q) => q.id));
+      const pendentes =
+        podeCorrigir && ativ.status !== 'rascunho'
+          ? db.respostas.filter((r) => discursivas.has(r.questao_id) && r.correcao === 'pendente').length
+          : 0;
+      return { ...ativ, total_questoes: questoes.length, pendentes_correcao: pendentes };
+    });
   }
 
   async obterAtividade(atividadeId: string): Promise<AtividadeCompleta | null> {

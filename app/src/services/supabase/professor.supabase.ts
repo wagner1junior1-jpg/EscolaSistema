@@ -40,6 +40,7 @@ import {
 import {
   Atividade,
   AtividadeCompleta,
+  AtividadeComContagem,
   OfertaDetalhada,
   ModoAtividade,
   Aviso,
@@ -333,6 +334,72 @@ export class SupabaseProfessorService implements ProfessorService {
     }
 
     return (data || []) as Atividade[];
+  }
+
+  /**
+   * Página da turma: 3 leituras no total (atividades, questões, respostas pendentes) em vez de
+   * carregar cada atividade completa. Mesmas regras de obterAtividade (questão não excluída) e de
+   * listarCorrecoesPendentes (discursiva com correcao = 'pendente', só para o professor dono).
+   */
+  async listarAtividadesComContagem(ofertaId: string): Promise<AtividadeComContagem[]> {
+    const atividades = await this.listarAtividades(ofertaId);
+    if (atividades.length === 0) {
+      return [];
+    }
+
+    const questoes = await lerTudoPorIds<LinhaBanco>(
+      atividades.map((a) => a.id),
+      (bloco) =>
+        this.cliente
+          .from('questoes')
+          .select('id, atividade_id, tipo')
+          .in('atividade_id', bloco)
+          .is('deleted_at', null),
+      'Não foi possível contar as questões das atividades.'
+    );
+
+    const sessao = await this.obterContextoSessao();
+    const oferta = await this.obterOfertaBasica(ofertaId);
+    const podeCorrigir = sessao.papel === 'professor' && oferta.professor_id === sessao.id;
+
+    const atividadePorQuestao = new Map<string, string>();
+    if (podeCorrigir) {
+      const naoRascunho = new Set(atividades.filter((a) => a.status !== 'rascunho').map((a) => a.id));
+      for (const q of questoes) {
+        if (q.tipo === 'discursiva' && naoRascunho.has(q.atividade_id)) {
+          atividadePorQuestao.set(q.id, q.atividade_id);
+        }
+      }
+    }
+
+    const pendentes = await lerTudoPorIds<LinhaBanco>(
+      [...atividadePorQuestao.keys()],
+      (bloco) =>
+        this.cliente
+          .from('respostas')
+          .select('id, questao_id')
+          .in('questao_id', bloco)
+          .eq('correcao', 'pendente'),
+      'Não foi possível contar as correções pendentes.'
+    );
+
+    const totalQuestoes = new Map<string, number>();
+    for (const q of questoes) {
+      totalQuestoes.set(q.atividade_id, (totalQuestoes.get(q.atividade_id) ?? 0) + 1);
+    }
+    const totalPendentes = new Map<string, number>();
+    for (const r of pendentes) {
+      const atividadeId = atividadePorQuestao.get(r.questao_id);
+      if (atividadeId) {
+        totalPendentes.set(atividadeId, (totalPendentes.get(atividadeId) ?? 0) + 1);
+      }
+    }
+
+    return atividades.map((ativ) => ({
+      ...ativ,
+      total_questoes: totalQuestoes.get(ativ.id) ?? 0,
+      pendentes_correcao: totalPendentes.get(ativ.id) ?? 0,
+    }));
   }
 
   async obterAtividade(atividadeId: string): Promise<AtividadeCompleta | null> {

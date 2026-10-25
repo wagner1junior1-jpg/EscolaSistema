@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import {
@@ -20,7 +20,7 @@ import {
   gestaoService,
   bancoService,
   assinarMudancas,
-  Atividade,
+  AtividadeComContagem,
   OfertaDetalhada,
   Periodo,
   ModoAtividade,
@@ -60,10 +60,7 @@ import {
 } from 'lucide-react';
 import { ModalGeradorIA } from '../components/ModalGeradorIA';
 
-interface AtividadeComQtd extends Atividade {
-  total_questoes: number;
-  pendentes_correcao?: number;
-}
+type AtividadeComQtd = AtividadeComContagem;
 
 export const ProfessorOfertaPage: React.FC = () => {
   const { ofertaId } = useParams<{ ofertaId: string }>();
@@ -160,7 +157,13 @@ export const ProfessorOfertaPage: React.FC = () => {
     setCarregando(true);
     setErro(null);
     try {
-      const listaOfertas = await professorService.minhasOfertas();
+      // As três leituras não dependem uma da outra; a de atividades confere a permissão sozinha.
+      // Atividades vêm com as contagens numa chamada só (antes: uma atividade completa por item).
+      const [listaOfertas, listaPeriodos, listaAtividades] = await Promise.all([
+        professorService.minhasOfertas(),
+        gestaoService.listarPeriodos(),
+        professorService.listarAtividadesComContagem(ofertaId),
+      ]);
       setMinhasOfertas(listaOfertas);
 
       const ofertaEncontrada = listaOfertas.find((o) => o.id === ofertaId);
@@ -169,45 +172,15 @@ export const ProfessorOfertaPage: React.FC = () => {
       }
       setOferta(ofertaEncontrada);
 
-      const listaPeriodos = await gestaoService.listarPeriodos();
       setPeriodos(listaPeriodos);
       const ativo = listaPeriodos.find((p) => p.ativo) || listaPeriodos[0];
       if (ativo) {
-        setNovoPeriodoId(ativo.id);
-        setPeriodoSelecionadoId(ativo.id);
+        // Recarregar (publicar, sincronizar) não desfaz o bimestre que o professor escolheu.
+        setNovoPeriodoId((atual) => atual || ativo.id);
+        setPeriodoSelecionadoId((atual) => atual || ativo.id);
       }
 
-      // Busca atividades da oferta
-      const listaAtividades = await professorService.listarAtividades(ofertaId);
-      const atividadesComQtd: AtividadeComQtd[] = await Promise.all(
-        listaAtividades.map(async (ativ) => {
-          let totalQuestoes = 0;
-          let pendentesCorrecao = 0;
-          try {
-            const completa = await professorService.obterAtividade(ativ.id);
-            totalQuestoes = completa?.questoes.length ?? 0;
-          } catch {
-            totalQuestoes = 0;
-          }
-
-          if (ativ.status !== 'rascunho') {
-            try {
-              const pendentes = await professorService.listarCorrecoesPendentes(ativ.id);
-              pendentesCorrecao = pendentes.length;
-            } catch {
-              pendentesCorrecao = 0;
-            }
-          }
-
-          return {
-            ...ativ,
-            total_questoes: totalQuestoes,
-            pendentes_correcao: pendentesCorrecao,
-          };
-        })
-      );
-
-      setAtividades(atividadesComQtd);
+      setAtividades(listaAtividades);
     } catch (err: unknown) {
       setErro(err instanceof Error ? err.message : 'Falha ao carregar dados da turma.');
     } finally {
@@ -229,18 +202,27 @@ export const ProfessorOfertaPage: React.FC = () => {
     }
   }, [ofertaId, toast]);
 
+  // A assinatura lê a aba e o bimestre atuais por ref: trocar de aba ou de bimestre não recarrega
+  // a página inteira (antes a carga rodava 2 vezes ao abrir e voltava o bimestre para o ativo).
+  const recarregarDesempenhoRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    recarregarDesempenhoRef.current = () => {
+      if (abaPrincipal === 'desempenho' && periodoSelecionadoId) {
+        void carregarDesempenho(periodoSelecionadoId);
+      }
+    };
+  }, [abaPrincipal, periodoSelecionadoId, carregarDesempenho]);
+
   useEffect(() => {
     carregarDadosBase();
     const desassinar = assinarMudancas(() => {
       carregarDadosBase();
-      if (abaPrincipal === 'desempenho' && periodoSelecionadoId) {
-        void carregarDesempenho(periodoSelecionadoId);
-      }
+      recarregarDesempenhoRef.current();
     });
     return () => {
       desassinar();
     };
-  }, [carregarDadosBase, abaPrincipal, periodoSelecionadoId, carregarDesempenho]);
+  }, [carregarDadosBase]);
 
   useEffect(() => {
     if (abaPrincipal === 'desempenho' && periodoSelecionadoId) {
@@ -907,7 +889,7 @@ export const ProfessorOfertaPage: React.FC = () => {
                               </span>
                             )}
 
-                            {ativ.pendentes_correcao !== undefined && ativ.pendentes_correcao > 0 && (
+                            {ativ.pendentes_correcao > 0 && (
                               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
                                 {ativ.pendentes_correcao} para corrigir
                               </span>
