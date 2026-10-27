@@ -67,13 +67,16 @@ export const PrivacidadePage: React.FC = () => {
         <Secao titulo="5. Com quem os dados são compartilhados">
           <p>Com ninguém para fins próprios. Para funcionar, o sistema usa estes serviços:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Supabase</strong>: banco de dados e login (servidores da Amazon Web Services; na versão de
-              produção, na região de São Paulo).</li>
+            <li><strong>Supabase</strong>: banco de dados e login, em servidores da Amazon Web Services nos{' '}
+              <strong>Estados Unidos</strong> (região de Oregon).</li>
             <li><strong>Vercel</strong>: entrega as telas do site. Não guarda os dados dos alunos.</li>
             <li><strong>Google (Gemini)</strong>: gera questões. Recebe só o material que o professor envia (tema,
               texto de apoio e fotos de material didático), <strong>nunca</strong> nomes, notas ou respostas dos
               alunos. Esse serviço pode funcionar fora do Brasil.</li>
           </ul>
+          <p>Como o banco de dados fica fora do Brasil, há transferência internacional de dados (LGPD, art. 33). Ela
+            é feita com as garantias contratuais de proteção de dados oferecidas pelos provedores, e os dados
+            continuam protegidos pelas mesmas regras desta política.</p>
           <p>Os dados também podem ser entregues a autoridades quando a lei obrigar.</p>
         </Secao>
 
@@ -87,7 +90,7 @@ export const PrivacidadePage: React.FC = () => {
         <Secao titulo="7. Por quanto tempo">
           <p>Enquanto a escola usar o sistema. Se a escola encerrar o contrato, ela recebe uma cópia dos dados e tudo
             é apagado em até {diasAposContrato} dias. A pedido do responsável, a escola pode apagar antes os dados de
-            um aluno. As cópias de segurança automáticas são substituídas em poucos dias.</p>
+            um aluno. As cópias de segurança seguem o mesmo prazo.</p>
         </Secao>
 
         <Secao titulo="8. Como os dados são protegidos">

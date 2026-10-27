@@ -22,5 +22,5 @@ Redigido em 27/10/2026. **Não é parecer jurídico:** revisar com um advogado a
 1. Preencher os campos entre colchetes (nome completo, CPF, dados da escola, cidade) e revisar com advogado.
 2. Assinar o acordo com a escola.
 3. A escola colher as autorizações das famílias antes de cadastrar os alunos.
-4. Criar o projeto de produção do Supabase na **região São Paulo** (a política e o acordo dizem isso).
+4. O banco fica em **Oregon, EUA (us-west-2)**, decisão de 27/10/2026 de manter o projeto atual. A política e o acordo já declaram a transferência internacional (art. 33); o advogado deve conferir esse ponto.
 5. Combinar com a escola que observações e comentários não devem conter dados sensíveis (saúde, família) além do necessário.

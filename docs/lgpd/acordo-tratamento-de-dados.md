@@ -35,14 +35,18 @@ As partes, considerando a Lei nº 13.709/2018 (Lei Geral de Proteção de Dados,
 ## 5. Suboperadores autorizados
 | Serviço | Finalidade | Dados |
 |---|---|---|
-| Supabase (infraestrutura Amazon Web Services, região São Paulo) | Banco de dados, login e cópias de segurança | Todos os dados do item 2 |
+| Supabase (infraestrutura Amazon Web Services, região us-west-2, Oregon, Estados Unidos) | Banco de dados e login | Todos os dados do item 2 |
 | Vercel | Entrega das telas do site | Nenhum dado de aluno é armazenado |
 | Google (Gemini) | Geração de questões | Apenas material pedagógico enviado pelo professor; nunca dados de alunos. Pode processar fora do Brasil |
+
+5.2. **Transferência internacional.** O banco de dados fica nos Estados Unidos. A ESCOLA autoriza essa transferência, que se apoia nas garantias contratuais de proteção de dados do provedor (LGPD, art. 33). O OPERADOR se compromete a manter os dados apenas nos provedores acima e a avisar a ESCOLA se a localização mudar. [Advogado: conferir o enquadramento no art. 33 e na Resolução CD/ANPD nº 19/2024.]
+
+5.3. As cópias de segurança são feitas pelo OPERADOR (exportação do banco pela ferramenta DBeaver) e guardadas com acesso restrito e criptografia.
 
 ## 6. Guarda e eliminação
 6.1. Os dados ficam guardados enquanto vigorar o contrato de uso.
 6.2. A pedido do titular ou responsável, a ESCOLA pode apagar a qualquer momento os dados de um aluno, de forma definitiva, pela função própria do sistema.
-6.3. No fim do contrato, o OPERADOR entrega à ESCOLA, se ela pedir, uma cópia dos dados em formato legível por máquina e elimina todos os dados em até 30 dias, inclusive as cópias de segurança ao fim do ciclo de substituição delas, salvo obrigação legal de guarda.
+6.3. No fim do contrato, o OPERADOR entrega à ESCOLA, se ela pedir, uma cópia dos dados em formato legível por máquina e elimina todos os dados em até 30 dias, inclusive as cópias de segurança, salvo obrigação legal de guarda.
 
 ## 7. Responsabilidade
 7.1. Cada parte responde pelos danos a que der causa por descumprir a LGPD ou este acordo, nos termos dos arts. 42 a 45 da LGPD.
