@@ -84,7 +84,7 @@ test.describe('Supabase — Gestão', () => {
       await modal.getByLabel('Nome da Turma').fill(nomeTurma);
       await modal.getByLabel('Série / Ano').fill('9º Ano');
       await modal.locator('select').selectOption('fund2');
-      codigoTurma = (await modal.getByPlaceholder('Ex: 7A-KRT').inputValue()).trim().toUpperCase();
+      codigoTurma = (await modal.getByPlaceholder('Ex: 7A-K3MQ-9XT2').inputValue()).trim().toUpperCase();
       expect(codigoTurma).toBeTruthy();
       await modal.getByRole('button', { name: 'Salvar Turma' }).click();
       await expect(page.getByText('Turma cadastrada com sucesso!')).toBeVisible();

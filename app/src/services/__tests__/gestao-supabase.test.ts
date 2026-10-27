@@ -405,11 +405,11 @@ describe('GestaoService Supabase (Fase 5.1)', () => {
       expect(resultado.papel).toBe('professor');
     });
 
-    it('redefinirSenhaProfessor valida tamanho mínimo de 6 caracteres', async () => {
+    it('redefinirSenhaProfessor valida tamanho mínimo de 8 caracteres', async () => {
       const { cliente } = criarClienteSimulado();
       const service = new SupabaseGestaoService(cliente);
-      await expect(service.redefinirSenhaProfessor('prof-1', '12345')).rejects.toThrow(
-        'A nova senha deve ter pelo menos 6 caracteres.'
+      await expect(service.redefinirSenhaProfessor('prof-1', '1234567')).rejects.toThrow(
+        'A nova senha deve ter pelo menos 8 caracteres.'
       );
     });
 

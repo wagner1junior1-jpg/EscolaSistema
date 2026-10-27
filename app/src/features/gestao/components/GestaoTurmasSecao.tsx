@@ -33,8 +33,23 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-const CONSOANTES = 'BCDFGHJKLMNPQRSTVWXYZ';
+// Sem letras e números que se confundem (0/O, 1/I/L).
+const ALFABETO_CODIGO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const TAMANHO_ALEATORIO = 8;
 
+/** Parte aleatória do código: 8 caracteres de 31 (~10^12 combinações), sem viés de módulo. */
+function caracteresAleatorios(qtd: number): string {
+  const limite = 256 - (256 % ALFABETO_CODIGO.length);
+  let saida = '';
+  while (saida.length < qtd) {
+    for (const b of crypto.getRandomValues(new Uint8Array(qtd * 2))) {
+      if (b < limite && saida.length < qtd) saida += ALFABETO_CODIGO[b % ALFABETO_CODIGO.length];
+    }
+  }
+  return saida;
+}
+
+/** Sugestão de código: série + letra da turma (ex.: 7A) + 8 caracteres aleatórios em dois blocos. */
 export function gerarCodigoAcessoSugerido(serie: string = '', nome: string = ''): string {
   const numMatch = serie.match(/\d+/) || nome.match(/\d+/);
   const num = numMatch ? numMatch[0] : '';
@@ -45,11 +60,16 @@ export function gerarCodigoAcessoSugerido(serie: string = '', nome: string = '')
     : (nome.match(/[A-Za-z]/)?.[0]?.toUpperCase() || 'A');
 
   const prefixo = `${num}${letter}` || 'TUR';
-  let rand = '';
-  for (let i = 0; i < 3; i++) {
-    rand += CONSOANTES.charAt(Math.floor(Math.random() * CONSOANTES.length));
-  }
-  return `${prefixo}-${rand}`.toUpperCase();
+  const rand = caracteresAleatorios(TAMANHO_ALEATORIO);
+  return `${prefixo}-${rand.slice(0, 4)}-${rand.slice(4)}`.toUpperCase();
+}
+
+/**
+ * Código difícil de adivinhar: pelo menos 10 letras/números (o sugerido tem 2 do prefixo + 8
+ * aleatórios). Quem acerta o código vê os nomes dos alunos da turma.
+ */
+export function codigoAcessoForte(codigo: string): boolean {
+  return codigo.toUpperCase().replace(/[^A-Z0-9]/g, '').length >= 10;
 }
 
 export const GestaoTurmasSecao: React.FC = () => {
@@ -171,6 +191,17 @@ export const GestaoTurmasSecao: React.FC = () => {
     e.preventDefault();
     if (!formNome.trim() || !formSerie.trim() || !formCodigoAcesso.trim()) {
       setErroFormTurma('Preencha todos os campos obrigatórios.');
+      return;
+    }
+    // Turmas antigas com código curto continuam editáveis; só o código novo ou alterado é conferido.
+    const codigoOriginal = editandoTurmaId
+      ? turmas.find((t) => t.id === editandoTurmaId)?.codigo_acesso
+      : undefined;
+    const codigoNovo = formCodigoAcesso.trim().toUpperCase();
+    if (codigoNovo !== codigoOriginal && !codigoAcessoForte(codigoNovo)) {
+      setErroFormTurma(
+        'O código de acesso precisa ter pelo menos 10 letras ou números. Use "Sugerir novo" para gerar um código seguro.'
+      );
       return;
     }
 
@@ -585,13 +616,14 @@ export const GestaoTurmasSecao: React.FC = () => {
             <Input
               value={formCodigoAcesso}
               onChange={(e) => setFormCodigoAcesso(e.target.value.toUpperCase())}
-              placeholder="Ex: 7A-KRT"
+              placeholder="Ex: 7A-K3MQ-9XT2"
               required
               disabled={salvandoTurma}
               className="font-mono uppercase font-bold tracking-wider"
             />
             <p className="text-[11px] text-slate-500 mt-1">
-              Sugestão automática: série + letra + 3 consoantes. Os alunos usarão este código para entrar.
+              Sugestão automática: série + letra + 8 caracteres aleatórios. Os alunos usarão este código
+              para entrar (os hífens são opcionais). Compartilhe só com a turma.
             </p>
           </div>
 

@@ -49,6 +49,7 @@ import { ModalObservacaoAluno } from '../components/ModalObservacaoAluno';
 import { ModalNovaAtividadeRapida } from '../components/ModalNovaAtividadeRapida';
 import { ModalGeradorIA } from '../components/ModalGeradorIA';
 import { TabelaAlunosSerie } from '../components/TabelaAlunosSerie';
+import { AvisoPinsBloqueados } from '@/components/common/AvisoPinsBloqueados';
 
 export const ProfessorDashboardPage: React.FC = () => {
   const { usuario } = useAuth();
@@ -349,6 +350,8 @@ export const ProfessorDashboardPage: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        <AvisoPinsBloqueados orientacao="Peça à secretaria ou à coordenação um PIN novo para esses alunos (Gestão > Alunos e PINs)." />
 
         {/* =========================================================================
             2. FAIXA DE KPIS DOCENTES (4 Cards de Estatísticas Consolidadas)

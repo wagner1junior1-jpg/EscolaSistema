@@ -25,6 +25,8 @@ interface Cenario {
   assunto?: { id: string; nome: string } | null;
   usoMes?: number;
   limiteMes?: number;
+  /** Gerações + transcrições da pessoa nos últimos 10 minutos (limite de ritmo). */
+  chamadasRecentes?: number;
 }
 
 function carregarFuncao(cenario: Cenario = {}) {
@@ -53,6 +55,7 @@ function carregarFuncao(cenario: Cenario = {}) {
   const filtros: Array<[string, string, unknown]> = [];
 
   const tabela = (nome: string) => {
+    const camposDaConsulta: string[] = [];
     const dados = () => {
       if (nome === 'perfis') return perfil;
       if (nome === 'disciplinas') return disciplina;
@@ -64,6 +67,11 @@ function carregarFuncao(cenario: Cenario = {}) {
       select: () => q,
       eq: (campo: string, valor: unknown) => {
         filtros.push([nome, campo, valor]);
+        camposDaConsulta.push(campo);
+        return q;
+      },
+      or: (expressao: string) => {
+        filtros.push([nome, 'or', expressao]);
         return q;
       },
       is: () => q,
@@ -73,9 +81,14 @@ function carregarFuncao(cenario: Cenario = {}) {
         registros.push(linha);
         return { error: null };
       },
-      // `await` direto na consulta de contagem de ia_geracoes
+      // `await` direto na consulta de contagem de ia_geracoes: por pessoa (ritmo) ou por escola (cota)
       then: (resolver: (v: unknown) => void) =>
-        resolver({ count: cenario.usoMes ?? 0, error: null }),
+        resolver({
+          count: camposDaConsulta.includes('professor_id')
+            ? (cenario.chamadasRecentes ?? 0)
+            : (cenario.usoMes ?? 0),
+          error: null,
+        }),
     };
     return q;
   };
@@ -442,5 +455,55 @@ describe('gerar-questoes: transcrever', () => {
   it('sem fotos → 400', async () => {
     const { handler } = carregarFuncao();
     expect((await handler(pedido({ acao: 'transcrever', fotos: [] }))).status).toBe(400);
+  });
+
+  it('grava a transcrição em ia_geracoes sem pedir questões (fica fora da cota)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respostaGemini('Texto')));
+    const { handler, registros } = carregarFuncao();
+    await handler(pedido({ acao: 'transcrever', fotos: ['data:image/png;base64,QUJD', 'data:image/png;base64,QUJD'] }));
+    expect(registros).toEqual([
+      expect.objectContaining({ professor_id: 'prof-1', escola_id: ESCOLA, qtd_fotos: 2, qtd_objetivas: 0, qtd_discursivas: 0, status: 'ok' }),
+    ]);
+  });
+
+  it('transcrição que falha também fica registrada, como erro', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('fora do ar', { status: 503 })));
+    const { handler, registros } = carregarFuncao();
+    const r = await handler(pedido({ acao: 'transcrever', fotos: ['data:image/png;base64,QUJD'] }));
+    expect(r.status).toBe(502);
+    expect(registros).toEqual([expect.objectContaining({ status: 'erro', qtd_objetivas: 0, qtd_discursivas: 0 })]);
+  });
+});
+
+describe('gerar-questoes: limite de ritmo (8.1)', () => {
+  it.each(['gerar', 'transcrever'])('%s: 20 pedidos em 10 minutos → 429, sem chamar o Gemini', async (acao) => {
+    const fetchFalso = vi.fn();
+    vi.stubGlobal('fetch', fetchFalso);
+    const { handler, registros, filtros } = carregarFuncao({ chamadasRecentes: 20 });
+    const corpo = acao === 'gerar' ? pedidoGerar() : { acao, fotos: ['data:image/png;base64,QUJD'] };
+    const r = await handler(pedido(corpo));
+    expect(r.status).toBe(429);
+    expect((await r.json()).erro).toContain('Muitos pedidos');
+    expect(fetchFalso).not.toHaveBeenCalled();
+    expect(registros).toHaveLength(0);
+    // conta por pessoa (o id vem do perfil do chamador, não do corpo)
+    expect(filtros).toContainEqual(['ia_geracoes', 'professor_id', 'prof-1']);
+  });
+
+  it('abaixo do limite segue normal, mesmo com a cota da escola alta', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respostaGemini('Texto')));
+    const { handler } = carregarFuncao({ chamadasRecentes: 19, usoMes: 500 });
+    expect((await handler(pedido({ acao: 'transcrever', fotos: ['data:image/png;base64,QUJD'] }))).status).toBe(200);
+  });
+
+  it('a cota mensal ignora as transcrições (só conta pedidos com questões)', async () => {
+    const { handler, filtros } = carregarFuncao({ env: { IA_COTA_ATIVA: 'true' }, usoMes: 3 });
+    await handler(pedido({ acao: 'cota' }));
+    expect(filtros).toContainEqual(['ia_geracoes', 'or', 'qtd_objetivas.gt.0,qtd_discursivas.gt.0']);
+  });
+
+  it('a ação cota não passa pelo limite de ritmo', async () => {
+    const { handler } = carregarFuncao({ chamadasRecentes: 99 });
+    expect((await handler(pedido({ acao: 'cota' }))).status).toBe(200);
   });
 });

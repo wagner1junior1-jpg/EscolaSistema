@@ -70,10 +70,13 @@ export class MockAlunoService implements AlunoService {
   async listarTurma(codigo: string): Promise<AlunoResumido[]> {
     const db = await getDatabase();
     const codigoUpper = codigo.trim().toUpperCase();
+    // Hífen e espaço não contam (o aluno pode digitar "7AK3MQ9XT2" para "7A-K3MQ-9XT2").
+    const normalizar = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const codigoNormalizado = normalizar(codigo);
 
-    const turma = db.turmas.find(
-      (t) => t.codigo_acesso.toUpperCase() === codigoUpper && t.ativa
-    );
+    const turma = codigoNormalizado
+      ? db.turmas.find((t) => normalizar(t.codigo_acesso) === codigoNormalizado && t.ativa)
+      : undefined;
 
     if (!turma) {
       throw new Error(`Turma com código "${codigoUpper}" não encontrada.`);
@@ -754,6 +757,14 @@ export class MockAlunoService implements AlunoService {
           (a.turma_id === null || a.turma_id === aluno.turma_id)
       )
       .sort((a, b) => new Date(b.publicado_em).getTime() - new Date(a.publicado_em).getTime());
+  }
+
+  async sair(token: string): Promise<void> {
+    const db = await getDatabase();
+    const tokenHash = await hashToken(token);
+    const antes = db.aluno_sessoes.length;
+    db.aluno_sessoes = db.aluno_sessoes.filter((s) => s.token_hash !== tokenHash);
+    if (db.aluno_sessoes.length !== antes) saveDatabase(db);
   }
 
   async responderDiscursiva(

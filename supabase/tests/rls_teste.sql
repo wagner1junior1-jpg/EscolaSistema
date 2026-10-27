@@ -1,7 +1,7 @@
 -- =============================================================================
 -- SABERPONTUAL — TESTES DE RLS (Fase 2.5)
 --
--- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 e 0004.
+-- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 a 0009.
 -- Cola tudo e executa de uma vez. O script cria funções de teste (schema zz_teste),
 -- roda, e a função SE DESFAZ sozinha: ela cria dados fictícios, simula cada
 -- usuário, confere o que cada um enxerga/altera e, no fim, lança um erro de
@@ -151,8 +151,8 @@ BEGIN
   PERFORM zz_teste.confere('prof A não vê a turma B', zz_teste.como(v_pa, format('select * from public.turmas where id = %L', v_tb)), 0);
   PERFORM zz_teste.confere('prof A não altera atividade da turma B',
     zz_teste.como(v_pa, format('update public.atividades set titulo = ''hack'' where id = %L', v_at_b)), 0);
-  PERFORM zz_teste.confere('prof A não apaga atividade da turma B',
-    zz_teste.como(v_pa, format('delete from public.atividades where id = %L', v_at_b)), 0);
+  PERFORM zz_teste.confere('prof A não apaga atividade da turma B (sem DELETE físico desde a 0009)',
+    zz_teste.como(v_pa, format('delete from public.atividades where id = %L', v_at_b)), -1);
   PERFORM zz_teste.confere('prof A não cria atividade na oferta da turma B',
     zz_teste.como(v_pa, format('insert into public.atividades (oferta_id, periodo_id, titulo, criado_por) values (%L, %L, ''x'', %L)', v_of_b, v_per_x, v_pa)), -1);
   PERFORM zz_teste.confere('prof A cria atividade na própria oferta',
@@ -298,6 +298,72 @@ BEGIN
   UPDATE public.perfis SET ativo = false WHERE id = v_pb;
   PERFORM zz_teste.confere('professor inativo não chama professor_painel_dados',
     zz_teste.como(v_pb, 'select 1 from (select public.professor_painel_dados() j) s where j is not null'), -1);
+
+  -- ---------- 12. Revisão de segurança (migration 0009) ----------
+  UPDATE public.perfis SET ativo = true WHERE id = v_pb;
+  INSERT INTO public.assuntos (id, escola_id, disciplina_id, nome)
+    VALUES ('00000000-0000-0000-0000-0000000a5501', v_ex, v_disc_x, 'Frações');
+  INSERT INTO public.banco_questoes (id, escola_id, disciplina_id, assunto_id, criado_por, serie, enunciado)
+    VALUES ('00000000-0000-0000-0000-0000000b5501', v_ex, v_disc_x, '00000000-0000-0000-0000-0000000a5501', v_pb, '7', 'Q do B');
+
+  -- M1: sem DELETE físico nas tabelas com exclusão lógica
+  PERFORM zz_teste.confere('prof A não apaga assunto (a cascata levaria o banco do prof B)',
+    zz_teste.como(v_pa, 'delete from public.assuntos where id = ''00000000-0000-0000-0000-0000000a5501'''), -1);
+  PERFORM zz_teste.confere('a questão do banco do prof B continua lá',
+    (SELECT count(*) FROM public.banco_questoes WHERE id = '00000000-0000-0000-0000-0000000b5501'), 1);
+  PERFORM zz_teste.confere('prof A ainda exclui assunto pela exclusão lógica',
+    zz_teste.como(v_pa, 'update public.assuntos set deleted_at = now() where id = ''00000000-0000-0000-0000-0000000a5501'''), 1);
+  FOREACH t IN ARRAY ARRAY['periodos','disciplinas','turmas','ofertas','alunos','atividades','avisos','aluno_observacoes']
+  LOOP
+    PERFORM zz_teste.confere('direção não apaga fisicamente ' || t,
+      zz_teste.como(v_dx, 'delete from public.' || t), -1);
+  END LOOP;
+  INSERT INTO public.questoes (id, atividade_id, ordem, enunciado)
+    VALUES ('00000000-0000-0000-0000-00000009a002', v_at_a, 2, 'apagar?');
+  PERFORM zz_teste.confere('prof A ainda apaga questão da própria atividade (o app usa)',
+    zz_teste.como(v_pa, 'delete from public.questoes where id = ''00000000-0000-0000-0000-00000009a002'''), 1);
+
+  -- M2: recado da turma não vira aviso da escola pelo UPDATE
+  INSERT INTO public.avisos (id, escola_id, autor_id, turma_id, titulo, mensagem)
+    VALUES ('00000000-0000-0000-0000-0000000a7501', v_ex, v_pa, v_ta, 'Recado', 'm');
+  PERFORM zz_teste.confere('prof A não transforma o recado em aviso da escola toda',
+    zz_teste.como(v_pa, 'update public.avisos set turma_id = null where id = ''00000000-0000-0000-0000-0000000a7501'''), -1);
+  PERFORM zz_teste.confere('prof A não move o recado para a turma B',
+    zz_teste.como(v_pa, format('update public.avisos set turma_id = %L where id = ''00000000-0000-0000-0000-0000000a7501''', v_tb)), -1);
+  PERFORM zz_teste.confere('prof A ainda edita o texto do próprio recado',
+    zz_teste.como(v_pa, 'update public.avisos set titulo = ''Recado novo'' where id = ''00000000-0000-0000-0000-0000000a7501'''), 1);
+  PERFORM zz_teste.confere('direção pode tornar o aviso da escola toda',
+    zz_teste.como(v_dx, 'update public.avisos set turma_id = null where id = ''00000000-0000-0000-0000-0000000a7501'''), 1);
+
+  -- M3: cota de IA só pela service role
+  PERFORM zz_teste.confere('direção não altera a cota de IA',
+    zz_teste.como(v_dx, format('update public.escolas set cota_ia_mensal = 9999 where id = %L', v_ex)), -1);
+  PERFORM zz_teste.confere('direção ainda altera os limites de desempenho',
+    zz_teste.como(v_dx, format('update public.escolas set limite_bom = 55 where id = %L', v_ex)), 1);
+
+  -- A2: tabela da pausa por turma fechada; lista de PINs bloqueados por papel
+  PERFORM zz_teste.confere('anon não lê turma_login_erros', zz_teste.como(NULL, 'select * from public.turma_login_erros'), -1);
+  PERFORM zz_teste.confere('direção não lê turma_login_erros', zz_teste.como(v_dx, 'select * from public.turma_login_erros'), -1);
+  INSERT INTO public.pin_tentativas (aluno_id, tentativas, travado_em) VALUES (v_aluno_a, 5, now());
+  INSERT INTO public.pin_tentativas (aluno_id, tentativas, bloqueado_ate) VALUES (v_aluno_b, 5, now() + interval '10 minutes');
+  INSERT INTO public.pin_tentativas (aluno_id, tentativas, travado_em) VALUES (v_aluno_y, 5, now());
+  PERFORM zz_teste.confere('anon não chama alunos_pin_bloqueado',
+    zz_teste.como(NULL, 'select e from jsonb_array_elements(public.alunos_pin_bloqueado()) e'), -1);
+  PERFORM zz_teste.confere('prof A vê só o bloqueado da sua turma',
+    zz_teste.como(v_pa, 'select e from jsonb_array_elements(public.alunos_pin_bloqueado()) e'), 1);
+  PERFORM zz_teste.confere('prof A: Aluno A travado até a equipe agir',
+    zz_teste.como(v_pa, 'select 1 from (select public.alunos_pin_bloqueado() j) s where j->0->>''nome_completo'' = ''Aluno A'' and j->0->>''motivo'' = ''equipe'' and j->0->''bloqueado_ate'' = ''null''::jsonb'), 1);
+  PERFORM zz_teste.confere('prof B vê o bloqueio temporário da turma B',
+    zz_teste.como(v_pb, 'select 1 from (select public.alunos_pin_bloqueado() j) s where jsonb_array_length(j) = 1 and j->0->>''motivo'' = ''temporario'' and j->0->>''bloqueado_ate'' is not null'), 1);
+  PERFORM zz_teste.confere('direção X vê os 2 da escola X',
+    zz_teste.como(v_dx, 'select e from jsonb_array_elements(public.alunos_pin_bloqueado()) e'), 2);
+  PERFORM zz_teste.confere('direção Y vê só o da escola Y',
+    zz_teste.como(v_dy, 'select 1 from (select public.alunos_pin_bloqueado() j) s where jsonb_array_length(j) = 1 and j->0->>''nome_completo'' = ''Aluno Y'''), 1);
+  PERFORM zz_teste.confere('a lista não leva hash de PIN',
+    zz_teste.como(v_dx, 'select 1 from (select public.alunos_pin_bloqueado()::text t) s where t not like ''%hash%'''), 1);
+  UPDATE public.pin_tentativas SET bloqueado_ate = now() - interval '1 minute' WHERE aluno_id = v_aluno_b;
+  PERFORM zz_teste.confere('bloqueio vencido sai da lista',
+    zz_teste.como(v_dx, 'select e from jsonb_array_elements(public.alunos_pin_bloqueado()) e'), 1);
 
   -- Erro de propósito: desfaz TODAS as inserções acima (nada fica gravado).
   RAISE EXCEPTION 'TODOS OS TESTES DE RLS PASSARAM';

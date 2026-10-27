@@ -21,6 +21,7 @@ import {
   AlunoPublico,
   Aviso,
   PrioridadeAviso,
+  PinBloqueado,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { hashPin, gerarPin4Digitos } from './crypto';
@@ -436,9 +437,58 @@ export class MockGestaoService implements GestaoService {
     }
 
     aluno.pin_hash = await hashPin(pinPuro);
+    // PIN novo destrava: o login só conta os erros depois do último sucesso (como no Supabase,
+    // onde definir_pin_aluno zera os contadores).
+    const agora = new Date().toISOString();
+    db.pin_tentativas.push({
+      id: gerarId('tent'),
+      created_at: agora,
+      aluno_id: alunoId,
+      tentativa_em: agora,
+      sucesso: true,
+    });
 
     saveDatabase(db);
     return { pin_puro: pinPuro };
+  }
+
+  async listarPinsBloqueados(): Promise<PinBloqueado[]> {
+    // O mock só tem o bloqueio de 15 minutos (5 erros); o travamento diário existe só no Supabase.
+    const usuario = await exigirUsuario(['direcao', 'coordenacao', 'professor']);
+    const db = await getDatabase();
+    const agoraMs = Date.now();
+    const janelaMs = 15 * 60 * 1000;
+    const turmasDoProfessor = new Set(
+      db.ofertas.filter((o) => o.professor_id === usuario.id).map((o) => o.turma_id)
+    );
+
+    const lista: PinBloqueado[] = [];
+    for (const aluno of db.alunos) {
+      if (!aluno.ativo || aluno.escola_id !== usuario.escola_id) continue;
+      if (usuario.papel === 'professor' && !turmasDoProfessor.has(aluno.turma_id)) continue;
+      const doAluno = db.pin_tentativas.filter((t) => t.aluno_id === aluno.id);
+      const ultimoSucesso = doAluno.reduce((idx, t, i) => (t.sucesso ? i : idx), -1);
+      const errosRecentes = doAluno
+        .filter((t, i) => !t.sucesso && i > ultimoSucesso)
+        .map((t) => new Date(t.tentativa_em).getTime())
+        .filter((ms) => ms >= agoraMs - janelaMs)
+        .sort((a, b) => b - a);
+      if (errosRecentes.length < 5) continue;
+      const turma = db.turmas.find((t) => t.id === aluno.turma_id);
+      lista.push({
+        aluno_id: aluno.id,
+        nome_completo: aluno.nome_completo,
+        numero_chamada: aluno.numero_chamada,
+        turma_id: aluno.turma_id,
+        turma_nome: turma?.nome ?? '',
+        motivo: 'temporario',
+        // Desbloqueia quando o 5º erro mais recente sai da janela de 15 minutos.
+        bloqueado_ate: new Date(errosRecentes[4] + janelaMs).toISOString(),
+      });
+    }
+    return lista.sort(
+      (a, b) => a.turma_nome.localeCompare(b.turma_nome) || a.numero_chamada - b.numero_chamada
+    );
   }
 
   async listarAvisosEscola(): Promise<Aviso[]> {

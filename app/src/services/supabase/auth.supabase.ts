@@ -10,6 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { AuthService } from '../contracts';
 import { Perfil } from '@/lib/types';
 import { supabase as clientePadrao } from '@/lib/supabase';
+import { SENHA_MINIMA_EQUIPE } from '@/lib/senha';
 
 const COLUNAS_PERFIL = 'id, created_at, escola_id, nome, papel, ativo, email, trocar_senha';
 
@@ -22,7 +23,7 @@ export function traduzirErroAuth(mensagem: string | undefined, padrao: string): 
   }
   if (m.includes('should be different')) return 'A nova senha não pode ser igual à senha atual.';
   if (m.includes('at least') && m.includes('characters')) {
-    return 'A nova senha deve ter no mínimo 6 caracteres.';
+    return `A nova senha deve ter no mínimo ${SENHA_MINIMA_EQUIPE} caracteres.`;
   }
   if (m.includes('failed to fetch') || m.includes('network')) {
     return 'Sem conexão com o servidor. Verifique a internet e tente novamente.';
@@ -89,8 +90,8 @@ export class SupabaseAuthService implements AuthService {
     const usuario = await this.usuarioAtual();
     if (!usuario || !usuario.email) throw new Error('Usuário não autenticado.');
     if (!senhaAtual) throw new Error('Informe a senha atual.');
-    if (!novaSenha || novaSenha.trim().length < 6) {
-      throw new Error('A nova senha deve ter no mínimo 6 caracteres.');
+    if (!novaSenha || novaSenha.trim().length < SENHA_MINIMA_EQUIPE) {
+      throw new Error(`A nova senha deve ter no mínimo ${SENHA_MINIMA_EQUIPE} caracteres.`);
     }
     if (senhaAtual === novaSenha) {
       throw new Error('A nova senha não pode ser igual à senha atual.');

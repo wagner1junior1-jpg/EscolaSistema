@@ -5,11 +5,12 @@ import { z } from 'zod';
 import { useAuth } from '../AuthProvider';
 import { Modal, Input, Button, useToast } from '@/components/ui';
 import { KeyRound, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { SENHA_MINIMA_EQUIPE } from '@/lib/senha';
 
 const alterarSenhaSchema = z
   .object({
     senhaAtual: z.string().min(1, 'Informe sua senha atual.'),
-    novaSenha: z.string().min(6, 'A nova senha deve ter no mínimo 6 caracteres.'),
+    novaSenha: z.string().min(SENHA_MINIMA_EQUIPE, `A nova senha deve ter no mínimo ${SENHA_MINIMA_EQUIPE} caracteres.`),
     confirmarSenha: z.string().min(1, 'Confirme a nova senha.'),
   })
   .refine((data) => data.novaSenha === data.confirmarSenha, {
@@ -140,8 +141,8 @@ export const ModalAlterarSenha: React.FC<ModalAlterarSenhaProps> = ({
           <Input
             label="Nova senha"
             type={mostrarNovaSenha ? 'text' : 'password'}
-            placeholder="Mínimo de 6 caracteres"
-            helperText="A nova senha deve ter no mínimo 6 caracteres e ser diferente da atual."
+            placeholder={`Mínimo de ${SENHA_MINIMA_EQUIPE} caracteres`}
+            helperText={`A nova senha deve ter no mínimo ${SENHA_MINIMA_EQUIPE} caracteres e ser diferente da atual.`}
             leftIcon={<KeyRound className="w-4 h-4" />}
             rightIcon={
               <button

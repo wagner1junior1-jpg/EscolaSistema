@@ -54,7 +54,7 @@ test.describe('Portal de Gestão', () => {
       await modalTurma.locator('select').selectOption('fund2');
 
       // Anota o código gerado
-      codigoTurma = (await modalTurma.getByPlaceholder('Ex: 7A-KRT').inputValue()).trim().toUpperCase();
+      codigoTurma = (await modalTurma.getByPlaceholder('Ex: 7A-K3MQ-9XT2').inputValue()).trim().toUpperCase();
       expect(codigoTurma).toBeTruthy();
 
       // Salva a turma

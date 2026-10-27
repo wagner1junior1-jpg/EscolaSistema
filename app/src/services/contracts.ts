@@ -49,6 +49,7 @@ import {
   AlunoObservacao,
   DesempenhoAlunoMateriaItem,
   AlunoComDesempenhoResumo,
+  PinBloqueado,
 } from '@/lib/types';
 
 export type {
@@ -172,6 +173,8 @@ export interface GestaoService {
   cadastrarAlunosEmLote(turmaId: string, nomes: string[]): Promise<Array<{ aluno: AlunoPublico; pin_puro: string }>>;
   atualizarAluno(id: string, dados: { nome_completo?: string; numero_chamada?: number; ativo?: boolean }): Promise<AlunoPublico>;
   gerarOuResetarPin(alunoId: string, novoPin?: string): Promise<{ pin_puro: string }>;
+  /** Alunos com PIN bloqueado. Gestão: a escola toda; professor: só as suas turmas. */
+  listarPinsBloqueados(): Promise<PinBloqueado[]>;
   listarAvisosEscola(): Promise<Aviso[]>;
   criarAvisoEscola(dados: { titulo: string; mensagem: string; prioridade: PrioridadeAviso }): Promise<Aviso>;
   excluirAvisoEscola(id: string): Promise<void>;
@@ -240,6 +243,8 @@ export interface AlunoService {
   resultadoProva(token: string, atividadeId: string): Promise<ResultadoProva>;
   meuDesempenho(token: string): Promise<MeuDesempenhoAluno>;
   avisos(token: string): Promise<Aviso[]>;
+  /** Encerra a sessão no servidor (o token deixa de valer). */
+  sair(token: string): Promise<void>;
 }
 
 // 5. RelatorioService (Coordenação e Direção)

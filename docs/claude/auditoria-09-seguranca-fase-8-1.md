@@ -62,5 +62,21 @@ Correção: registrar em `ia_geracoes` e/ou limitar por minuto por usuário.
 3. Edge Function [CLAUDE]: limite do `transcrever` (M4), senha mínima 8 (M5). O Wagner republica pelo painel.
 4. Painel do Supabase [WAGNER]: senha mínima 8 e proteção contra senha vazada (M5); apagar `VITE_GEMINI_API_KEY` do .env (B6).
 
+## Correções feitas (27/10/2026, com OK do Wagner: "faça conforme suas recomendações")
+- **Migration `0009_seguranca_fase8.sql`**: M1 (REVOKE DELETE nas 9 tabelas com exclusão lógica), M2 (avisos_update repete a regra do insert), M3 (UPDATE de escolas só em nome, cidade_uf, ano_letivo_atual, limite_otimo, limite_bom), A1 (código comparado sem hífen/espaço; código que vale para 2 turmas não lista ninguém), A2 (5 erros em 15 min = 15 min; 10 erros em 24 h = travado até a equipe criar PIN novo; erros na turma em 1 h ≥ maior entre 20 e o nº de alunos = turma pausada 15 min, sem conferir PIN; RPC `alunos_pin_bloqueado()`), B4 (search_path das duas funções = só o schema do pgcrypto + pg_temp).
+- **Testes SQL**: `rls_teste.sql` seção 12 e `aluno_rpc_teste.sql` seção 15. Rodados num Postgres local (PGlite, fora do repositório) com 0003 a 0009: as duas suítes passam; 8 quebras deliberadas (DELETE de volta, policy antiga de avisos, cota liberada, sem travamento, sem pausa, lista sem filtro de professor, código sem normalizar, PIN novo sem destravar) foram todas detectadas.
+- **Front**: código sugerido `7A-XXXX-XXXX` (8 caracteres aleatórios por `crypto.getRandomValues`, sem 0/O/1/I/L); código novo ou alterado precisa de 10+ letras/números (turmas antigas continuam editáveis); `AlunoService.sair` (mock remove a sessão; Supabase chama `aluno_sair`) usado no "Sair"; `GestaoService.listarPinsBloqueados` + aviso `AvisoPinsBloqueados` em Gestão > Alunos e PINs (com selo "PIN bloqueado" no aluno) e no painel do professor; PIN novo no mock também destrava; mock aceita o código sem hífen; senha mínima 8 (`lib/senha.ts`) nas telas e nos serviços Supabase; cabeçalhos de segurança no `vercel.json` (frame-ancestors/X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy; sem CSP de scripts para não quebrar sem teste no navegador).
+- **Edge Functions**: `admin-usuarios` senha mínima 8; `gerar-questoes` com limite de 20 pedidos (gerar + transcrever) por pessoa a cada 10 min, transcrição gravada em `ia_geracoes` (com 0 questões, fora da cota). Não dependem da 0009.
+- **Script** `bootstrap-direcao.ts`: senha mínima 8.
+- Testes: `seguranca-fase8.test.ts` (13) e +6 em `gerar-questoes-funcao.test.ts`; 577 testes, build OK. E2E não rodado (só o seletor do campo de código mudou nos dois `gestao.spec.ts`).
+- **Não feito**: B1 (tirar o mock do bundle) exige refatorar ~10 arquivos que importam o mock; adiado por ser achado leve, sem segredo real. B2, B5 ficam para a produção. Nomes na tela de entrada do aluno: mantido o nome completo (com o código forte, só quem recebeu o código vê a lista).
+
+## Falta o Wagner
+1. SQL Editor do Supabase de TESTE: rodar a `0009`, depois `rls_teste.sql` e `aluno_rpc_teste.sql` (esperado: "TODOS OS TESTES ... PASSARAM" nas duas).
+2. Republicar as Edge Functions `admin-usuarios` (apelido `swift-processor`) e `gerar-questoes` colando os `index.ts` novos (Verify JWT ligado).
+3. Authentication > Providers > Email: "Minimum password length" = 8; ligar "Leaked password protection" se o plano permitir.
+4. Apagar a linha `VITE_GEMINI_API_KEY` do `app/.env`.
+5. Turmas antigas do seed seguem com código curto (ex.: `7A-MAT`); na produção todas nascem com o código novo. Para trocar uma turma existente: Gestão > Turmas > Editar > "Sugerir novo".
+
 ## Para a produção (8.4), lembrar
 Projeto novo (chaves novas, então a anon key de teste deixa de importar), `VITE_MODO_TESTE=false`, `IA_COTA_ATIVA=true`, cadastro aberto desligado, Verify JWT ligado nas duas funções, CORS restrito ao domínio, rodar as suítes `rls_teste.sql` e `aluno_rpc_teste.sql` lá antes de qualquer dado real.

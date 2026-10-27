@@ -18,6 +18,10 @@
 // Cota mensal por escola (escolas.cota_ia_mensal, contando ia_geracoes com status 'ok' no mês
 // de São Paulo): SÓ vale com o segredo IA_COTA_ATIVA=true. Sem ele a IA fica sem limite
 // (decisão do Wagner até a produção). Cada geração (ok ou erro) é gravada em ia_geracoes.
+// A transcrição também é gravada (com qtd_objetivas = qtd_discursivas = 0) mas não conta na cota.
+//
+// Limite de ritmo (Fase 8.1, sempre ligado): no máximo LIMITE_CHAMADAS gerações + transcrições
+// por pessoa a cada 10 minutos, para ninguém gerar custo sem limite no Gemini.
 //
 // Segredos (painel > Edge Functions > Secrets): GEMINI_API_KEY (obrigatório) e
 // IA_COTA_ATIVA (opcional). SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY já são injetados.
@@ -303,6 +307,8 @@ const MAX_CHARS_TEXTO = 20_000;
 const TAMANHO_LOTE = 5;
 const TIMEOUT_CHAMADA_MS = 30_000;
 const PRAZO_TOTAL_MS = 120_000; // a função tem teto de tempo; passado isso devolve o que já veio
+const LIMITE_CHAMADAS = 20;
+const JANELA_LIMITE_MS = 10 * 60 * 1000;
 const DIFICULDADES = ['facil', 'medio', 'dificil'];
 const MODELOS = [
   'gemini-3-flash-preview',
@@ -521,7 +527,9 @@ async function consultarCota(admin: Cliente, escolaId: string) {
     .select('id', { count: 'exact', head: true })
     .eq('escola_id', escolaId)
     .eq('status', 'ok')
-    .gte('criado_em', inicioDoMes());
+    .gte('criado_em', inicioDoMes())
+    // Transcrição não pede questões (as duas quantidades são 0) e não conta na cota.
+    .or('qtd_objetivas.gt.0,qtd_discursivas.gt.0');
   if (erroConta) throw new ErroHttp(500, 'Não foi possível consultar a cota de IA.');
   return {
     uso_mes: count ?? 0,
@@ -546,6 +554,19 @@ async function registrarGeracao(
   });
   // O registro não pode derrubar a resposta, mas a falha precisa aparecer no log.
   if (error) console.error('gerar-questoes: não gravou ia_geracoes', error.message);
+}
+
+/** Limite de ritmo por pessoa: conta gerações e transcrições (ok ou erro) dos últimos 10 minutos. */
+async function verificarRitmo(admin: Cliente, chamador: Chamador) {
+  const { count, error } = await admin
+    .from('ia_geracoes')
+    .select('id', { count: 'exact', head: true })
+    .eq('professor_id', chamador.id)
+    .gte('criado_em', new Date(Date.now() - JANELA_LIMITE_MS).toISOString());
+  if (error) throw new ErroHttp(500, 'Não foi possível consultar o uso da IA.');
+  if ((count ?? 0) >= LIMITE_CHAMADAS) {
+    throw new ErroHttp(429, 'Muitos pedidos à IA em pouco tempo. Aguarde alguns minutos e tente de novo.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -695,11 +716,17 @@ async function acaoGerar(
   };
 }
 
-async function acaoTranscrever(corpo: Record<string, unknown>, chave: string) {
+async function acaoTranscrever(
+  admin: Cliente,
+  chamador: Chamador,
+  corpo: Record<string, unknown>,
+  chave: string
+) {
   const fotos = validarFotos(corpo.fotos);
   if (fotos.length === 0) throw new ErroHttp(400, 'Envie pelo menos uma foto.');
+  let texto: string;
   try {
-    const texto = await chamarGemini(
+    texto = await chamarGemini(
       chave,
       [
         ...fotos.map((f) => ({ inlineData: f })),
@@ -710,10 +737,17 @@ async function acaoTranscrever(corpo: Record<string, unknown>, chave: string) {
       false,
       Date.now() + PRAZO_TOTAL_MS
     );
-    return { texto: texto.trim() };
-  } catch {
+  } catch (e) {
+    await registrarGeracao(admin, chamador, {
+      fotos: fotos.length,
+      objetivas: 0,
+      discursivas: 0,
+      erro: `transcrever: ${e instanceof Error ? e.message : String(e)}`,
+    });
     throw new ErroHttp(502, 'Não foi possível ler o texto da imagem agora. Tente novamente.');
   }
+  await registrarGeracao(admin, chamador, { fotos: fotos.length, objetivas: 0, discursivas: 0 });
+  return { texto: texto.trim() };
 }
 
 // ---------------------------------------------------------------------------
@@ -763,10 +797,11 @@ Deno.serve(async (req) => {
     const chaveGemini = Deno.env.get('GEMINI_API_KEY')?.trim();
     if (corpo.acao === 'gerar' || corpo.acao === 'transcrever') {
       if (!chaveGemini) throw new ErroHttp(503, 'A IA ainda não foi configurada neste ambiente.');
+      await verificarRitmo(admin, chamador);
       return resposta(
         corpo.acao === 'gerar'
           ? await acaoGerar(admin, chamador, corpo, chaveGemini)
-          : await acaoTranscrever(corpo, chaveGemini)
+          : await acaoTranscrever(admin, chamador, corpo, chaveGemini)
       );
     }
     throw new ErroHttp(400, 'Ação desconhecida.');

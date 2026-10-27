@@ -27,7 +27,8 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const SENHA_MINIMA = 6;
+// Igual a SENHA_MINIMA_EQUIPE (app/src/lib/senha.ts); a função roda fora do app e não importa de lá.
+const SENHA_MINIMA = 8;
 const ALFABETO = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const PAPEIS_CRIAVEIS = ['professor', 'coordenacao'];
 

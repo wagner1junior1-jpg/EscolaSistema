@@ -257,8 +257,16 @@ export const AlunoPainelPage: React.FC = () => {
   };
 
   const handleSair = () => {
+    const token = localStorage.getItem('saberpontual_aluno_token');
     localStorage.removeItem('saberpontual_aluno_token');
     navigate('/aluno', { replace: true });
+    if (token) {
+      // Encerra a sessão também no servidor. Se falhar (sem internet), o aluno já saiu deste
+      // aparelho e o token expira sozinho em 30 dias.
+      alunoService.sair(token).catch((erro) => {
+        console.warn('Não foi possível encerrar a sessão no servidor.', erro);
+      });
+    }
   };
 
   // Separação oficial: "Para fazer" vs "Concluídas"

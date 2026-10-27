@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { gestaoService, Perfil } from '@/services';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { SENHA_MINIMA_EQUIPE } from '@/lib/senha';
 import {
   Users,
   UserPlus,
@@ -110,8 +111,8 @@ export const GestaoProfessoresSecao: React.FC = () => {
       return;
     }
     const senhaLimpa = senha.trim();
-    if (senhaLimpa.length > 0 && senhaLimpa.length < 6) {
-      setErroForm('A senha deve ter pelo menos 6 caracteres.');
+    if (senhaLimpa.length > 0 && senhaLimpa.length < SENHA_MINIMA_EQUIPE) {
+      setErroForm(`A senha deve ter pelo menos ${SENHA_MINIMA_EQUIPE} caracteres.`);
       return;
     }
 
@@ -153,8 +154,8 @@ export const GestaoProfessoresSecao: React.FC = () => {
     e.preventDefault();
     if (!professorParaRedefinir) return;
     const senhaLimpa = novaSenha.trim();
-    if (!senhaLimpa || senhaLimpa.length < 6) {
-      setErroRedefinir('A nova senha deve ter pelo menos 6 caracteres.');
+    if (!senhaLimpa || senhaLimpa.length < SENHA_MINIMA_EQUIPE) {
+      setErroRedefinir(`A nova senha deve ter pelo menos ${SENHA_MINIMA_EQUIPE} caracteres.`);
       return;
     }
 
@@ -433,7 +434,7 @@ export const GestaoProfessoresSecao: React.FC = () => {
                 }
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Deixe em branco para usar a senha padrão (<strong>demo123</strong>) ou informe uma senha (mínimo de 6 caracteres).
+                Deixe em branco para usar a senha padrão (<strong>demo123</strong>) ou informe uma senha (mínimo de {SENHA_MINIMA_EQUIPE} caracteres).
               </p>
             </div>
 
@@ -489,7 +490,7 @@ export const GestaoProfessoresSecao: React.FC = () => {
               type={mostrarNovaSenha ? 'text' : 'password'}
               value={novaSenha}
               onChange={(e) => setNovaSenha(e.target.value)}
-              placeholder="Digite a nova senha (mínimo 6 caracteres)"
+              placeholder={`Digite a nova senha (mínimo ${SENHA_MINIMA_EQUIPE} caracteres)`}
               required
               disabled={redefinindo}
               rightIcon={

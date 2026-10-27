@@ -198,6 +198,14 @@ export class SupabaseAlunoService implements AlunoService {
       p_token: token,
     });
   }
+
+  async sair(token: string): Promise<void> {
+    // aluno_sair devolve void (data null), por isso não passa por chamarRpc.
+    const { error } = await this.cliente.rpc('aluno_sair', { p_token: token });
+    if (error) {
+      throw new Error(error.message);
+    }
+  }
 }
 
 export function criarSupabaseAlunoService(cliente?: SupabaseClient): AlunoService {

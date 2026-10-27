@@ -10,7 +10,7 @@
  *   $env:SUPABASE_SERVICE_ROLE_KEY = "chave service_role (Settings > API)"
  *   npx vite-node src/scripts/bootstrap-direcao.ts -- --escola "Colégio X" --cidade "Goiânia/GO" --nome "Maria Silva" --email maria@escola.com
  *
- * Opcional: --senha "..." (mínimo 6). Sem ela, gera uma provisória e mostra UMA vez no final.
+ * Opcional: --senha "..." (mínimo 8). Sem ela, gera uma provisória e mostra UMA vez no final.
  * O usuário troca a senha no primeiro acesso. Não roda se o e-mail já existir (não duplica).
  */
 
@@ -42,7 +42,7 @@ if (!escola || !cidade || !nome || !email) {
   falhar('Informe --escola, --cidade, --nome e --email.');
 }
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) falhar('E-mail inválido.');
-if (senhaInformada !== undefined && senhaInformada.length < 6) falhar('A senha deve ter pelo menos 6 caracteres.');
+if (senhaInformada !== undefined && senhaInformada.length < 8) falhar('A senha deve ter pelo menos 8 caracteres.');
 
 const senha =
   senhaInformada || Array.from({ length: 12 }, () => ALFABETO[randomInt(ALFABETO.length)]).join('');

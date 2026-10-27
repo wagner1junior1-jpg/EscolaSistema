@@ -29,8 +29,10 @@ import {
   Aluno,
   Aviso,
   PrioridadeAviso,
+  PinBloqueado,
 } from '@/lib/types';
 import { chamarAdminUsuarios, RespostaCriarUsuario } from './adminUsuarios';
+import { SENHA_MINIMA_EQUIPE } from '@/lib/senha';
 
 interface LinhaOfertaBanco {
   id: string;
@@ -546,8 +548,8 @@ export class SupabaseGestaoService implements GestaoService {
 
   async redefinirSenhaProfessor(id: string, novaSenha: string): Promise<void> {
     const senhaLimpa = novaSenha?.trim();
-    if (!senhaLimpa || senhaLimpa.length < 6) {
-      throw new Error('A nova senha deve ter pelo menos 6 caracteres.');
+    if (!senhaLimpa || senhaLimpa.length < SENHA_MINIMA_EQUIPE) {
+      throw new Error(`A nova senha deve ter pelo menos ${SENHA_MINIMA_EQUIPE} caracteres.`);
     }
 
     await chamarAdminUsuarios<{ senha_provisoria?: string }>(
@@ -804,6 +806,15 @@ export class SupabaseGestaoService implements GestaoService {
     const pinPuro = pinInformadoOuGerado(novoPin);
     await this.definirPin(alunoId, pinPuro);
     return { pin_puro: pinPuro };
+  }
+
+  async listarPinsBloqueados(): Promise<PinBloqueado[]> {
+    // RPC da 0009: filtra por escola e por papel no servidor (professor só vê as suas turmas).
+    const { data, error } = await this.cliente.rpc('alunos_pin_bloqueado');
+    if (error) {
+      throw new Error('Não foi possível consultar os PINs bloqueados.');
+    }
+    return (data ?? []) as PinBloqueado[];
   }
 
   /** Grava o hash do PIN no servidor. A RPC valida a permissão e encerra as sessões antigas. */

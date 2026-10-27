@@ -1,7 +1,7 @@
 -- =============================================================================
 -- SABERPONTUAL — TESTES DO PORTAL DO ALUNO (Fase 4)
 --
--- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003, 0004 e 0005.
+-- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 a 0009.
 -- Cola tudo e executa de uma vez. Igual ao rls_teste.sql: cria dados fictícios, simula o aluno
 -- (papel anônimo, só com o token da sessão) e a equipe, confere o que cada um vê e, no fim,
 -- lança um erro de propósito para desfazer tudo (nada fica gravado).
@@ -458,6 +458,107 @@ BEGIN
   PERFORM zz_aluno.ok('aluno com PIN recém-criado entra', (j->>'ok')::boolean, j::text);
   j := zz_aluno.chamar(v_dx, 'select to_jsonb(count(*)) from public.aluno_credenciais');
   PERFORM zz_aluno.ok('nem a direção lê o hash do PIN', j->>'__estado' = '42501', j::text);
+
+  -- ---------- 15. Revisão de segurança (migration 0009) ----------
+  -- 15a. Código da turma sem hífen/espaço
+  j := zz_aluno.chamar(NULL, 'select public.aluno_listar_turma('' testea '')');
+  PERFORM zz_aluno.ok('código digitado sem hífen acha a turma A',
+    jsonb_typeof(j) = 'array' AND jsonb_array_length(j) = 3, j::text);
+  j := zz_aluno.chamar(NULL, 'select public.aluno_listar_turma(''-'')');
+  PERFORM zz_aluno.ok('código só com hífen não acha nada', zz_aluno.erro_contem(j, 'não encontrada'), j::text);
+  INSERT INTO public.turmas (id, escola_id, nome, serie, segmento, ano_letivo, codigo_acesso, ativa)
+    VALUES (zz_aluno.u(24), v_ex, 'Turma A2', '7', 'fund2', 2026, 'TESTEA', true);
+  j := zz_aluno.chamar(NULL, 'select public.aluno_listar_turma(''TESTE-A'')');
+  PERFORM zz_aluno.ok('código que vale para duas turmas não lista ninguém', zz_aluno.erro_contem(j, 'mais de uma turma'), j::text);
+  DELETE FROM public.turmas WHERE id = zz_aluno.u(24);
+
+  -- 15b. Pausa da turma: erros demais na turma em 1 hora (limite 20 na turma A, que tem 3 alunos)
+  INSERT INTO public.turma_login_erros (turma_id, janela_inicio, erros) VALUES (v_ta, now(), 18)
+    ON CONFLICT (turma_id) DO UPDATE SET janela_inicio = now(), erros = 18, pausada_ate = NULL;
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_a2));
+  PERFORM zz_aluno.ok('19º erro da turma ainda não pausa', (j->>'tentativas_restantes')::int = 4, j::text);
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_a2));
+  PERFORM zz_aluno.ok('20º erro da turma pausa a turma',
+    (SELECT pausada_ate > now() + interval '14 minutes' FROM public.turma_login_erros WHERE turma_id = v_ta), j::text);
+  v_n := (SELECT count(*) FROM public.aluno_sessoes WHERE aluno_id = v_a5);
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''1111'')', v_a5));
+  PERFORM zz_aluno.ok('turma pausada: nem o PIN certo entra',
+    (j->>'ok')::boolean = false AND (j->>'pausado')::boolean AND j->>'mensagem' ILIKE '%nesta turma%', j::text);
+  PERFORM zz_aluno.ok('turma pausada: nenhuma sessão criada',
+    (SELECT count(*) FROM public.aluno_sessoes WHERE aluno_id = v_a5) = v_n);
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_a2));
+  PERFORM zz_aluno.ok('turma pausada: o erro não chega a contar no aluno',
+    (SELECT tentativas FROM public.pin_tentativas WHERE aluno_id = v_a2) = 2);
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_b1));
+  PERFORM zz_aluno.ok('a pausa da turma A não afeta a turma B', j->>'pausado' IS NULL AND j ? 'tentativas_restantes', j::text);
+  UPDATE public.turma_login_erros SET pausada_ate = now() - interval '1 minute' WHERE turma_id = v_ta;
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''1111'')', v_a5));
+  PERFORM zz_aluno.ok('depois da pausa o PIN certo entra', (j->>'ok')::boolean, j::text);
+  UPDATE public.turma_login_erros SET erros = 19, janela_inicio = now() - interval '2 hours' WHERE turma_id = v_ta;
+  PERFORM zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_a2));
+  PERFORM zz_aluno.ok('erros da turma com mais de 1 hora não contam',
+    (SELECT erros = 1 AND pausada_ate < now() FROM public.turma_login_erros WHERE turma_id = v_ta));
+
+  -- 15c. Travamento diário: 10 erros em 24 h travam até a equipe criar um PIN novo (aluno B1)
+  DELETE FROM public.pin_tentativas WHERE aluno_id = v_b1;
+  FOR i IN 1..5 LOOP
+    j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_b1));
+  END LOOP;
+  PERFORM zz_aluno.ok('5º erro: bloqueio de 15 minutos, ainda não travado',
+    (j->>'bloqueado')::boolean AND j->>'travado' IS NULL, j::text);
+  UPDATE public.pin_tentativas SET bloqueado_ate = now() - interval '1 minute' WHERE aluno_id = v_b1;
+  FOR i IN 1..4 LOOP
+    j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_b1));
+  END LOOP;
+  PERFORM zz_aluno.ok('9º erro do dia avisa que resta 1 tentativa', (j->>'tentativas_restantes')::int = 1, j::text);
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_b1));
+  PERFORM zz_aluno.ok('10º erro do dia trava o acesso',
+    (j->>'travado')::boolean AND j->>'mensagem' ILIKE '%PIN novo%', j::text);
+  v_n := (SELECT count(*) FROM public.aluno_sessoes WHERE aluno_id = v_b1);
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''1111'')', v_b1));
+  PERFORM zz_aluno.ok('travado: o PIN certo não entra', (j->>'ok')::boolean = false AND (j->>'travado')::boolean, j::text);
+  ALTER TABLE public.pin_tentativas DISABLE TRIGGER trg_updated_at;
+  UPDATE public.pin_tentativas
+    SET erros_dia_desde = now() - interval '25 hours', updated_at = now() - interval '25 hours'
+    WHERE aluno_id = v_b1;
+  ALTER TABLE public.pin_tentativas ENABLE TRIGGER trg_updated_at;
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''1111'')', v_b1));
+  PERFORM zz_aluno.ok('travado não destrava sozinho com o tempo', (j->>'travado')::boolean, j::text);
+  PERFORM zz_aluno.ok('travado: nenhuma sessão criada',
+    (SELECT count(*) FROM public.aluno_sessoes WHERE aluno_id = v_b1) = v_n);
+  j := zz_aluno.chamar(v_pb, 'select public.alunos_pin_bloqueado()');
+  PERFORM zz_aluno.ok('professor da turma B vê o aluno travado',
+    j @> jsonb_build_array(jsonb_build_object('aluno_id', v_b1, 'motivo', 'equipe')), j::text);
+  j := zz_aluno.chamar(v_pa, 'select public.alunos_pin_bloqueado()');
+  PERFORM zz_aluno.ok('professor da turma A não vê o aluno da turma B',
+    NOT (j @> jsonb_build_array(jsonb_build_object('aluno_id', v_b1))), j::text);
+  j := zz_aluno.chamar(NULL, 'select public.alunos_pin_bloqueado()');
+  PERFORM zz_aluno.ok('anon não chama alunos_pin_bloqueado', j->>'__estado' = '42501', j::text);
+  j := zz_aluno.chamar_void(v_pb, format('select public.definir_pin_aluno(%L, ''2468'')', v_b1));
+  PERFORM zz_aluno.ok('a equipe cria PIN novo para o aluno travado', (j->>'ok')::boolean, j::text);
+  PERFORM zz_aluno.ok('PIN novo zera todos os contadores',
+    (SELECT tentativas = 0 AND erros_dia = 0 AND travado_em IS NULL AND bloqueado_ate IS NULL
+       FROM public.pin_tentativas WHERE aluno_id = v_b1));
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''2468'')', v_b1));
+  PERFORM zz_aluno.ok('aluno destravado entra com o PIN novo', (j->>'ok')::boolean, j::text);
+
+  -- 15d. Janela de 24 h: erros de ontem não contam para o travamento (aluno 2)
+  ALTER TABLE public.pin_tentativas DISABLE TRIGGER trg_updated_at;
+  UPDATE public.pin_tentativas
+    SET tentativas = 0, bloqueado_ate = NULL, erros_dia = 9, erros_dia_desde = now() - interval '25 hours',
+        updated_at = now() - interval '1 hour'
+    WHERE aluno_id = v_a2;
+  ALTER TABLE public.pin_tentativas ENABLE TRIGGER trg_updated_at;
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_a2));
+  PERFORM zz_aluno.ok('erros com mais de 24 h não travam', j->>'travado' IS NULL AND (j->>'tentativas_restantes')::int = 4, j::text);
+  PERFORM zz_aluno.ok('a contagem do dia recomeça', (SELECT erros_dia FROM public.pin_tentativas WHERE aluno_id = v_a2) = 1);
+  UPDATE public.pin_tentativas SET erros_dia = 9, erros_dia_desde = now() - interval '1 hour' WHERE aluno_id = v_a2;
+  j := zz_aluno.chamar(NULL, format('select public.aluno_login(%L, ''0000'')', v_a2));
+  PERFORM zz_aluno.ok('10º erro dentro de 24 h trava', (j->>'travado')::boolean, j::text);
+  PERFORM zz_aluno.ok('login e definir_pin não procuram no schema public',
+    (SELECT bool_and(NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) c WHERE c LIKE 'search_path=%' AND c ~ '(=|, *)public(,|$)')
+                     OR (SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'pgcrypto') = 'public')
+       FROM pg_proc p WHERE p.oid IN ('public.aluno_login(uuid, text)'::regprocedure, 'public.definir_pin_aluno(uuid, text)'::regprocedure)));
 
   RAISE EXCEPTION 'TODOS OS TESTES DO PORTAL DO ALUNO PASSARAM';
 END $f$;

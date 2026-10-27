@@ -32,6 +32,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { FilipetasImpressao, PinGeradoItem } from './FilipetasImpressao';
+import { AvisoPinsBloqueados } from '@/components/common/AvisoPinsBloqueados';
 
 export const GestaoAlunosSecao: React.FC = () => {
   const toast = useToast();
@@ -88,6 +89,13 @@ export const GestaoAlunosSecao: React.FC = () => {
   const [pinsGerados, setPinsGerados] = useState<PinGeradoItem[]>([]);
   const [modalPinsAberto, setModalPinsAberto] = useState(false);
   const [pinCopiadoId, setPinCopiadoId] = useState<string | null>(null);
+
+  // Alunos com PIN bloqueado (o aviso recarrega sempre que PINs novos são gerados).
+  const [idsPinBloqueado, setIdsPinBloqueado] = useState<Set<string>>(new Set());
+  const [recarregarBloqueados, setRecarregarBloqueados] = useState(0);
+  useEffect(() => {
+    if (modalPinsAberto) setRecarregarBloqueados((n) => n + 1);
+  }, [modalPinsAberto]);
 
   const carregarTurmasEEscola = useCallback(async () => {
     setCarregandoTurmas(true);
@@ -435,6 +443,13 @@ export const GestaoAlunosSecao: React.FC = () => {
         </div>
       )}
 
+      <AvisoPinsBloqueados
+        recarregar={recarregarBloqueados}
+        orientacao='Para liberar, abra a turma e use "Resetar PIN" no aluno (o PIN antigo deixa de valer).'
+        onVerTurma={setTurmaSelecionadaId}
+        onLista={(lista) => setIdsPinBloqueado(new Set(lista.map((p) => p.aluno_id)))}
+      />
+
       {/* Seleção de Turma & Ações Globais da Turma */}
       <Card className="p-4 sm:p-5 bg-white border-slate-200">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -558,6 +573,11 @@ export const GestaoAlunosSecao: React.FC = () => {
                         {!aluno.ativo && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-rose-100 text-rose-700">
                             Inativo
+                          </span>
+                        )}
+                        {idsPinBloqueado.has(aluno.id) && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-100 text-amber-800">
+                            PIN bloqueado
                           </span>
                         )}
                       </div>

@@ -112,8 +112,8 @@ describe('SupabaseAuthService (Fase 3)', () => {
       const { cliente, auth } = criarCliente();
       const s = new SupabaseAuthService(cliente);
       await expect(s.alterarSenha('', 'novasenha')).rejects.toThrow('Informe a senha atual.');
-      await expect(s.alterarSenha('atual1', '123')).rejects.toThrow('no mínimo 6');
-      await expect(s.alterarSenha('mesma12', 'mesma12')).rejects.toThrow('igual à senha atual');
+      await expect(s.alterarSenha('atual1', '123')).rejects.toThrow('no mínimo 8');
+      await expect(s.alterarSenha('mesma123', 'mesma123')).rejects.toThrow('igual à senha atual');
       expect(auth.updateUser).not.toHaveBeenCalled();
     });
 

@@ -207,6 +207,18 @@ export interface PinTentativa {
   sucesso: boolean;
 }
 
+// Aluno com o PIN bloqueado (aviso para a equipe; migration 0009).
+// 'temporario' = bloqueio de 15 minutos; 'equipe' = só destrava com um PIN novo.
+export interface PinBloqueado {
+  aluno_id: string;
+  nome_completo: string;
+  numero_chamada: number;
+  turma_id: string;
+  turma_nome: string;
+  motivo: 'temporario' | 'equipe';
+  bloqueado_ate: string | null;
+}
+
 // 15. assuntos (Fase H1 - docs/ESPECIFICACAO.md 9.2)
 export interface Assunto {
   id: string;
