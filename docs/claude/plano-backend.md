@@ -131,9 +131,11 @@ Critério: o mesmo comportamento no mock e no Supabase; nenhuma tela acessa dado
 |---|---|---|---|
 | 8.1 | Revisão de segurança: auditar RLS, tentar acesso com a anon key, procurar segredos no bundle | CLAUDE 🧠 | M |
 | 8.2 | LGPD para menores: termo, política de privacidade, consentimento do responsável, exportar e apagar dados | WAGNER + CLAUDE (texto) | M |
-| 8.3 | Backup e procedimento de restauração | WAGNER + CLAUDE | P |
-| 8.4 | Projeto de produção, variáveis por ambiente, deploy (Vercel já tem `vercel.json`) | WAGNER + CLAUDE | M |
+| 8.3 | Backup e procedimento de restauração (pelo DBeaver, feito pelo Wagner) | WAGNER | P |
+| 8.4 | Preparar o projeto ATUAL para dados reais (ele já é a produção, decisão de 27/10): girar as chaves, limpar dados fictícios e de E2E, VITE_MODO_TESTE=false, confirmar a região, deploy na Vercel | WAGNER + CLAUDE | M |
 | 8.5 | Piloto com uma turma; dado real só depois do aceite da escola | WAGNER | G |
+
+Atualização de 27/10/2026 (Wagner): **o projeto Supabase atual já é o de produção** (não haverá outro). O backup é pelo DBeaver. Os textos de docs/lgpd/ ficam por último, preenchidos escola por escola. Com dado real no banco, NÃO rodar `seed-supabase.ts --zerar`, a suíte `e2e-supabase` nem scripts que gravam (as suítes SQL podem: terminam em rollback).
 
 ## Resumo: quando abrir conversa nova e quando usar Sonnet em high
 | Momento | Conversa nova | Sonnet em high |
