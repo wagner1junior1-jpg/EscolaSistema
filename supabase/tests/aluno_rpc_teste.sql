@@ -1,7 +1,7 @@
 -- =============================================================================
 -- SABERPONTUAL — TESTES DO PORTAL DO ALUNO (Fase 4)
 --
--- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 a 0009.
+-- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 a 0010.
 -- Cola tudo e executa de uma vez. Igual ao rls_teste.sql: cria dados fictícios, simula o aluno
 -- (papel anônimo, só com o token da sessão) e a equipe, confere o que cada um vê e, no fim,
 -- lança um erro de propósito para desfazer tudo (nada fica gravado).

@@ -50,6 +50,7 @@ import {
   DesempenhoAlunoMateriaItem,
   AlunoComDesempenhoResumo,
   PinBloqueado,
+  ExportacaoAluno,
 } from '@/lib/types';
 
 export type {
@@ -175,6 +176,13 @@ export interface GestaoService {
   gerarOuResetarPin(alunoId: string, novoPin?: string): Promise<{ pin_puro: string }>;
   /** Alunos com PIN bloqueado. Gestão: a escola toda; professor: só as suas turmas. */
   listarPinsBloqueados(): Promise<PinBloqueado[]>;
+  /** LGPD: todos os dados de um aluno (direção e coordenação). Fica registrado. */
+  exportarDadosAluno(alunoId: string): Promise<ExportacaoAluno>;
+  /**
+   * LGPD: apaga de verdade o aluno e tudo dele (só a direção). `confirmacao` = nome completo do
+   * aluno. Não tem volta.
+   */
+  apagarDadosAluno(alunoId: string, confirmacao: string): Promise<{ respostas: number; observacoes: number }>;
   listarAvisosEscola(): Promise<Aviso[]>;
   criarAvisoEscola(dados: { titulo: string; mensagem: string; prioridade: PrioridadeAviso }): Promise<Aviso>;
   excluirAvisoEscola(id: string): Promise<void>;

@@ -30,9 +30,12 @@ import {
   Users,
   RefreshCw,
   FileSpreadsheet,
+  ShieldCheck,
 } from 'lucide-react';
 import { FilipetasImpressao, PinGeradoItem } from './FilipetasImpressao';
 import { AvisoPinsBloqueados } from '@/components/common/AvisoPinsBloqueados';
+import { ModalDadosAluno } from './ModalDadosAluno';
+import { useAuth } from '@/features/auth/AuthProvider';
 
 export const GestaoAlunosSecao: React.FC = () => {
   const toast = useToast();
@@ -75,6 +78,9 @@ export const GestaoAlunosSecao: React.FC = () => {
 
   // Reset Individual
   const [alunoParaResetPin, setAlunoParaResetPin] = useState<AlunoPublico | null>(null);
+  // LGPD: exportar/apagar os dados de um aluno (apagar só a direção)
+  const { usuario } = useAuth();
+  const [alunoDadosLgpd, setAlunoDadosLgpd] = useState<AlunoPublico | null>(null);
   const [resetandoPinIndividual, setResetandoPinIndividual] = useState(false);
   const [modoResetPin, setModoResetPin] = useState<'manual' | 'automatico'>('manual');
   const [resetPinValor, setResetPinValor] = useState('');
@@ -443,6 +449,16 @@ export const GestaoAlunosSecao: React.FC = () => {
         </div>
       )}
 
+      <ModalDadosAluno
+        aluno={alunoDadosLgpd}
+        podeApagar={usuario?.papel === 'direcao'}
+        onFechar={() => setAlunoDadosLgpd(null)}
+        onApagado={() => {
+          setAlunoDadosLgpd(null);
+          if (turmaSelecionadaId) carregarAlunosDaTurma(turmaSelecionadaId);
+        }}
+      />
+
       <AvisoPinsBloqueados
         recarregar={recarregarBloqueados}
         orientacao='Para liberar, abra a turma e use "Resetar PIN" no aluno (o PIN antigo deixa de valer).'
@@ -606,6 +622,17 @@ export const GestaoAlunosSecao: React.FC = () => {
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Editar</span>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAlunoDadosLgpd(aluno)}
+                      className="text-xs flex items-center gap-1 text-slate-600 hover:text-slate-900"
+                      title="Baixar ou apagar os dados do aluno (LGPD)"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Dados</span>
                     </Button>
                   </div>
                 </div>

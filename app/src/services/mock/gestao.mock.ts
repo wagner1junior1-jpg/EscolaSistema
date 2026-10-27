@@ -22,6 +22,7 @@ import {
   Aviso,
   PrioridadeAviso,
   PinBloqueado,
+  ExportacaoAluno,
 } from '@/lib/types';
 import { getDatabase, saveDatabase } from './db';
 import { hashPin, gerarPin4Digitos } from './crypto';
@@ -450,6 +451,93 @@ export class MockGestaoService implements GestaoService {
 
     saveDatabase(db);
     return { pin_puro: pinPuro };
+  }
+
+  async exportarDadosAluno(alunoId: string): Promise<ExportacaoAluno> {
+    // Mesmo formato da RPC exportar_dados_aluno (0010). O mock não guarda o registro da exportação.
+    const usuario = await exigirUsuario(['direcao', 'coordenacao']);
+    const db = await getDatabase();
+    const aluno = db.alunos.find((a) => a.id === alunoId && a.escola_id === usuario.escola_id);
+    if (!aluno) throw new Error('Aluno não encontrado ou sem permissão.');
+    const escola = db.escolas.find((e) => e.id === aluno.escola_id);
+    const turma = db.turmas.find((t) => t.id === aluno.turma_id);
+    const sessoes = db.aluno_sessoes.filter((s) => s.aluno_id === aluno.id);
+
+    const respostas = db.respostas
+      .filter((r) => r.aluno_id === aluno.id)
+      .map((r) => {
+        const questao = db.questoes.find((q) => q.id === r.questao_id);
+        const atividade = db.atividades.find((a) => a.id === questao?.atividade_id);
+        const oferta = db.ofertas.find((o) => o.id === atividade?.oferta_id);
+        return {
+          disciplina: db.disciplinas.find((d) => d.id === oferta?.disciplina_id)?.nome ?? null,
+          periodo: db.periodos.find((p) => p.id === atividade?.periodo_id)?.nome ?? null,
+          atividade: atividade?.titulo ?? '',
+          modo: atividade?.modo ?? '',
+          questao: questao?.ordem ?? 0,
+          enunciado: questao?.enunciado ?? '',
+          tipo: questao?.tipo ?? 'objetiva',
+          alternativa_escolhida: db.alternativas.find((x) => x.id === r.alternativa_id)?.letra ?? null,
+          acertou: r.acertou,
+          acertou_final: r.acertou_final,
+          tentativas: r.tentativas,
+          texto_resposta: r.texto_resposta ?? null,
+          correcao: r.correcao ?? null,
+          pontuacao: r.pontuacao ?? null,
+          comentario_professor: r.comentario_professor ?? null,
+          respondida_em: r.respondida_em,
+          corrigida_em: r.corrigido_em ?? null,
+        };
+      })
+      .sort((a, b) => a.respondida_em.localeCompare(b.respondida_em) || a.questao - b.questao);
+
+    return {
+      formato: 'saberpontual-exportacao-aluno-v1',
+      exportado_em: new Date().toISOString(),
+      escola: escola ? { nome: escola.nome, cidade_uf: escola.cidade_uf } : null,
+      aluno: {
+        id: aluno.id,
+        nome_completo: aluno.nome_completo,
+        numero_chamada: aluno.numero_chamada,
+        ativo: aluno.ativo,
+        cadastrado_em: aluno.created_at,
+        excluido_em: null,
+      },
+      turma: turma ? { nome: turma.nome, serie: turma.serie, ano_letivo: turma.ano_letivo } : null,
+      respostas,
+      observacoes: (db.aluno_observacoes || [])
+        .filter((o) => o.aluno_id === aluno.id)
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((o) => ({ professor: o.professor_nome, texto: o.texto, criada_em: o.created_at, excluida_em: null })),
+      acesso: {
+        pin_cadastrado: Boolean(aluno.pin_hash),
+        entradas_guardadas: sessoes.length,
+        ultima_entrada: sessoes.map((s) => s.criado_em).sort().pop() ?? null,
+      },
+    };
+  }
+
+  async apagarDadosAluno(
+    alunoId: string,
+    confirmacao: string
+  ): Promise<{ respostas: number; observacoes: number }> {
+    const usuario = await exigirUsuario(['direcao']);
+    const db = await getDatabase();
+    const aluno = db.alunos.find((a) => a.id === alunoId && a.escola_id === usuario.escola_id);
+    if (!aluno) throw new Error('Aluno não encontrado ou sem permissão.');
+    if ((confirmacao ?? '').trim().toLowerCase() !== aluno.nome_completo.trim().toLowerCase()) {
+      throw new Error('Para apagar, digite o nome completo do aluno exatamente como está cadastrado.');
+    }
+
+    const respostas = db.respostas.filter((r) => r.aluno_id === alunoId).length;
+    const observacoes = (db.aluno_observacoes || []).filter((o) => o.aluno_id === alunoId).length;
+    db.alunos = db.alunos.filter((a) => a.id !== alunoId);
+    db.respostas = db.respostas.filter((r) => r.aluno_id !== alunoId);
+    db.aluno_observacoes = (db.aluno_observacoes || []).filter((o) => o.aluno_id !== alunoId);
+    db.aluno_sessoes = db.aluno_sessoes.filter((s) => s.aluno_id !== alunoId);
+    db.pin_tentativas = db.pin_tentativas.filter((t) => t.aluno_id !== alunoId);
+    saveDatabase(db);
+    return { respostas, observacoes };
   }
 
   async listarPinsBloqueados(): Promise<PinBloqueado[]> {

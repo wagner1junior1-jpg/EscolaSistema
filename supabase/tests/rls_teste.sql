@@ -1,7 +1,7 @@
 -- =============================================================================
 -- SABERPONTUAL — TESTES DE RLS (Fase 2.5)
 --
--- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 a 0009.
+-- Como rodar: SQL Editor do projeto Supabase de TESTE, DEPOIS das migrations 0003 a 0010.
 -- Cola tudo e executa de uma vez. O script cria funções de teste (schema zz_teste),
 -- roda, e a função SE DESFAZ sozinha: ela cria dados fictícios, simula cada
 -- usuário, confere o que cada um enxerga/altera e, no fim, lança um erro de
@@ -364,6 +364,51 @@ BEGIN
   UPDATE public.pin_tentativas SET bloqueado_ate = now() - interval '1 minute' WHERE aluno_id = v_aluno_b;
   PERFORM zz_teste.confere('bloqueio vencido sai da lista',
     zz_teste.como(v_dx, 'select e from jsonb_array_elements(public.alunos_pin_bloqueado()) e'), 1);
+
+  -- ---------- 13. LGPD: exportar e apagar os dados de um aluno (migration 0010) ----------
+  INSERT INTO public.aluno_observacoes (aluno_id, professor_id, professor_nome, texto)
+    VALUES (v_aluno_a, v_pa, 'Prof A', 'Observação LGPD');
+  PERFORM zz_teste.confere('anon não exporta',
+    zz_teste.como(NULL, format('select public.exportar_dados_aluno(%L)', v_aluno_a)), -1);
+  PERFORM zz_teste.confere('professor não exporta (pedido do titular é com a gestão)',
+    zz_teste.como(v_pa, format('select public.exportar_dados_aluno(%L)', v_aluno_a)), -1);
+  PERFORM zz_teste.confere('direção Y não exporta aluno da escola X',
+    zz_teste.como(v_dy, format('select public.exportar_dados_aluno(%L)', v_aluno_a)), -1);
+  PERFORM zz_teste.confere('coordenação X exporta: cadastro, turma, respostas e observações',
+    zz_teste.como(v_cx, format('select 1 from (select public.exportar_dados_aluno(%L) j) s where j->''aluno''->>''nome_completo'' = ''Aluno A'' and j->''turma''->>''nome'' = ''Turma A'' and jsonb_array_length(j->''respostas'') >= 1 and j->''observacoes'' @> ''[{"texto": "Observação LGPD"}]'' and (j->''acesso''->>''pin_cadastrado'')::boolean', v_aluno_a)), 1);
+  PERFORM zz_teste.confere('exportação não leva PIN, gabarito nem explicação',
+    zz_teste.como(v_dx, format('select 1 from (select public.exportar_dados_aluno(%L)::text t) s where t not like ''%%hash-de-teste%%'' and t not like ''%%pin_hash%%'' and t not like ''%%"correta"%%'' and t not like ''%%por_que_errou%%'' and t not like ''%%token%%''', v_aluno_a)), 1);
+  PERFORM zz_teste.confere('exportação fica registrada (sem nome do aluno)',
+    (SELECT count(*) FROM public.lgpd_registros WHERE aluno_id = v_aluno_a AND acao = 'exportar' AND NOT detalhes::text LIKE '%Aluno A%'), 2);
+
+  PERFORM zz_teste.confere('coordenação não apaga', zz_teste.como(v_cx, format('select public.apagar_dados_aluno(%L, ''Aluno A'')', v_aluno_a)), -1);
+  PERFORM zz_teste.confere('professor não apaga', zz_teste.como(v_pa, format('select public.apagar_dados_aluno(%L, ''Aluno A'')', v_aluno_a)), -1);
+  PERFORM zz_teste.confere('direção Y não apaga aluno da X', zz_teste.como(v_dy, format('select public.apagar_dados_aluno(%L, ''Aluno A'')', v_aluno_a)), -1);
+  BEGIN
+    PERFORM zz_teste.como(v_dx, format('select public.apagar_dados_aluno(%L, ''Aluno B'')', v_aluno_a));
+    RAISE EXCEPTION 'FALHOU: confirmação com outro nome apagou o aluno';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM LIKE 'FALHOU%' THEN RAISE; END IF;
+  END;
+  PERFORM zz_teste.confere('confirmação errada não apaga nada', (SELECT count(*) FROM public.alunos WHERE id = v_aluno_a), 1);
+  PERFORM zz_teste.confere('direção X apaga com o nome completo (sem diferenciar maiúscula)',
+    zz_teste.como(v_dx, format('select 1 from (select public.apagar_dados_aluno(%L, '' aluno a '') j) s where (j->>''respostas'')::int >= 1 and (j->>''observacoes'')::int >= 1', v_aluno_a)), 1);
+  PERFORM zz_teste.confere('aluno, PIN, tentativas, sessões, respostas e observações sumiram',
+    (SELECT count(*) FROM public.alunos WHERE id = v_aluno_a)
+    + (SELECT count(*) FROM public.aluno_credenciais WHERE aluno_id = v_aluno_a)
+    + (SELECT count(*) FROM public.pin_tentativas WHERE aluno_id = v_aluno_a)
+    + (SELECT count(*) FROM public.aluno_sessoes WHERE aluno_id = v_aluno_a)
+    + (SELECT count(*) FROM public.respostas WHERE aluno_id = v_aluno_a)
+    + (SELECT count(*) FROM public.aluno_observacoes WHERE aluno_id = v_aluno_a), 0);
+  PERFORM zz_teste.confere('os outros alunos continuam', (SELECT count(*) FROM public.alunos WHERE id IN (v_aluno_b, v_aluno_y)), 2);
+  PERFORM zz_teste.confere('exclusão registrada com as contagens',
+    (SELECT count(*) FROM public.lgpd_registros WHERE aluno_id = v_aluno_a AND acao = 'apagar' AND feito_por = v_dx AND (detalhes->>'respostas')::int >= 1), 1);
+  PERFORM zz_teste.confere('direção X lê os registros da escola', zz_teste.como(v_dx, 'select * from public.lgpd_registros'), 3);
+  PERFORM zz_teste.confere('coordenação não lê os registros', zz_teste.como(v_cx, 'select * from public.lgpd_registros'), 0);
+  PERFORM zz_teste.confere('direção Y não lê os registros da X', zz_teste.como(v_dy, 'select * from public.lgpd_registros'), 0);
+  PERFORM zz_teste.confere('ninguém altera os registros pelo cliente',
+    zz_teste.como(v_dx, 'delete from public.lgpd_registros'), -1);
+  PERFORM zz_teste.confere('anon não lê os registros', zz_teste.como(NULL, 'select * from public.lgpd_registros'), -1);
 
   -- Erro de propósito: desfaz TODAS as inserções acima (nada fica gravado).
   RAISE EXCEPTION 'TODOS OS TESTES DE RLS PASSARAM';

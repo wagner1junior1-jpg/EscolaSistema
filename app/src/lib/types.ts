@@ -219,6 +219,43 @@ export interface PinBloqueado {
   bloqueado_ate: string | null;
 }
 
+// Exportação dos dados de um aluno (LGPD art. 18; migration 0010). Nunca leva PIN nem gabarito.
+export interface ExportacaoAluno {
+  formato: 'saberpontual-exportacao-aluno-v1';
+  exportado_em: string;
+  escola: { nome: string; cidade_uf: string } | null;
+  aluno: {
+    id: string;
+    nome_completo: string;
+    numero_chamada: number;
+    ativo: boolean;
+    cadastrado_em: string;
+    excluido_em: string | null;
+  };
+  turma: { nome: string; serie: string; ano_letivo: number } | null;
+  respostas: Array<{
+    disciplina: string | null;
+    periodo: string | null;
+    atividade: string;
+    modo: string;
+    questao: number;
+    enunciado: string;
+    tipo: string;
+    alternativa_escolhida: string | null;
+    acertou: boolean | null;
+    acertou_final: boolean | null;
+    tentativas: number;
+    texto_resposta: string | null;
+    correcao: string | null;
+    pontuacao: number | null;
+    comentario_professor: string | null;
+    respondida_em: string;
+    corrigida_em: string | null;
+  }>;
+  observacoes: Array<{ professor: string; texto: string; criada_em: string; excluida_em: string | null }>;
+  acesso: { pin_cadastrado: boolean; entradas_guardadas: number; ultima_entrada: string | null };
+}
+
 // 15. assuntos (Fase H1 - docs/ESPECIFICACAO.md 9.2)
 export interface Assunto {
   id: string;

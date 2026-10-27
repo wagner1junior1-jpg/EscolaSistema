@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AlunoLayout, CartaoVidro, BotaoGrande } from '@/components/aluno';
 import { Sparkles, GraduationCap, ArrowRight, UserCheck } from 'lucide-react';
 import logoEscola from '@/assets/logo-escola.png';
@@ -115,7 +115,10 @@ export const HomePage: React.FC = () => {
         </CartaoVidro>
 
         <p className="text-xs text-slate-500">
-          Acesso seguro e simplificado para alunos, professores e coordenação.
+          Acesso seguro e simplificado para alunos, professores e coordenação.{' '}
+          <Link to="/privacidade" className="underline hover:text-slate-700">
+            Política de privacidade
+          </Link>
         </p>
       </main>
     </AlunoLayout>

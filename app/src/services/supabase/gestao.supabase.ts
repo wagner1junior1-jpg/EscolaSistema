@@ -30,6 +30,7 @@ import {
   Aviso,
   PrioridadeAviso,
   PinBloqueado,
+  ExportacaoAluno,
 } from '@/lib/types';
 import { chamarAdminUsuarios, RespostaCriarUsuario } from './adminUsuarios';
 import { SENHA_MINIMA_EQUIPE } from '@/lib/senha';
@@ -806,6 +807,37 @@ export class SupabaseGestaoService implements GestaoService {
     const pinPuro = pinInformadoOuGerado(novoPin);
     await this.definirPin(alunoId, pinPuro);
     return { pin_puro: pinPuro };
+  }
+
+  async exportarDadosAluno(alunoId: string): Promise<ExportacaoAluno> {
+    // RPC da 0010: confere papel e escola no servidor e registra a exportação.
+    const { data, error } = await this.cliente.rpc('exportar_dados_aluno', { p_aluno_id: alunoId });
+    if (error) {
+      throw new Error(
+        error.code === '42501' ? 'Você não tem permissão para exportar os dados deste aluno.' : 'Não foi possível exportar os dados do aluno.'
+      );
+    }
+    if (!data) throw new Error('Não foi possível exportar os dados do aluno.');
+    return data as ExportacaoAluno;
+  }
+
+  async apagarDadosAluno(
+    alunoId: string,
+    confirmacao: string
+  ): Promise<{ respostas: number; observacoes: number }> {
+    const { data, error } = await this.cliente.rpc('apagar_dados_aluno', {
+      p_aluno_id: alunoId,
+      p_confirmacao: confirmacao,
+    });
+    if (error) {
+      // P0001 = confirmação errada (mensagem em português); 42501 = sem permissão.
+      if (error.code === 'P0001' && error.message) throw new Error(error.message);
+      throw new Error(
+        error.code === '42501' ? 'Só a direção pode apagar os dados de um aluno.' : 'Não foi possível apagar os dados do aluno.'
+      );
+    }
+    if (!data) throw new Error('Não foi possível apagar os dados do aluno.');
+    return data as { respostas: number; observacoes: number };
   }
 
   async listarPinsBloqueados(): Promise<PinBloqueado[]> {

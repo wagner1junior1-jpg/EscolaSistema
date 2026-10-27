@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import HomePage from '@/features/home/HomePage';
+import PrivacidadePage from '@/features/home/PrivacidadePage';
 import LoginPage from '@/features/auth/pages/LoginPage';
 import AlunoLoginPage from '@/features/aluno/pages/AlunoLoginPage';
 import AlunoPainelPage from '@/features/aluno/pages/AlunoPainelPage';
@@ -99,6 +100,9 @@ export const AppRoutes: React.FC = () => {
           </RotaProtegida>
         }
       />
+
+      {/* 7. Política de privacidade (pública, LGPD) */}
+      <Route path="/privacidade" element={<PrivacidadePage />} />
 
       {/* Redirecionamento de rotas desconhecidas */}
       <Route path="*" element={<Navigate to="/" replace />} />
